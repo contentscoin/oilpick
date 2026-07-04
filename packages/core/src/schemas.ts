@@ -215,3 +215,19 @@ export const pointAdjustOutputSchema = z.object({
   amount: z.number().int(),
 });
 export type PointAdjustOutput = z.infer<typeof pointAdjustOutputSchema>;
+
+// ===== U2 supplier 가입 (profiles + supplier_profiles row 생성) =====
+// 이 입력은 Edge Function이 아니라 클라이언트가 anon key로 profiles/supplier_profiles에
+// 직접 insert할 때 쓰인다(01-db-schema.sql RLS p_profiles_insert/p_sup_self가 본인 행
+// insert를 허용). CLAUDE.md 규칙 4 "모든 API 입출력은 zod 스키마로 검증"에 따라 Edge
+// Function 여부와 무관하게 zod로 검증한다.
+
+export const supplierSignupInputSchema = z.object({
+  displayName: z.string().min(1),
+  storeName: z.string().min(1),
+  bizNumber: z.string().min(1),
+  address: z.string().min(1),
+  lat: latSchema,
+  lng: lngSchema,
+});
+export type SupplierSignupInput = z.infer<typeof supplierSignupInputSchema>;

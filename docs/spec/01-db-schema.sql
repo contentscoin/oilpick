@@ -225,4 +225,5 @@ create policy p_noti_read on notifications for select using (user_id = auth.uid(
 create policy p_noti_update on notifications for update using (user_id = auth.uid()); -- read_at 갱신
 
 -- Storage 버킷: order-photos (관련자 read / rider write), rider-docs (본인 write, admin read)
--- Realtime publication: pickup_orders, notifications 활성화
+-- Realtime publication: pickup_orders, notifications, price_ticks 활성화
+-- (price_ticks는 03-frontend.md U3 "PriceCard(최신 tick, Realtime 구독)"에 필요 — T7에서 추가)

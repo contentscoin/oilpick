@@ -151,3 +151,41 @@
   교체하면 되도록 설계했다 — `url`은 표시용(webPath/dataUrl/objectURL 어느 쪽이든 `<img src>`로만
   소비), `file`은 Storage 업로드용 File/Blob이라는 계약만 유지하면 소비 측(R4 계량 제출 등) 코드는
   변경이 필요 없다.
+- (T7) 전화 OTP: 이 개발 환경에는 실제 SMS 프로바이더(Twilio 등)가 연결돼 있지 않다. GoTrue의
+  공식 로컬 테스트 기능인 `supabase/config.toml`의 `[auth.sms.test_otp]`로 해결했다 — 실제로
+  로컬 스택에서 직접 검증한 결과 두 가지가 확인됐다: (1) `[auth.sms]`에 실제 프로바이더가 하나도
+  `enabled=true`가 아니면 GoTrue가 "no SMS provider is enabled"로 판단해 전화 로그인 자체를
+  비활성화한다(`test_otp`만 설정해도 무시됨) — 그래서 `[auth.sms.twilio]`를 더미 자격증명으로
+  `enabled=true`로 켜 두었다(`test_otp`에 등록된 번호는 실제 Twilio 호출 전에 GoTrue가 가로채
+  고정 코드로 검증하므로 이 더미 자격증명으로 실제 SMS가 나가는 일은 없다 — 미등록 번호로 시도하면
+  이 더미 자격증명으로 Twilio 호출을 시도해 실패한다). (2) `test_otp`의 phone 키와
+  `signInWithOtp`에 넘기는 phone 값은 GoTrue가 요구하는 E.164(국가코드, '+' 없음) 형식이어야
+  한다 — "01000000000" 같은 국내 표기는 "Invalid phone number format" 400으로 거부되고
+  "821000000000"(82+국내번호 앞자리 0 제거) 형식만 통과한다. 이에 따라
+  `packages/core/src/phone.ts`에 `toE164Kr` 변환 헬퍼를 추가해 U2 화면이 사용자 입력(국내 표기)을
+  Auth 호출 시점에만 E.164로 변환하도록 구현했다(profiles.phone에는 국내 표기 원본 저장).
+  `enable_signup=true`로 설정해 회원가입 흐름도 허용했다. 테스트 번호:
+  `010-0000-0000`/`010-0000-0001` → 고정 코드 `123456`.
+- (T7) 카카오 주소검색: 이 개발 환경에는 카카오 주소검색(Daum Postcode) API 키가 없다(T6 MapView와
+  동일한 공백). `apps/user/src/components/AddressField.tsx`를 만들어 `VITE_KAKAO_KEY`가 없으면
+  수동 텍스트 주소 입력 필드로 폴백하고, 위/경도는 기본값(집하장 인근 좌표, 서울 강서구
+  37.5509/126.8225)을 유지한 채 "위/경도 직접 입력(선택)" 토글로 사용자가 필요 시 직접 숫자를
+  조정할 수 있게 했다. 실제 키가 주입되면(hasKakaoKey 분기가 true) 카카오 주소검색 SDK 연동으로
+  교체해야 하는데 그 호출부는 아직 없다 — 현재는 폴백 UI만 항상 렌더된다(개발 환경에서
+  VITE_KAKAO_KEY가 항상 비어 있어 이 분기는 실행되지 않음).
+- (T7) price_ticks Realtime publication 누락: 01-db-schema.sql/20260704000002_storage_realtime.sql은
+  "Realtime publication: pickup_orders, notifications 활성화"만 구현했으나, 03-frontend.md
+  U3(55~61행)은 "PriceCard(최신 tick, Realtime 구독)"을 명시적으로 요구한다. 이는 새로운 설계
+  판단이 아니라 스펙이 이미 요구한 기능을 위한 스키마 보완이라 판단해
+  `20260704000009_realtime_price_ticks.sql`로 price_ticks를 supabase_realtime publication에
+  추가하고 01-db-schema.sql 주석도 동기화했다(CLAUDE.md 규칙 6).
+- (T7, 실사용 버그 수정) Realtime 구독 훅 2개에서 렌더 크래시를 발견해 수정했다: (1) `usePriceTicks`가
+  고정 채널명(`"price_ticks_changes"`)을 썼는데, HomePage가 `useLatestPriceTick()`(내부적으로
+  `usePriceTicks(30)`)과 `usePriceTicks(10)`을 동시에 호출하면서 동일 채널명으로 Supabase Realtime
+  채널을 중복 구독해 충돌 — 실제로 브라우저에서 홈 화면이 완전히 빈 화면(root DOM 비어있음)으로
+  렌더되는 것으로 재현됨. 채널명을 `` `price_ticks_changes_${limit}` ``로 limit별 고유화해 해결.
+  (2) `useActiveOrder`의 `useEffect` 의존성 배열에 `queryKeys.activeOrder(userId)`가 반환하는
+  배열(매 렌더 새 참조)을 그대로 넣어 매 렌더마다 채널을 구독/해제 — 의존성을 `[userId, queryClient]`
+  로 바꾸고 이펙트 내부에서 최신 queryKey를 다시 계산하도록 고쳤다. 두 버그 모두 자동 테스트
+  (vitest, jsdom 환경의 목 채널)로는 잡히지 않고 실제 브라우저 렌더에서만 재현됐다 — 이 태스크
+  지시사항의 "가능하면 브라우저 자동화로 직접 실행해 확인" 요구가 아니었다면 놓쳤을 결함이다.

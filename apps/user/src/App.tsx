@@ -1,11 +1,25 @@
-import { Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { AuthGuard } from "./components/AuthGuard";
+import { queryClient } from "./lib/queryClient";
 import { DevUiPage } from "./pages/DevUiPage";
+import { OnboardingPage, ONBOARDING_DONE_KEY } from "./pages/OnboardingPage";
+import { AuthPage } from "./pages/AuthPage";
+import { HomePage } from "./pages/HomePage";
+import { PricePage } from "./pages/PricePage";
+import { RequestPlaceholderPage } from "./pages/RequestPlaceholderPage";
 
-function Home() {
+/**
+ * 루트("/") 진입 가드. U1 온보딩을 아직 안 봤으면 /onboarding으로,
+ * 03-frontend.md T7 작업 지시대로 인증 안 된 사용자는 /auth로 리다이렉트한다.
+ */
+function RootRoute() {
+  const onboardingDone = localStorage.getItem(ONBOARDING_DONE_KEY) === "1";
+  if (!onboardingDone) return <Navigate to="/onboarding" replace />;
   return (
-    <main>
-      <h1>OilPick User App</h1>
-    </main>
+    <AuthGuard>
+      <HomePage />
+    </AuthGuard>
   );
 }
 
@@ -17,9 +31,29 @@ function Home() {
  */
 export function App() {
   return (
-    <Routes>
-      <Route path="/" element={<Home />} />
-      <Route path="/dev-ui" element={<DevUiPage />} />
-    </Routes>
+    <QueryClientProvider client={queryClient}>
+      <Routes>
+        <Route path="/onboarding" element={<OnboardingPage />} />
+        <Route path="/auth" element={<AuthPage />} />
+        <Route path="/" element={<RootRoute />} />
+        <Route
+          path="/price"
+          element={
+            <AuthGuard>
+              <PricePage />
+            </AuthGuard>
+          }
+        />
+        <Route
+          path="/request"
+          element={
+            <AuthGuard>
+              <RequestPlaceholderPage />
+            </AuthGuard>
+          }
+        />
+        <Route path="/dev-ui" element={<DevUiPage />} />
+      </Routes>
+    </QueryClientProvider>
   );
 }

@@ -251,7 +251,7 @@ otp_expiry = 3600
 
 [auth.sms]
 # Allow/disallow new user signups via SMS to your project.
-enable_signup = false
+enable_signup = true
 # If enabled, users need to confirm their phone number before signing in.
 enable_confirmations = false
 # Template for sending OTP to users
@@ -260,8 +260,19 @@ template = "Your code is {{ .Code }}"
 max_frequency = "5s"
 
 # Use pre-defined map of phone number to OTP for testing.
-# [auth.sms.test_otp]
-# 4152127777 = "123456"
+# 로컬 개발 환경에는 실제 SMS 프로바이더(Twilio 등)가 연결돼 있지 않다(04-tasks.md 질문 목록
+# 참고 — 스펙 문서에 OTP 프로바이더 관련 명시가 없어 임의 결정 대신 GoTrue의 공식 로컬 테스트
+# 기능인 test_otp로 해결했다). 이 표에 있는 전화번호로 OTP 요청 시 실제 SMS를 보내는 대신
+# 아래 고정 코드로 검증에 성공한다 — signInWithOtp/verifyOtp 호출 흐름 자체는 프로덕션과
+# 동일(진짜 OTP 발송처럼 동작), 값만 고정이다. 프로덕션에서는 이 섹션과
+# [auth.sms.twilio](또는 다른 SMS 프로바이더) enabled=true 설정으로 교체하면 된다.
+# 키는 GoTrue가 요구하는 E.164 형식(국가코드, '+' 없이)이어야 한다 — 로컬 검증 결과 "01000000000"
+# 같은 국내 표기는 "Invalid phone number format (E.164 required)" 400으로 거부된다.
+# 82(대한민국) + 10-0000-0000 → "821000000000". 클라이언트 U2 화면은 사용자가 입력한 국내
+# 표기("010-0000-0000")를 이 형식으로 변환해 signInWithOtp에 전달한다(apps/user/src/lib/phone.ts).
+[auth.sms.test_otp]
+"821000000000" = "123456"
+"821000000001" = "123456"
 
 # Configure logged in session timeouts.
 # [auth.sessions]
@@ -281,10 +292,17 @@ max_frequency = "5s"
 # uri = "pg-functions://<database>/<schema>/<hook_name>"
 
 # Configure one of the supported SMS providers: `twilio`, `twilio_verify`, `messagebird`, `textlocal`, `vonage`.
+# 이 프로젝트에는 실제 Twilio 계정이 없다(04-tasks.md 질문 목록 참고). enabled=true + 더미
+# 값으로 두는 이유: GoTrue는 [auth.sms] 아래 실제 프로바이더가 하나도 enabled=true가 아니면
+# "no SMS provider is enabled"로 판단해 전화 로그인 자체를 비활성화한다(로컬에서 직접 확인:
+# 프로바이더 블록 없이 test_otp만 설정하면 `enable_signup`이 무시되고 phone login이 꺼짐).
+# test_otp에 등록된 전화번호는 실제 Twilio 호출 이전에 GoTrue가 가로채 고정 코드로 검증하므로
+# 아래 더미 자격증명으로 실제 SMS가 발송되는 일은 없다(test_otp 미등록 번호로 시도하면 이
+# 더미 자격증명으로 Twilio 호출을 시도해 실패한다 — 로컬 테스트는 test_otp 등록 번호만 사용).
 [auth.sms.twilio]
-enabled = false
-account_sid = ""
-message_service_sid = ""
+enabled = true
+account_sid = "ACtest0000000000000000000000000local"
+message_service_sid = "MGtest00000000000000000000000local"
 # DO NOT commit your Twilio auth token to git. Use environment variable substitution instead:
 auth_token = "env(SUPABASE_AUTH_SMS_TWILIO_AUTH_TOKEN)"
 
