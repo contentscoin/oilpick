@@ -1,0 +1,10 @@
+{
+  "importMap": "./import_map.json",
+  "nodeModulesDir": "none",
+  "lint": {
+    "exclude": ["_shared/vendor/"]
+  },
+  "fmt": {
+    "exclude": ["_shared/vendor/"]
+  }
+}

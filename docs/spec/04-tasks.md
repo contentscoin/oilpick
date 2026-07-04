@@ -70,4 +70,32 @@
 
 ## 질문 목록
 스펙으로 해결 안 되는 사항은 여기 추가하고 임의 결정하지 말 것:
-- (비어 있음)
+- (T4) FCM 서비스 계정 자격증명(`FCM_SERVICE_ACCOUNT` secret)이 이 개발 환경에 없다.
+  `_shared/push.ts`는 시크릿 누락/발송 실패를 catch해서 로그만 남기고 핵심 로직(상태 전이,
+  포인트 지급)은 절대 막지 않도록 구현했다 — notifications 테이블 기록은 FCM 발송 성패와
+  무관하게 항상 수행된다. 이는 실제 FCM 연동(서비스 계정 키 발급 및 Supabase secrets 등록)
+  전까지 유효한 임시 동작이며, 연동 시점에 `FCM_SERVICE_ACCOUNT`만 설정하면 자동으로 실제
+  발송이 활성화된다(코드 변경 불필요).
+- (T4) 01-db-schema.sql/20260704000001_init.sql~20260704000003_rpc.sql에는 명시돼 있지 않지만,
+  로컬 Supabase 스택(CLI 2.109.0)에서 `db reset`/`start` 시 `alter default privileges in schema
+  public grant all on tables to postgres, anon, authenticated, service_role` 이후
+  `revoke select, insert, update, delete on tables from anon, authenticated, service_role`이
+  자동 실행되어, 이후 마이그레이션으로 생성되는 모든 public 테이블에 anon/authenticated/
+  service_role의 select/insert/update/delete 권한이 전혀 없는 상태가 된다(`revoke all on
+  function ... from public`도 동일하게 service_role의 EXECUTE 권한까지 제거함). RLS 정책과는
+  별개로 이 기본 GRANT 자체가 없으면 service_role(Edge Function)도 "permission denied"로
+  막힌다 — T4 curl 검증 중 실제로 `profiles` SELECT와 `fn_find_eligible_riders` EXECUTE가
+  이 문제로 실패하는 것을 확인했다. `supabase/migrations/20260704000005_grants.sql`을 추가해
+  service_role에 테이블 CRUD 전체 + RPC 4종 EXECUTE를, authenticated/anon에는 RLS 정책이
+  이미 정의된 만큼의 select/insert/update를 명시적으로 GRANT했다. 향후 새 테이블/함수를
+  추가할 때도 이 패턴(명시적 GRANT)을 함께 챙겨야 한다 — 04-tasks.md 이후 태스크(T5 이상)
+  진행 시 동일 문제가 재발할 수 있으니 신규 테이블/RPC마다 확인 필요.
+- (T4) Edge Function(Deno)은 `packages/core/src`의 확장자 없는 상대 import(예: `./constants`,
+  tsconfig `moduleResolution: "Bundler"` 관례)를 해석하지 못한다(직접 검증: Deno import map의
+  `scopes`로도 우회 불가, `--unstable-sloppy-imports`는 CLI `deno check`에서는 동작하나
+  `supabase-edge-runtime`(edge-runtime 1.74.2) 바이너리는 인식하지 않음 — 실제 함수 호출 시
+  "Module not found" 부팅 에러로 재현됨). packages/core 원본은 수정 최소화 원칙에 따라 건드리지
+  않고, `supabase/functions/_shared/vendor/build.sh`(esbuild 기반)로 각 소스 파일을 자기완결형
+  ESM으로 번들링해 `supabase/functions/_shared/vendor/oilpick-core/`에 vendoring하는 방식으로
+  해결했다. packages/core/src가 바뀔 때마다 이 스크립트를 재실행해 vendor 산출물을 갱신해야
+  한다(자동화는 이 태스크 범위 밖 — CI/pre-commit 훅으로 추후 자동화 검토 필요).

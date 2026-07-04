@@ -1,0 +1,40 @@
+// @ts-nocheck — 자동 생성 vendor 산출물(빌드 시 타입 정보 소실). 원본은 packages/core/src/format.ts.
+// packages/core/src/format.ts
+function formatPoint(n) {
+  return `${Math.trunc(n).toLocaleString("ko-KR")}P`;
+}
+function formatKrw(n) {
+  return `${Math.trunc(n).toLocaleString("ko-KR")}\uC6D0`;
+}
+function formatKg(n) {
+  return `${n.toFixed(1)}kg`;
+}
+var RELATIVE_UNITS = [
+  { limitMs: 6e4, divisor: 1, unit: "\uCD08" },
+  { limitMs: 36e5, divisor: 6e4, unit: "\uBD84" },
+  { limitMs: 864e5, divisor: 36e5, unit: "\uC2DC\uAC04" },
+  { limitMs: 2592e6, divisor: 864e5, unit: "\uC77C" },
+  { limitMs: 31536e6, divisor: 2592e6, unit: "\uAC1C\uC6D4" },
+  { limitMs: Infinity, divisor: 31536e6, unit: "\uB144" }
+];
+function formatRelativeTime(date, now = /* @__PURE__ */ new Date()) {
+  const target = typeof date === "object" ? date.getTime() : new Date(date).getTime();
+  const base = typeof now === "number" ? now : now.getTime();
+  const diffMs = base - target;
+  const isFuture = diffMs < 0;
+  const absMs = Math.abs(diffMs);
+  if (absMs < 5e3) return "\uBC29\uAE08 \uC804";
+  for (const { limitMs, divisor, unit } of RELATIVE_UNITS) {
+    if (absMs < limitMs) {
+      const value = Math.floor(absMs / divisor);
+      return isFuture ? `${value}${unit} \uD6C4` : `${value}${unit} \uC804`;
+    }
+  }
+  return isFuture ? "\uBA3C \uBBF8\uB798" : "\uC624\uB798 \uC804";
+}
+export {
+  formatKg,
+  formatKrw,
+  formatPoint,
+  formatRelativeTime
+};
