@@ -213,3 +213,27 @@
   호출하면 정상 동작 확인). 관리자/운영자가 이 RPC를 psql로 직접 검증할 때는 `.*` 전개 없이
   `select fn_transition_order(p_order_id, p_action, p_actor_id, p_actor_role, p_payload);` 형태로
   호출할 것 — 이 각주는 향후 admin SQL 콘솔/런북에 반영이 필요하다.
+- (T9) rider_profiles Realtime publication 누락: 03-frontend.md apps/rider R1은 "PENDING 대기
+  화면(Realtime으로 rider_profiles.verify_status 변경 감지해 자동 전환)"을 명시적으로 요구하지만,
+  01-db-schema.sql/기존 마이그레이션은 pickup_orders·notifications(T3)·price_ticks(T7)만
+  supabase_realtime publication에 추가했고 rider_profiles는 빠져 있었다. T7의 price_ticks
+  누락과 동일한 종류(스펙이 이미 요구한 기능을 위한 스키마 보완, 새 설계 판단 아님)라 판단해
+  `20260704000011_realtime_rider_profiles.sql`로 추가했다(01-db-schema.sql 주석 동기화).
+  실제 브라우저 E2E 중 admin이 SQL로 verify_status를 APPROVED로 바꿔도 /verify 화면이
+  자동 전환되지 않는 것을 먼저 재현한 뒤 원인을 특정했다 — 이 마이그레이션 적용 후 재검증해서
+  자동 전환(콜 홈으로 즉시 이동)을 확인했다.
+- (T9) QR 스캐너 폴백: 위 태스크 지시사항이 이미 "depotId+qrSecret 수동 텍스트 입력(또는 두 개
+  select/입력 필드) 폴백 UI로 구현하고 질문 목록에 기록"하라고 명시했으므로 그대로
+  `apps/rider/src/pages/ActiveRunPage.tsx`의 PickedUpPanel에 두 개 텍스트 입력 필드로
+  구현했다(@capacitor-community/barcode-scanner 도입은 T12). 실제 잘못된 qrSecret 입력 시
+  `INVALID_QR` 400이 "QR 코드가 일치하지 않아요" 토스트로 올바르게 표시되는지, 올바른
+  depots.qr_secret 입력 시 DELIVER→COMPLETED까지 이어지는지 둘 다 실제 브라우저로 검증했다.
+- (T9) order-photos 비공개 버킷과 photo_urls 표시: order-photos Storage 버킷은
+  `public: false`(20260704000002_storage_realtime.sql)로 생성돼 있어 `getPublicUrl()`이
+  반환하는 URL은 인증 헤더 없는 `<img src>`로는 열람할 수 없다(RLS로 막힘). 새로운 설계 판단이
+  아니라 "Storage에 업로드하고 photo_urls에 URL을 저장해 소비 측이 <img src>로 그대로 쓴다"는
+  기존 계약(apps/user OrderDetailPage.photoUrls, submitMeasurePayloadSchema의
+  `photoUrls: z.array(z.string().url())`)을 실제로 동작하게 만드는 구현 세부라서,
+  `ActiveRunPage.tsx`의 계량 사진 업로드는 `upload()` 직후 `createSignedUrl()`(1년 만료)로 만든
+  서명 URL을 photoUrls에 담아 SUBMIT_MEASURE에 전달하도록 구현했다. 실제 브라우저 E2E에서
+  user 앱 계량 확인 화면에 사진이 정상 로드되는 것으로 검증했다.
