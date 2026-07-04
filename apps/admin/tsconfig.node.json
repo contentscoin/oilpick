@@ -1,0 +1,12 @@
+{
+  "extends": "@oilpick/config/tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "outDir": "dist-node",
+    "rootDir": ".",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "types": ["node"]
+  },
+  "include": ["vite.config.ts", "tailwind.config.js", "postcss.config.js"]
+}

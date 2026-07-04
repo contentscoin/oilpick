@@ -1,0 +1,19 @@
+{
+  "name": "oilpick",
+  "private": true,
+  "packageManager": "pnpm@10.14.0",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "dev:user": "turbo run dev --filter=@oilpick/user",
+    "dev:rider": "turbo run dev --filter=@oilpick/rider",
+    "dev:admin": "turbo run dev --filter=@oilpick/admin",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "build": "turbo run build"
+  },
+  "devDependencies": {
+    "turbo": "^2.1.3"
+  }
+}

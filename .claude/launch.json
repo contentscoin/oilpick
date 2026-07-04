@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "user",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@oilpick/user", "dev"],
+      "port": 5173
+    },
+    {
+      "name": "rider",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@oilpick/rider", "dev"],
+      "port": 5174
+    },
+    {
+      "name": "admin",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@oilpick/admin", "dev"],
+      "port": 5175
+    }
+  ]
+}

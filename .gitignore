@@ -1,7 +1,9 @@
 node_modules/
 dist/
+dist-node/
 build/
 .turbo/
+*.tsbuildinfo
 .env
 .env.*
 !.env.example
