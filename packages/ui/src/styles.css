@@ -19,6 +19,10 @@ body {
     "Segoe UI",
     sans-serif;
   font-size: 16px;
+  /* 05-design-upgrade.md "토큰 확장": 앱 배경(약간 웜뉴트럴) — 흰 카드가 이 위에서 떠 보이게 한다.
+     tokens.ts surface.app와 동일 값. 화면 컨테이너는 흰색을 강제하지 말고 이 배경을 비치게 둘 것. */
+  background-color: #f5f6f5;
+  color: #18181b;
 }
 
 /* 시세/포인트/kg 등 숫자 강조 표시에 사용. 03-frontend.md font 절. */

@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { CallCard, EmptyState, colors, radius } from "@oilpick/ui";
+import { CallCard, EmptyState, colors, elevation, radius, surface } from "@oilpick/ui";
 import { formatPoint } from "@oilpick/core";
 import { useSession } from "../hooks/useSession";
 import { useRiderProfile } from "../hooks/useRiderProfile";
@@ -57,7 +57,7 @@ export function CallHomePage() {
             gap: 8,
             border: "none",
             borderRadius: 999,
-            padding: "8px 16px",
+            padding: "9px 16px",
             backgroundColor: rider?.isOnline ? colors.primary.DEFAULT : "#e4e4e7",
             color: rider?.isOnline ? "#fff" : colors.status.wait,
             fontWeight: 700,
@@ -65,27 +65,50 @@ export function CallHomePage() {
             cursor: "pointer",
           }}
         >
+          {/* 05-design-upgrade.md "라이더 콜홈 스탯": on일 때 채워진 점 + green pill. */}
+          <span
+            aria-hidden
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: "50%",
+              backgroundColor: rider?.isOnline ? "#fff" : colors.status.wait,
+            }}
+          />
           {rider?.isOnline ? "온라인" : "오프라인"}
         </button>
       </div>
 
-      <section
-        data-testid="today-stats"
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          borderRadius: radius.card,
-          padding: 16,
-          backgroundColor: colors.primary.light,
-        }}
-      >
-        <div>
-          <p style={{ margin: 0, fontSize: 13, color: colors.primary.dark }}>오늘 완료</p>
-          <p style={{ margin: "4px 0 0", fontSize: 20, fontWeight: 700 }}>{stats?.completedCount ?? 0}건</p>
+      {/* 05-design-upgrade.md "라이더 콜홈 스탯": 오늘 실적을 2개 스탯 카드로 나란히. */}
+      <section data-testid="today-stats" style={{ display: "flex", gap: 12 }}>
+        <div
+          style={{
+            flex: 1,
+            borderRadius: radius.card,
+            padding: 16,
+            backgroundColor: surface.card,
+            border: `1px solid ${surface.border}`,
+            boxShadow: elevation.card,
+          }}
+        >
+          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: colors.status.wait }}>오늘 완료</p>
+          <p className="oilpick-tabular-nums" style={{ margin: "6px 0 0", fontSize: 26, fontWeight: 800, letterSpacing: "-0.01em", color: colors.primary.DEFAULT }}>
+            {stats?.completedCount ?? 0}
+            <span style={{ fontSize: 15, fontWeight: 600, color: colors.status.wait }}>건</span>
+          </p>
         </div>
-        <div style={{ textAlign: "right" }}>
-          <p style={{ margin: 0, fontSize: 13, color: colors.primary.dark }}>오늘 확정 포인트</p>
-          <p className="oilpick-tabular-nums" style={{ margin: "4px 0 0", fontSize: 20, fontWeight: 700 }}>
+        <div
+          style={{
+            flex: 1,
+            borderRadius: radius.card,
+            padding: 16,
+            backgroundColor: surface.card,
+            border: `1px solid ${surface.border}`,
+            boxShadow: elevation.card,
+          }}
+        >
+          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: colors.status.wait }}>오늘 확정 포인트</p>
+          <p className="oilpick-tabular-nums" style={{ margin: "6px 0 0", fontSize: 26, fontWeight: 800, letterSpacing: "-0.01em", color: colors.accent.DEFAULT }}>
             {formatPoint(stats?.earnedPoint ?? 0)}
           </p>
         </div>

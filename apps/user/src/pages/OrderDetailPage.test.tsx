@@ -80,9 +80,9 @@ describe("OrderDetailPage", () => {
     });
     renderPage();
 
-    expect(screen.getByTestId("rider-card")).toHaveTextContent("박라이더");
-    expect(screen.getByTestId("rider-verified-badge")).toBeInTheDocument();
-    expect(screen.getByTestId("rider-call-link")).toHaveAttribute("href", "tel:01011112222");
+    expect(screen.getByTestId("driver-card")).toHaveTextContent("박라이더");
+    expect(screen.getByTestId("driver-card-verified")).toBeInTheDocument();
+    expect(screen.getByTestId("driver-card-call")).toHaveAttribute("href", "tel:01011112222");
   });
 
   it("shows the measure confirmation UI with confirm/dispute actions when ARRIVED with measuredKg", () => {

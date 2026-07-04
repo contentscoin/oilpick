@@ -5,7 +5,9 @@ import {
   PointBalanceCard,
   PointHeroAction,
   colors,
+  elevation,
   radius,
+  surface,
 } from "@oilpick/ui";
 import { formatPoint } from "@oilpick/core";
 import { useSession } from "../hooks/useSession";
@@ -50,20 +52,20 @@ export function EarningsPage() {
       <section style={{ display: "flex", gap: 12 }}>
         <div
           data-testid="earnings-today"
-          style={{ flex: 1, borderRadius: radius.card, padding: 16, backgroundColor: colors.accent.light }}
+          style={{ flex: 1, borderRadius: radius.card, padding: 16, backgroundColor: colors.accent.light, border: `1px solid ${surface.border}`, boxShadow: elevation.card }}
         >
-          <p style={{ margin: 0, fontSize: 13, color: colors.status.wait }}>오늘 확정 지급</p>
-          <p className="oilpick-tabular-nums" style={{ margin: "4px 0 0", fontSize: 22, fontWeight: 700, color: colors.accent.DEFAULT }}>
+          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: colors.status.wait }}>오늘 확정 지급</p>
+          <p className="oilpick-tabular-nums" style={{ margin: "6px 0 0", fontSize: 22, fontWeight: 800, letterSpacing: "-0.01em", color: colors.accent.DEFAULT }}>
             {formatPoint(today.releasedPoint)}
           </p>
           <p style={{ margin: "4px 0 0", fontSize: 12, color: colors.status.wait }}>{today.count}건</p>
         </div>
         <div
           data-testid="earnings-week"
-          style={{ flex: 1, borderRadius: radius.card, padding: 16, backgroundColor: colors.primary.light }}
+          style={{ flex: 1, borderRadius: radius.card, padding: 16, backgroundColor: colors.primary.light, border: `1px solid ${surface.border}`, boxShadow: elevation.card }}
         >
-          <p style={{ margin: 0, fontSize: 13, color: colors.primary.dark }}>이번 주 확정 지급</p>
-          <p className="oilpick-tabular-nums" style={{ margin: "4px 0 0", fontSize: 22, fontWeight: 700, color: colors.primary.DEFAULT }}>
+          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: colors.primary.dark }}>이번 주 확정 지급</p>
+          <p className="oilpick-tabular-nums" style={{ margin: "6px 0 0", fontSize: 22, fontWeight: 800, letterSpacing: "-0.01em", color: colors.primary.DEFAULT }}>
             {formatPoint(week.releasedPoint)}
           </p>
           <p style={{ margin: "4px 0 0", fontSize: 12, color: colors.status.wait }}>{week.count}건</p>

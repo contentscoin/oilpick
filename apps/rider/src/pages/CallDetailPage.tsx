@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { BigButton, MapView, Toast, colors, radius } from "@oilpick/ui";
+import { BigButton, MapView, Toast, colors, elevation, radius, surface } from "@oilpick/ui";
 import { formatKg, formatKrw } from "@oilpick/core";
 import { KAKAO_KEY } from "../lib/env";
 import { invokeEdgeFunction } from "../lib/edgeFunction";
@@ -77,18 +77,32 @@ export function CallDetailPage() {
 
       <MapView apiKey={KAKAO_KEY} center={{ lat: call.pickupLat, lng: call.pickupLng }} markers={[{ lat: call.pickupLat, lng: call.pickupLng }]} />
 
-      <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <p style={{ margin: 0, fontSize: 14, color: colors.status.wait }}>수거 주소</p>
-        <p data-testid="call-detail-address" style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>
-          {call.pickupAddress}
-        </p>
+      {/* 주소 + 예상 수거량을 하나의 흰 카드로 묶어 배경 위에 띄운다. */}
+      <section
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 14,
+          padding: 16,
+          borderRadius: radius.card,
+          backgroundColor: surface.card,
+          border: `1px solid ${surface.border}`,
+          boxShadow: elevation.card,
+        }}
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: colors.status.wait }}>수거 주소</p>
+          <p data-testid="call-detail-address" style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>
+            {call.pickupAddress}
+          </p>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: colors.status.wait }}>예상 수거량</p>
+          <p className="oilpick-tabular-nums" style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>{formatKg(call.requestedKg)}</p>
+        </div>
       </section>
 
-      <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <p style={{ margin: 0, fontSize: 14, color: colors.status.wait }}>예상 수거량</p>
-        <p style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>{formatKg(call.requestedKg)}</p>
-      </section>
-
+      {/* 05-design-upgrade.md R3: 수거비 앰버 강조. 앰버 히어로 카드로 격상. */}
       <section
         data-testid="call-detail-fee"
         style={{
@@ -96,13 +110,15 @@ export function CallDetailPage() {
           flexDirection: "column",
           gap: 4,
           alignItems: "center",
-          padding: "24px 0",
-          borderRadius: radius.card,
+          padding: "28px 20px",
+          borderRadius: radius.hero,
           backgroundColor: colors.accent.light,
+          border: `1px solid ${surface.border}`,
+          boxShadow: elevation.card,
         }}
       >
-        <p style={{ margin: 0, fontSize: 14, color: colors.status.wait }}>수거비</p>
-        <p className="oilpick-tabular-nums" style={{ margin: 0, fontSize: 36, fontWeight: 700, color: colors.accent.DEFAULT }}>
+        <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: colors.status.wait }}>수거비</p>
+        <p className="oilpick-tabular-nums" style={{ margin: 0, fontSize: 40, fontWeight: 800, letterSpacing: "-0.02em", color: colors.accent.DEFAULT }}>
           {formatKrw(call.snapshotRiderFee)}
         </p>
       </section>

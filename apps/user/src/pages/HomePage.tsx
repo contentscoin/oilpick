@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { BigButton, PriceCard, QtyStepper, StatusBadge, colors, radius } from "@oilpick/ui";
+import { BigButton, PriceCard, QtyStepper, StatusBadge, colors, elevation, radius, surface } from "@oilpick/ui";
 import { estimateKg, estimatePoint, formatPoint, ORDER_STATUS_LABEL } from "@oilpick/core";
 import { useSession } from "../hooks/useSession";
 import { useLatestPriceTick, usePriceTicks } from "../hooks/usePriceTicks";
@@ -63,8 +63,11 @@ export function HomePage() {
             justifyContent: "space-between",
             borderRadius: radius.card,
             padding: 16,
-            backgroundColor: "#fff",
-            border: `1px solid ${colors.primary.light}`,
+            backgroundColor: surface.card,
+            border: `1px solid ${surface.border}`,
+            // 좌측 얇은 green 액센트 바로 "진행중"임을 강조. shadow-card로 배경 위에 띄운다.
+            borderLeft: `4px solid ${colors.primary.DEFAULT}`,
+            boxShadow: elevation.card,
             textAlign: "left",
             cursor: "pointer",
           }}
@@ -121,13 +124,18 @@ export function HomePage() {
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            padding: "16px 20px",
+            padding: "18px 20px",
             borderRadius: radius.card,
             backgroundColor: colors.accent.light,
+            border: `1px solid ${surface.border}`,
+            boxShadow: elevation.card,
           }}
         >
-          <span style={{ fontSize: 14, color: colors.status.wait }}>예상 지급 포인트</span>
-          <span className="oilpick-tabular-nums" style={{ fontSize: 24, fontWeight: 700, color: colors.accent.DEFAULT }}>
+          <span style={{ fontSize: 15, fontWeight: 600, color: colors.status.wait }}>예상 지급 포인트</span>
+          <span
+            className="oilpick-tabular-nums"
+            style={{ fontSize: 26, fontWeight: 800, letterSpacing: "-0.01em", color: colors.accent.DEFAULT }}
+          >
             {formatPoint(estimatedPoint)}
           </span>
         </div>

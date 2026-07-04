@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { BigButton, MapView, OrderTimeline, StatusBadge, colors, radius } from "@oilpick/ui";
-import { formatKg, formatKrPhone, formatPoint } from "@oilpick/core";
+import { BigButton, DriverCard, MapView, OrderTimeline, StatusHeadline, colors, elevation, radius, surface } from "@oilpick/ui";
+import { formatKg, formatPoint } from "@oilpick/core";
 import { KAKAO_KEY } from "../lib/env";
 import { invokeEdgeFunction } from "../lib/edgeFunction";
 import { useOrder } from "../hooks/useOrder";
@@ -105,9 +105,13 @@ export function OrderDetailPage() {
         >
           &lt;
         </button>
-        <h1 style={{ fontSize: 20, margin: 0, flex: 1 }}>수거 요청 상세</h1>
-        <StatusBadge status={order.status} />
+        <h1 style={{ fontSize: 15, margin: 0, flex: 1, fontWeight: 600, color: colors.status.wait }}>
+          수거 요청 상세
+        </h1>
       </div>
+
+      {/* 05-design-upgrade.md "주문 상세 상태 헤드라인": 배지 대신 큰 상태 문장 + 보조설명. */}
+      <StatusHeadline status={order.status} />
 
       {actionError && (
         <p role="alert" data-testid="order-action-error" style={{ color: colors.status.danger, fontSize: 14, margin: 0 }}>
@@ -145,25 +149,14 @@ export function OrderDetailPage() {
         <OrderTimeline currentStatus={order.status} />
       )}
 
+      {/* 05-design-upgrade.md "라이더/기사 카드": 아바타 이니셜+이름+인증 pill+차량번호+전화 버튼. */}
       {showRiderCard && rider && (
-        <section data-testid="rider-card" style={{ borderRadius: radius.card, backgroundColor: "#fff", border: "1px solid #e4e4e7", padding: 16, display: "flex", flexDirection: "column", gap: 8 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <p style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{rider.displayName} 라이더</p>
-            {rider.verifyStatus === "APPROVED" && (
-              <span data-testid="rider-verified-badge" style={{ fontSize: 12, fontWeight: 600, color: colors.primary.DEFAULT }}>
-                인증완료
-              </span>
-            )}
-          </div>
-          <p style={{ margin: 0, fontSize: 14, color: colors.status.wait }}>차량번호 {rider.vehicleNumber}</p>
-          <a
-            href={`tel:${rider.phone}`}
-            data-testid="rider-call-link"
-            style={{ marginTop: 4, fontSize: 14, fontWeight: 600, color: colors.primary.DEFAULT, textDecoration: "none" }}
-          >
-            {formatKrPhone(rider.phone)}로 전화하기
-          </a>
-        </section>
+        <DriverCard
+          name={rider.displayName}
+          vehicleNo={rider.vehicleNumber}
+          phone={rider.phone}
+          verified={rider.verifyStatus === "APPROVED"}
+        />
       )}
 
       {order.status !== "REQUESTED" && order.status !== "CANCELLED" && (
@@ -185,7 +178,7 @@ export function OrderDetailPage() {
               ))}
             </div>
           )}
-          <div style={{ borderRadius: radius.card, backgroundColor: "#fafafa", padding: 16, display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ borderRadius: radius.card, backgroundColor: surface.card, border: `1px solid ${surface.border}`, boxShadow: elevation.card, padding: 16, display: "flex", flexDirection: "column", gap: 8 }}>
             <div style={{ display: "flex", justifyContent: "space-between" }}>
               <span style={{ fontSize: 14, color: colors.status.wait }}>확정 계량</span>
               <span data-testid="measured-kg-value" style={{ fontSize: 14, fontWeight: 600 }}>
@@ -255,12 +248,25 @@ export function OrderDetailPage() {
       )}
 
       {order.status === "COMPLETED" && (
-        <section data-testid="completed-panel" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: "24px 0" }}>
-          <p style={{ margin: 0, fontSize: 15, color: colors.status.wait }}>지급된 포인트</p>
+        <section
+          data-testid="completed-panel"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 6,
+            padding: "28px 20px",
+            borderRadius: radius.hero,
+            backgroundColor: colors.accent.light,
+            border: `1px solid ${surface.border}`,
+            boxShadow: elevation.card,
+          }}
+        >
+          <p style={{ margin: 0, fontSize: 15, fontWeight: 600, color: colors.status.wait }}>지급된 포인트</p>
           <p
             data-testid="completed-supplier-point"
             className="oilpick-tabular-nums"
-            style={{ margin: 0, fontSize: 40, fontWeight: 700, color: colors.primary.DEFAULT }}
+            style={{ margin: 0, fontSize: 40, fontWeight: 800, letterSpacing: "-0.02em", color: colors.accent.DEFAULT }}
           >
             {formatPoint(order.supplierPoint ?? 0)}
           </p>
