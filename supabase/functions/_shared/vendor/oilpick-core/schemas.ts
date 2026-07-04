@@ -136,6 +136,23 @@ var pointAdjustOutputSchema = z.object({
   userId: uuidSchema,
   amount: z.number().int()
 });
+var supplierSignupInputSchema = z.object({
+  displayName: z.string().min(1),
+  storeName: z.string().min(1),
+  bizNumber: z.string().min(1),
+  address: z.string().min(1),
+  lat: latSchema,
+  lng: lngSchema
+});
+var notifyBroadcastInputSchema = z.object({
+  target: z.enum(["ALL", "supplier", "rider"]),
+  title: z.string().min(1),
+  body: z.string().min(1),
+  link: z.string().optional()
+});
+var notifyBroadcastOutputSchema = z.object({
+  recipientCount: z.number().int().nonnegative()
+});
 export {
   arrivePayloadSchema,
   cancelPayloadSchema,
@@ -143,6 +160,8 @@ export {
   deliverPayloadSchema,
   disputePayloadSchema,
   errorResponseSchema,
+  notifyBroadcastInputSchema,
+  notifyBroadcastOutputSchema,
   okResponseSchema,
   orderAcceptInputSchema,
   orderAcceptOutputSchema,
@@ -161,6 +180,7 @@ export {
   riderVerifyInputSchema,
   riderVerifyOutputSchema,
   submitMeasurePayloadSchema,
+  supplierSignupInputSchema,
   withdrawProcessInputSchema,
   withdrawProcessOutputSchema,
   withdrawRequestInputSchema,

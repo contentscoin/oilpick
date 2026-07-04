@@ -265,3 +265,41 @@
   반려하니 화면이 즉시 갱신되는 것(WITHDRAW_CANCEL +금액 원장 행 표시, 잔액 즉시 반영)을
   확인했다 — 이것이 이번 태스크 DoD("출금 신청→admin 승인→원장 반영 확인")의 실제 검증
   결과다.
+- (T11, 실사용 버그 수정) admin 시드 계정 로그인 500 에러: seed.sql의 admin auth.users insert가
+  confirmation_token/recovery_token/email_change_token_new/email_change 4개 컬럼을 명시하지
+  않아 NULL로 저장됐다(`information_schema.columns`로 실측 확인 — 다른 token류 컬럼들과 달리
+  이 4개만 기본값이 없음). GoTrue v2.192.0의 signInWithPassword가 auth.users를 Go string으로
+  스캔하는데 NULL이 오면 "converting NULL to string is unsupported" 500으로 로그인 자체가
+  실패한다(admin 로그인 실제 시도 2회로 재현 — 처음엔 confirmation_token류에서, 그 컬럼만
+  고친 뒤에는 email_change에서 동일 에러 재발, docker logs supabase_auth_oilpick에서 매번
+  원인 특정 — 태스크 브리핑에 미리 언급된 바로 그 이슈). 새 설계 판단이 아니라 이미 명시된
+  T3 DoD("admin 계정 시드")를 실제로 로그인 가능하게 만드는 버그 수정이라 판단해 seed.sql의
+  insert에 4개 컬럼 모두 빈 문자열로 명시했다. `supabase db reset` 재적용 후 admin 로그인
+  E2E로 최종 확인 완료.
+- (T11) 집하장 CRUD: 02-api.md에는 집하장 전용 Edge Function이 없다. 01-db-schema.sql
+  `p_depot_write on depots for all using (is_admin())`가 이미 admin 클라이언트의 직접
+  write를 허용하도록 설계돼 있어(price_ticks의 p_price_write와 동일 패턴), 새 Edge Function을
+  만들지 않고 admin 세션의 anon 클라이언트로 insert/update한다(CLAUDE.md 절대 규칙 2/3은
+  "주문 상태 전이"와 "포인트 원장"에 한정 — depots는 상태머신도 원장도 아니다).
+- (T11) 공지 발송: 02-api.md에 `notify-broadcast` 엔드포인트가 없다. 03-frontend.md
+  apps/admin "/notify"("전체/역할별 푸시 발송 폼")를 만족시키기 위해 신규 Edge Function
+  `supabase/functions/notify-broadcast/index.ts`를 추가했다 — 새 발송 로직을 만들지 않고
+  기존 `_shared/push.ts`의 `sendPush`(FCM 자격증명 없으면 로그만 남기고 notifications
+  insert는 항상 수행 — T4 질문 목록 항목과 동일 가정)를 대상 role별 user id 목록에
+  호출하는 얇은 래퍼다. notifications 테이블에는 client insert RLS 정책이 없어(쓰기는
+  Edge Function만, CLAUDE.md 절대 규칙 3과 동일 원칙) 이 함수가 유일한 경로다.
+- (T11, 실사용 버그 발견 — apps/rider T9 기존 코드) apps/admin 대시보드 지도 핀 데이터를
+  실제 로컬 스택으로 검증하던 중, geography(point) 컬럼을 select하면 이 환경의 PostgREST가
+  GeoJSON 객체가 아니라 **WKB hex 문자열**("0101000020E6100000...")을 반환하는 것을 curl로
+  실측 확인했다(anon+authenticated 세션, service_role 양쪽 동일). `apps/admin/src/hooks/
+  useDashboard.ts`에 처음 GeoJSON 전용 파서를 apps/rider의 기존 패턴(useOpenCalls.ts
+  parsePoint)을 그대로 복사해 썼다가, 방금 만든 테스트 주문이 대시보드 지도/리스트에 전혀
+  뜨지 않는 것으로 먼저 재현하고 원인을 특정했다 — GeoJSON 분기만 있어 WKB hex 입력에는
+  null을 반환하고 `.filter(v => v !== null)`가 조용히 걸러 없앤다(에러 없음). WKB 헤더(1B
+  endianness + 4B geom type + 4B SRID) + 8B lng + 8B lat(double)을 직접 디코드하는 파서로
+  교체해 실제 브라우저에서 지도 리스트에 정상 표시되는 것을 확인했다(`useDashboard.ts`
+  parseGeographyPoint, `useDepotsAdmin.ts` parsePoint). 이 발견은 apps/rider/src/hooks/
+  useOpenCalls.ts의 기존 parsePoint(T9에서 작성, "PostgREST는 GeoJSON으로 반환한다"는
+  잘못된 가정)에도 동일하게 적용되는 잠재 버그다 — 그 함수는 실패 시 예외 없이 `{lat:0,lng:0}`
+  으로 폴백해 R2 "거리순 정렬"이 항상 (0,0) 기준으로 계산되는 문제가 있을 것으로 추정되나,
+  이번 태스크(T11) 범위 밖이라 별도 백그라운드 작업으로 분리했다(직접 수정하지 않음).

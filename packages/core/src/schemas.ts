@@ -231,3 +231,23 @@ export const supplierSignupInputSchema = z.object({
   lng: lngSchema,
 });
 export type SupplierSignupInput = z.infer<typeof supplierSignupInputSchema>;
+
+// ===== notify-broadcast (admin) =====
+// 03-frontend.md apps/admin "/notify": "전체/역할별 푸시 발송 폼". 02-api.md에는 없던
+// 신규 엔드포인트 — T11 작업 지시사항이 명시한 "notifications 테이블 insert는 되고 실제
+// 발송은 로그만"이라는 기존 가정(04-tasks.md 질문 목록 "FCM 서비스 계정 자격증명 없음")을
+// 그대로 재사용하는 얇은 래퍼다. _shared/push.ts의 sendPush(userIds, title, body, link)를
+// 대상 role별 user id 목록에 호출하기만 하고 새 발송 로직을 만들지 않는다.
+
+export const notifyBroadcastInputSchema = z.object({
+  target: z.enum(["ALL", "supplier", "rider"]),
+  title: z.string().min(1),
+  body: z.string().min(1),
+  link: z.string().optional(),
+});
+export type NotifyBroadcastInput = z.infer<typeof notifyBroadcastInputSchema>;
+
+export const notifyBroadcastOutputSchema = z.object({
+  recipientCount: z.number().int().nonnegative(),
+});
+export type NotifyBroadcastOutput = z.infer<typeof notifyBroadcastOutputSchema>;
