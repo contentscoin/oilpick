@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { AuthGuard } from "./components/AuthGuard";
+import { useNativeIntegration } from "./hooks/useNativeIntegration";
 import { queryClient } from "./lib/queryClient";
 import { DevUiPage } from "./pages/DevUiPage";
 import { OnboardingPage, ONBOARDING_DONE_KEY } from "./pages/OnboardingPage";
@@ -36,6 +37,9 @@ function RootRoute() {
  * 링크되지 않는다. 필요 시 이후 태스크에서 `import.meta.env.DEV` 가드를 추가할 수 있다.
  */
 export function App() {
+  // 네이티브(Capacitor) 통합: 커스텀 스킴 딥링크 + FCM 푸시 초기화(웹에서는 no-op).
+  useNativeIntegration();
+
   return (
     <QueryClientProvider client={queryClient}>
       <Routes>

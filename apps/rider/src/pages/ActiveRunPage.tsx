@@ -8,6 +8,7 @@ import { supabase } from "../lib/supabaseClient";
 import { useSession } from "../hooks/useSession";
 import { useActiveRun } from "../hooks/useActiveRun";
 import { useRiderLocationPusher } from "../hooks/useRiderLocationPusher";
+import { isScannerAvailable, scanQrCode } from "../lib/native/scanner";
 
 /**
  * R4~R6 "/active" 운행 단일 화면. 03-frontend.md apps/rider 표:
@@ -15,9 +16,10 @@ import { useRiderLocationPusher } from "../hooks/useRiderLocationPusher";
  * [계량 제출]→'사장님 확인 대기' 배너(Realtime로 PICKED_UP 감지). PICKED_UP: 집하장 안내+QR
  * 스캐너→DELIVER 호출. 운행 중 15초 간격 rider-location 호출".
  *
- * QR 스캐너는 @capacitor-community/barcode-scanner가 최종형태이지만 Capacitor는 T12에서
- * 추가된다(태스크 지시사항, 04-tasks.md 질문 목록에 동일 패턴 기록됨 — PhotoUploader/MapView와
- * 동일). 지금은 depotId+qrSecret 수동 텍스트 입력 폴백 UI로 구현한다.
+ * QR 스캐너: T12에서 @capacitor-community/barcode-scanner를 연동했다(lib/native/scanner.ts).
+ * 네이티브(iOS/Android)에서는 [QR 스캔] 버튼으로 카메라 스캔 → qrSecret 자동 입력하고,
+ * 웹/개발 모드에서는 depotId+qrSecret 수동 텍스트 입력 폴백 UI를 그대로 사용한다
+ * (scanQrCode가 웹에서 no-op). 두 경로 모두 최종적으로 DELIVER RPC를 호출한다.
  */
 export function ActiveRunPage() {
   const navigate = useNavigate();
@@ -245,7 +247,22 @@ function PickedUpPanel({ orderId, depotId }: { orderId: string; depotId: string 
   const [inputDepotId, setInputDepotId] = useState(depotId ?? "");
   const [qrSecret, setQrSecret] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [scanning, setScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // R6 QR 스캔(네이티브 전용). 스캔 성공 시 qrSecret 필드를 채운다. 웹에서는 버튼이 노출되지 않음.
+  async function handleScan() {
+    setError(null);
+    setScanning(true);
+    try {
+      const content = await scanQrCode();
+      if (content) setQrSecret(content);
+    } catch {
+      setError("QR 스캔에 실패했어요. 카메라 권한을 확인하거나 값을 직접 입력해주세요.");
+    } finally {
+      setScanning(false);
+    }
+  }
 
   async function handleDeliver(e: FormEvent) {
     e.preventDefault();
@@ -269,10 +286,23 @@ function PickedUpPanel({ orderId, depotId }: { orderId: string; depotId: string 
       <section style={{ borderRadius: radius.card, backgroundColor: "#fafafa", padding: 16 }}>
         <p style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>지정 집하장으로 이동해주세요.</p>
         <p style={{ margin: "8px 0 0", fontSize: 13, color: colors.status.wait }}>
-          집하장 QR 코드를 스캔하는 대신, 개발 모드에서는 집하장 ID와 QR 값을 직접 입력할 수 있어요
-          (04-tasks.md 질문 목록 — QR 스캐너는 T12에서 Capacitor 도입 후 교체 예정).
+          {isScannerAvailable()
+            ? "집하장 QR 코드를 스캔해 배송을 완료하세요. 필요하면 값을 직접 입력할 수도 있어요."
+            : "집하장 QR 코드를 스캔하는 대신, 웹/개발 모드에서는 집하장 ID와 QR 값을 직접 입력할 수 있어요."}
         </p>
       </section>
+
+      {isScannerAvailable() && (
+        <BigButton
+          type="button"
+          variant="secondary"
+          data-testid="scan-qr-button"
+          loading={scanning}
+          onClick={() => void handleScan()}
+        >
+          QR 스캔
+        </BigButton>
+      )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         <label htmlFor="depot-id-input" style={{ fontSize: 14, fontWeight: 600 }}>

@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { AuthGuard } from "./components/AuthGuard";
 import { RiderShell } from "./components/RiderShell";
+import { useNativeIntegration } from "./hooks/useNativeIntegration";
 import { queryClient } from "./lib/queryClient";
 import { AuthPage } from "./pages/AuthPage";
 import { VerifyPage } from "./pages/VerifyPage";
@@ -22,6 +23,9 @@ import { MyPage } from "./pages/MyPage";
  * 태스크(T10) 구현. R10(/history)만 아직 범위 밖이라 placeholder를 유지한다.
  */
 export function App() {
+  // 네이티브(Capacitor) 통합: 커스텀 스킴 딥링크 + FCM 푸시 초기화(웹에서는 no-op).
+  useNativeIntegration();
+
   return (
     <QueryClientProvider client={queryClient}>
       <Routes>

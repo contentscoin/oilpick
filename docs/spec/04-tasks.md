@@ -303,3 +303,27 @@
   잘못된 가정)에도 동일하게 적용되는 잠재 버그다 — 그 함수는 실패 시 예외 없이 `{lat:0,lng:0}`
   으로 폴백해 R2 "거리순 정렬"이 항상 (0,0) 기준으로 계산되는 문제가 있을 것으로 추정되나,
   이번 태스크(T11) 범위 밖이라 별도 백그라운드 작업으로 분리했다(직접 수정하지 않음).
+- (T12) 실제 푸시 수신/딥링크 이동/에뮬레이터·시뮬레이터 실행은 이 환경에서 검증 불가 —
+  런칭 단계에서 실기기 또는 CI로 검증이 필요하다. 이유/현황:
+  (1) FCM 서비스 계정 자격증명(`FCM_SERVICE_ACCOUNT` secret)이 없어 실제 발송 경로는 T4와
+      동일하게 서버(`_shared/push.ts`)에서 로그만 남기고 스킵된다. 클라이언트 측 등록 코드
+      (권한 요청 → registration 토큰 → `profiles.fcm_token` update)는 작성됐으나 실제 토큰
+      발급은 네이티브(APNs/FCM) 런타임에서만 일어나므로 웹/이 환경에서 end-to-end 검증 불가.
+      FCM 서비스 계정 키 발급 + Supabase secret 등록 + 실기기(또는 CI 디바이스 팜)에서만
+      실제 수신을 확인할 수 있다.
+  (2) 태스크 브리핑 지시대로 Android 에뮬레이터/iOS 시뮬레이터는 부팅하지 않았다(머신 부하).
+      따라서 네이티브 앱을 띄워 딥링크 탭 이동(oilpick-user://orders/:id 등)이 실제로 라우팅
+      되는지는 미검증. 대신 (a) `cap add ios/android` + `cap sync`가 양 앱에서 에러 없이 완료,
+      (b) pod install 7개(user)/8개(rider, +barcode-scanner) 성공, (c) Info.plist 권한 문구·
+      CFBundleURLSchemes, AndroidManifest 권한·intent-filter가 올바르게 주입됐는지, (d) 딥링크
+      경로 정규화(normalizeDeepLink) 단위 테스트, (e) 웹에서 no-op 가드가 동작해 3개 앱이 그대로
+      렌더되는지(브라우저 실측)까지 검증했다.
+  (3) 아이콘/스플래시는 임시 placeholder(단색 primary 배경 + "OilPick" 텍스트, `assets/icon.png`
+      2732 splash)를 `@capacitor/assets`로 iOS/Android 리소스에 생성했다. 실제 브랜드 로고는
+      런칭 전 교체 전제. `@capacitor/assets`는 PWA용 `www/manifest.json`이 없어 PWA 리소스
+      생성 단계에서만 에러를 내지만(무시), iOS/Android 아이콘·스플래시는 정상 생성된다.
+  (4) `@capacitor-community/barcode-scanner@4.0.1`의 선언된 peer는 `@capacitor/core@^5`지만
+      실사용상 Capacitor 6에서 동작한다 — 루트 `package.json`의 `pnpm.peerDependencyRules`로
+      Cap6를 허용했다(설치 경고 제거). 최종형태는 스펙이 명시한 이 커뮤니티 스캐너를 유지했고
+      (substitute 금지), R6 PickedUpPanel에 네이티브 [QR 스캔] 버튼(웹에서는 미노출, 수동 입력
+      폴백 유지)으로 배선했다. 실제 카메라 스캔은 실기기에서만 검증 가능.

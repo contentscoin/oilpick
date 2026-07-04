@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">OilPick 라이더</string>
+    <string name="title_activity_main">OilPick 라이더</string>
+    <string name="package_name">kr.oilpick.rider</string>
+    <string name="custom_url_scheme">kr.oilpick.rider</string>
+</resources>
