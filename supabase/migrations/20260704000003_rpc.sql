@@ -247,7 +247,9 @@ begin
     end if;
 
     select * into v_depot from depots where id = (p_payload->>'depotId')::uuid;
-    if not found or v_depot.qr_secret <> (p_payload->>'qrSecret') then
+    if not found
+      or coalesce(p_payload->>'qrSecret', '') = ''
+      or v_depot.qr_secret is distinct from (p_payload->>'qrSecret') then
       raise exception 'INVALID_QR' using errcode = 'P0001';
     end if;
 
