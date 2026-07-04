@@ -32,7 +32,25 @@ export function HomePage() {
 
   return (
     <main style={{ display: "flex", flexDirection: "column", gap: 20, padding: 20, maxWidth: 480, margin: "0 auto" }}>
-      <h1 style={{ fontSize: 20, margin: "8px 0 0" }}>OilPick</h1>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <h1 style={{ fontSize: 20, margin: "8px 0 0" }}>OilPick</h1>
+        <button
+          type="button"
+          data-testid="orders-history-link"
+          onClick={() => navigate("/orders")}
+          style={{
+            background: "none",
+            border: "none",
+            color: colors.status.wait,
+            fontSize: 14,
+            fontWeight: 600,
+            cursor: "pointer",
+            padding: 0,
+          }}
+        >
+          이력 보기
+        </button>
+      </div>
 
       {activeOrder && (
         <button

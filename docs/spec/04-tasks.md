@@ -189,3 +189,27 @@
   로 바꾸고 이펙트 내부에서 최신 queryKey를 다시 계산하도록 고쳤다. 두 버그 모두 자동 테스트
   (vitest, jsdom 환경의 목 채널)로는 잡히지 않고 실제 브라우저 렌더에서만 재현됐다 — 이 태스크
   지시사항의 "가능하면 브라우저 자동화로 직접 실행해 확인" 요구가 아니었다면 놓쳤을 결함이다.
+- (T8) 라이더 카드 read 권한 공백: 03-frontend.md U6~U9(63행)는 "/orders/:id"에서 "라이더
+  카드(이름/차량/인증배지/전화 tel:)"를 요구하지만, 01-db-schema.sql의 기존 RLS(p_profiles_self,
+  p_rider_self)는 profiles/rider_profiles를 "본인 또는 admin"만 select하도록 허용해 supplier가
+  자신에게 배정된 라이더 정보를 조회할 방법이 없었다. 이는 새로운 설계 판단이 아니라 스펙이 이미
+  요구한 화면을 위한 스키마 보완이라 판단해, p_order_rider/p_events_read와 동일한 "본인이 관련된
+  주문의 상대방 정보 read" 패턴을 profiles/rider_profiles에 대칭 적용하는
+  `20260704000010_rider_card_read_policy.sql`을 추가했다(01-db-schema.sql도 동기화).
+- (T8, 실사용 버그 수정) 위 RLS 정책의 최초 버전은 profiles/rider_profiles 정책 안에서 직접
+  `exists(select 1 from pickup_orders ...)`를 썼는데, 이 때문에 로컬 브라우저 검증 중
+  `GET .../profiles`, `GET .../pickup_orders` 요청이 전부 500으로 실패하는 것을 실제로 확인했다
+  (postgres 로그: "infinite recursion detected in policy for relation pickup_orders"). 원인:
+  pickup_orders의 기존 정책 p_order_open_calls가 rider_profiles를 참조하는데(RLS 콜 목록용),
+  내가 추가한 rider_profiles 정책이 다시 pickup_orders를 참조해 순환이 생김. is_admin()과 동일한
+  패턴으로 `fn_is_assigned_rider_of_caller(uuid)` security definer 함수로 pickup_orders 조회를
+  감싸 RLS 재평가를 우회하도록 고쳐 해결했다 — 이 버그는 정적 타입체크/lint/vitest로는 전혀
+  드러나지 않고 실제 로컬 Supabase 스택 + 브라우저 렌더에서만 재현됐다.
+- (T8, 실사용 버그 아님 — 검증 중 발견한 psql 함정) `fn_transition_order` 같은 컴포짓(row) 반환
+  RPC를 `psql`에서 `select (fn_transition_order(...)).*`(괄호+`.*` 전개) 형태로 호출하면, 알 수 없는
+  이유로 동일 statement 내에서 함수가 두 번 평가되는 것처럼 동작해(첫 호출은 성공하지만 두 번째
+  평가가 이미 전이된 행에 대해 실패) 항상 `ALREADY_ACCEPTED`류 에러로 보이는 현상을 로컬에서
+  실제로 겪었다(`DO` 블록으로 동일 호출을 감싸거나 `select fn_transition_order(...)`로 `.*` 전개 없이
+  호출하면 정상 동작 확인). 관리자/운영자가 이 RPC를 psql로 직접 검증할 때는 `.*` 전개 없이
+  `select fn_transition_order(p_order_id, p_action, p_actor_id, p_actor_role, p_payload);` 형태로
+  호출할 것 — 이 각주는 향후 admin SQL 콘솔/런북에 반영이 필요하다.

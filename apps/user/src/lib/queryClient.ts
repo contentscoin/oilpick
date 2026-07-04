@@ -20,4 +20,7 @@ export const queryKeys = {
   latestPriceTick: () => ["priceTicks", "latest"] as const,
   priceTickHistory: (limit: number) => ["priceTicks", "history", limit] as const,
   activeOrder: (userId: string) => ["orders", "active", userId] as const,
+  orderDetail: (orderId: string) => ["orders", "detail", orderId] as const,
+  riderCard: (riderId: string) => ["riderCard", riderId] as const,
+  orderHistory: (userId: string, page: number) => ["orders", "history", userId, page] as const,
 };

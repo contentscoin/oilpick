@@ -191,9 +191,32 @@ create policy p_profiles_self on profiles for select using (id = auth.uid() or i
 create policy p_profiles_update on profiles for update using (id = auth.uid());
 create policy p_profiles_insert on profiles for insert with check (id = auth.uid() and role <> 'admin');
 
+-- supplier가 자신에게 배정된 라이더의 profiles/rider_profiles 행을 read (03-frontend.md U6~U9
+-- "라이더 카드" 렌더용, 20260704000010_rider_card_read_policy.sql에서 추가 — p_order_rider/
+-- p_events_read와 동일한 "본인이 관련된 주문의 상대방 정보 read" 패턴). pickup_orders 조회는
+-- is_admin()과 동일하게 security definer 함수로 감싼다 — pickup_orders의 기존 정책
+-- p_order_open_calls가 rider_profiles를 참조하므로, profiles/rider_profiles 정책 안에서
+-- pickup_orders를 직접(RLS 평가 대상으로) 조회하면 rider_profiles ↔ pickup_orders 순환 참조로
+-- "infinite recursion detected in policy" 에러가 난다(로컬 검증으로 재현 확인).
+create or replace function fn_is_assigned_rider_of_caller(p_rider_id uuid) returns boolean as
+$$ select exists (
+  select 1 from pickup_orders o where o.rider_id = p_rider_id and o.supplier_id = auth.uid()
+) $$
+language sql security definer stable;
+
+create policy p_profiles_read_assigned_rider on profiles for select using (
+  fn_is_assigned_rider_of_caller(profiles.id)
+);
+
 -- supplier/rider_profiles: 본인 R/W, admin 전체. 단 rider verify_status는 클라이언트 update 금지(컬럼 분리 함수로만)
 create policy p_sup_self on supplier_profiles for all using (id = auth.uid() or is_admin());
 create policy p_rider_self on rider_profiles for all using (id = auth.uid() or is_admin());
+-- supplier가 자신에게 배정된 라이더의 rider_profiles 행을 read (차량번호/인증상태 표시용,
+-- 20260704000010_rider_card_read_policy.sql). fn_is_assigned_rider_of_caller는 위 profiles
+-- 정책과 공유.
+create policy p_rider_profiles_read_by_supplier on rider_profiles for select using (
+  fn_is_assigned_rider_of_caller(rider_profiles.id)
+);
 
 -- price_ticks: 전체 공개 read, insert는 admin만
 create policy p_price_read on price_ticks for select using (true);

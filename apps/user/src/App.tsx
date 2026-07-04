@@ -7,7 +7,9 @@ import { OnboardingPage, ONBOARDING_DONE_KEY } from "./pages/OnboardingPage";
 import { AuthPage } from "./pages/AuthPage";
 import { HomePage } from "./pages/HomePage";
 import { PricePage } from "./pages/PricePage";
-import { RequestPlaceholderPage } from "./pages/RequestPlaceholderPage";
+import { RequestPage } from "./pages/RequestPage";
+import { OrderDetailPage } from "./pages/OrderDetailPage";
+import { OrdersHistoryPage } from "./pages/OrdersHistoryPage";
 
 /**
  * 루트("/") 진입 가드. U1 온보딩을 아직 안 봤으면 /onboarding으로,
@@ -48,7 +50,23 @@ export function App() {
           path="/request"
           element={
             <AuthGuard>
-              <RequestPlaceholderPage />
+              <RequestPage />
+            </AuthGuard>
+          }
+        />
+        <Route
+          path="/orders"
+          element={
+            <AuthGuard>
+              <OrdersHistoryPage />
+            </AuthGuard>
+          }
+        />
+        <Route
+          path="/orders/:id"
+          element={
+            <AuthGuard>
+              <OrderDetailPage />
             </AuthGuard>
           }
         />
