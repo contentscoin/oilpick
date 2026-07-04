@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { QueryClientProvider } from "@tanstack/react-query";
+import { OfflineBanner } from "@oilpick/ui";
 import { AuthGuard } from "./components/AuthGuard";
 import { useNativeIntegration } from "./hooks/useNativeIntegration";
 import { queryClient } from "./lib/queryClient";
@@ -42,6 +43,8 @@ export function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      {/* 03-frontend.md "공통 규칙" 오프라인 배너 — 셸 래핑과 무관하게 항상 최상단에 고정. */}
+      <OfflineBanner />
       <Routes>
         <Route path="/onboarding" element={<OnboardingPage />} />
         <Route path="/auth" element={<AuthPage />} />

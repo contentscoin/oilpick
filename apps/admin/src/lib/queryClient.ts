@@ -10,6 +10,8 @@ export const queryClient = new QueryClient({
     queries: {
       retry: 1,
       staleTime: 15_000,
+      // 03-frontend.md "공통 규칙"(네트워크 재시도): 연결 복구 시 자동 refetch.
+      refetchOnReconnect: true,
     },
   },
 });

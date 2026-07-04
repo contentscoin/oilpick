@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { QueryClientProvider } from "@tanstack/react-query";
+import { OfflineBanner } from "@oilpick/ui";
 import { AuthGuard } from "./components/AuthGuard";
 import { RiderShell } from "./components/RiderShell";
 import { useNativeIntegration } from "./hooks/useNativeIntegration";
@@ -28,6 +29,8 @@ export function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      {/* 03-frontend.md "공통 규칙" 오프라인 배너 — 셸 래핑과 무관하게 항상 최상단에 고정. */}
+      <OfflineBanner />
       <Routes>
         <Route path="/auth" element={<AuthPage />} />
         <Route

@@ -13,6 +13,7 @@ export * from "./components/QtyStepper";
 export * from "./components/BottomSheet";
 export * from "./components/TabBar";
 export * from "./components/Toast";
+export * from "./components/OfflineBanner";
 export * from "./components/EmptyState";
 export * from "./components/PhotoUploader";
 export * from "./components/MapView";

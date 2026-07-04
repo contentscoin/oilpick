@@ -10,6 +10,9 @@ export const queryClient = new QueryClient({
     queries: {
       retry: 1,
       staleTime: 30_000,
+      // 03-frontend.md "공통 규칙"(네트워크 재시도): 연결이 끊겼다 복구되면 자동 refetch.
+      // (TanStack Query v5 기본값이지만 오프라인 배너와 짝을 이루는 동작이라 의도를 명시.)
+      refetchOnReconnect: true,
     },
   },
 });

@@ -126,9 +126,10 @@ create table point_ledger (
 create index idx_ledger_user on point_ledger (user_id, created_at desc);
 
 -- append-only 강제
+-- search_path 고정: Supabase security advisor(function_search_path_mutable) 대응.
 create or replace function forbid_ledger_mutation() returns trigger as $$
 begin raise exception 'point_ledger is append-only'; end;
-$$ language plpgsql;
+$$ language plpgsql set search_path = public;
 create trigger trg_ledger_no_update before update or delete on point_ledger
   for each row execute function forbid_ledger_mutation();
 
@@ -189,14 +190,17 @@ alter table point_ledger enable row level security;
 alter table withdrawals enable row level security;
 alter table notifications enable row level security;
 
+-- security definer 함수는 search_path를 고정해 하이재킹을 막는다(Supabase security advisor 대응).
 create or replace function is_admin() returns boolean as
 $$ select exists(select 1 from profiles where id = auth.uid() and role='admin') $$
-language sql security definer stable;
+language sql security definer stable set search_path = public;
 
 -- profiles: 본인 R/W(role 변경 불가는 컬럼 권한으로), admin 전체 R
-create policy p_profiles_self on profiles for select using (id = auth.uid() or is_admin());
-create policy p_profiles_update on profiles for update using (id = auth.uid());
-create policy p_profiles_insert on profiles for insert with check (id = auth.uid() and role <> 'admin');
+-- 성능 advisor(auth_rls_initplan): auth.uid()는 (select auth.uid())로 감싸 행마다 재평가되지 않고
+-- InitPlan으로 한 번만 평가되게 한다(값 동일, 20260704000015_rls_initplan.sql에서 정렬).
+create policy p_profiles_self on profiles for select using (id = (select auth.uid()) or is_admin());
+create policy p_profiles_update on profiles for update using (id = (select auth.uid()));
+create policy p_profiles_insert on profiles for insert with check (id = (select auth.uid()) and role <> 'admin');
 
 -- supplier가 자신에게 배정된 라이더의 profiles/rider_profiles 행을 read (03-frontend.md U6~U9
 -- "라이더 카드" 렌더용, 20260704000010_rider_card_read_policy.sql에서 추가 — p_order_rider/
@@ -209,15 +213,15 @@ create or replace function fn_is_assigned_rider_of_caller(p_rider_id uuid) retur
 $$ select exists (
   select 1 from pickup_orders o where o.rider_id = p_rider_id and o.supplier_id = auth.uid()
 ) $$
-language sql security definer stable;
+language sql security definer stable set search_path = public;
 
 create policy p_profiles_read_assigned_rider on profiles for select using (
   fn_is_assigned_rider_of_caller(profiles.id)
 );
 
 -- supplier/rider_profiles: 본인 R/W, admin 전체. 단 rider verify_status는 클라이언트 update 금지(컬럼 분리 함수로만)
-create policy p_sup_self on supplier_profiles for all using (id = auth.uid() or is_admin());
-create policy p_rider_self on rider_profiles for all using (id = auth.uid() or is_admin());
+create policy p_sup_self on supplier_profiles for all using (id = (select auth.uid()) or is_admin());
+create policy p_rider_self on rider_profiles for all using (id = (select auth.uid()) or is_admin());
 -- supplier가 자신에게 배정된 라이더의 rider_profiles 행을 read (차량번호/인증상태 표시용,
 -- 20260704000010_rider_card_read_policy.sql). fn_is_assigned_rider_of_caller는 위 profiles
 -- 정책과 공유.
@@ -230,29 +234,29 @@ create policy p_price_read on price_ticks for select using (true);
 create policy p_price_write on price_ticks for insert with check (is_admin());
 
 -- depots: read는 인증 사용자, write는 admin
-create policy p_depot_read on depots for select using (auth.uid() is not null);
+create policy p_depot_read on depots for select using ((select auth.uid()) is not null);
 create policy p_depot_write on depots for all using (is_admin());
 
 -- pickup_orders: supplier 본인 것 / 배정 rider 본인 것 / REQUESTED는 verified 라이더 콜 목록용 read / admin 전체
-create policy p_order_supplier on pickup_orders for select using (supplier_id = auth.uid() or is_admin());
-create policy p_order_rider on pickup_orders for select using (rider_id = auth.uid());
+create policy p_order_supplier on pickup_orders for select using (supplier_id = (select auth.uid()) or is_admin());
+create policy p_order_rider on pickup_orders for select using (rider_id = (select auth.uid()));
 create policy p_order_open_calls on pickup_orders for select using (
   status = 'REQUESTED' and exists(
-    select 1 from rider_profiles r where r.id = auth.uid() and r.verify_status='APPROVED')
+    select 1 from rider_profiles r where r.id = (select auth.uid()) and r.verify_status='APPROVED')
 );
 -- insert/update는 클라이언트 금지 → Edge Function(service_role)만. 정책 없음 = 차단.
 
 -- order_events: 관련자 read only
 create policy p_events_read on order_events for select using (
   is_admin() or exists(select 1 from pickup_orders o where o.id = order_id
-    and (o.supplier_id = auth.uid() or o.rider_id = auth.uid()))
+    and (o.supplier_id = (select auth.uid()) or o.rider_id = (select auth.uid())))
 );
 
 -- point_ledger / withdrawals / notifications: 본인 read, admin 전체. 쓰기는 Edge Function만
-create policy p_ledger_read on point_ledger for select using (user_id = auth.uid() or is_admin());
-create policy p_withdraw_read on withdrawals for select using (user_id = auth.uid() or is_admin());
-create policy p_noti_read on notifications for select using (user_id = auth.uid());
-create policy p_noti_update on notifications for update using (user_id = auth.uid()); -- read_at 갱신
+create policy p_ledger_read on point_ledger for select using (user_id = (select auth.uid()) or is_admin());
+create policy p_withdraw_read on withdrawals for select using (user_id = (select auth.uid()) or is_admin());
+create policy p_noti_read on notifications for select using (user_id = (select auth.uid()));
+create policy p_noti_update on notifications for update using (user_id = (select auth.uid())); -- read_at 갱신
 
 -- Storage 버킷: order-photos (관련자 read / rider write), rider-docs (본인 write, admin read)
 -- Realtime publication: pickup_orders, notifications, price_ticks, rider_profiles, point_ledger 활성화
