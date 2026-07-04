@@ -99,3 +99,19 @@
   ESM으로 번들링해 `supabase/functions/_shared/vendor/oilpick-core/`에 vendoring하는 방식으로
   해결했다. packages/core/src가 바뀔 때마다 이 스크립트를 재실행해 vendor 산출물을 갱신해야
   한다(자동화는 이 태스크 범위 밖 — CI/pre-commit 훅으로 추후 자동화 검토 필요).
+- (T4, 재시도 2 수정) 00-domain.md:30은 REQUESTED→CANCELLED 트리거를 "supplier 또는 시스템"으로
+  명시하지만, 20260704000003_rpc.sql의 fn_transition_order CANCEL 분기는 애초에 시스템(30분
+  무수락 자동취소) 경로를 구현하지 않았다 — user_role enum(01-db-schema.sql:7)에 'system' 값이
+  없기 때문. 1차 구현에서는 order-expire Edge Function이 이 공백을 pickup_orders.status 직접
+  UPDATE로 우회해 CLAUDE.md 절대 규칙 2("상태 전이는 Edge Function order-transition/RPC로만")를
+  구조적으로 위반했다(logic-review 지적). 스펙에 없는 새 설계 판단이 필요한 지점이라 임의 결정
+  대신 다음으로 해결: user_role enum에 'system'을 추가하지 않고(profiles.role 등 실사용자 role과
+  섞이면 안전하지 않음 — 시스템은 로그인 계정이 아니라 profiles에 대응 row가 없음),
+  `p_actor_id IS NULL AND p_actor_role IS NULL` 조합을 시스템 액터의 명시적 신호로 규약화했다
+  (order_events.actor_id 컬럼 주석 "null = 시스템", 01-db-schema.sql:106과 정합).
+  20260704000006_rpc_system_cancel.sql에서 fn_transition_order를 CREATE OR REPLACE로 갱신했고,
+  order-expire의 cancelNoRider는 이제 이 RPC를 호출한다(직접 UPDATE 제거). 함수 시그니처는
+  그대로(user_role 파라미터는 nullable로 SQL NULL 전달 가능)라 20260704000005_grants.sql의
+  EXECUTE GRANT 재적용은 불필요. 사람 actor가 이 경로를 오용할 수 없는 이유: Edge Function은
+  항상 _shared/auth.ts에서 profiles 재조회한 role을 넘기므로 사람 호출에서 actor_role=NULL이
+  나올 수 없다(클라이언트가 role을 자칭해도 무시됨 — CLAUDE.md 절대 규칙 3).

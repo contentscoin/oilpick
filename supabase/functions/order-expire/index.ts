@@ -4,7 +4,9 @@
 // broadcast_radius_km 컬럼으로 현재 단계 추적(중복 브로드캐스트 방지).
 //
 // 실제 스케줄링 배선(pg_cron 등)은 배포 시점 설정이라 이 태스크 범위 밖 — 로컬에서는 curl로
-// 직접 호출해 로직만 검증한다(태스크 지시사항). 취소는 fn_transition_order의 CANCEL 액션에 위임.
+// 직접 호출해 로직만 검증한다(태스크 지시사항). 취소는 fn_transition_order의 CANCEL 액션에 위임
+// (시스템 자동취소 경로는 20260704000006_rpc_system_cancel.sql에서 actor_id=NULL/actor_role=NULL
+// 조합으로 RPC에 추가됨 — 상태머신은 항상 이 RPC를 통해서만 변경한다).
 
 import { AuthError, requireAuth, requireRole } from "../_shared/auth.ts";
 import { errorResponse, okResponse, withErrorHandling } from "../_shared/response.ts";
@@ -131,33 +133,28 @@ async function cancelNoRider(
   orderId: string,
   supplierId: string,
 ): Promise<void> {
-  // 30분 무수락 자동 취소는 "시스템" 액터 — fn_transition_order의 CANCEL 액션은
-  // REQUESTED+supplier 또는 ACCEPTED+admin만 허용하므로, 여기서는 RPC를 거치지 않고
-  // service_role로 직접 상태를 CANCELLED로 전이한다(00-domain.md "REQUESTED→CANCELLED,
-  // supplier 또는 시스템" 행 — 트리거가 "시스템"인 유일한 자동 전이).
-  const { data: cancelledOrder, error } = await admin
-    .from("pickup_orders")
-    .update({ status: "CANCELLED", cancel_reason: "NO_RIDER" })
-    .eq("id", orderId)
-    .eq("status", "REQUESTED")
-    .select("id")
-    .maybeSingle();
-  if (error) {
-    console.error("cancelNoRider: 취소 실패", error);
+  // 30분 무수락 자동 취소는 "시스템" 액터(00-domain.md:30 "REQUESTED→CANCELLED, supplier 또는
+  // 시스템"). fn_transition_order의 CANCEL 액션은 20260704000006_rpc_system_cancel.sql에서
+  // p_actor_id=NULL & p_actor_role=NULL 조합을 시스템 취소 경로로 인식하도록 확장됐다 —
+  // 상태전이/order_events insert는 모두 RPC 내부에서 트랜잭션으로 처리된다(재구현하지 않음).
+  const { data: order, error: rpcErr } = await admin.rpc("fn_transition_order", {
+    p_order_id: orderId,
+    p_action: "CANCEL",
+    p_actor_id: null,
+    p_actor_role: null,
+    p_payload: { reason: "NO_RIDER" },
+  });
+
+  if (rpcErr) {
+    const message = rpcErr.message ?? "";
+    if (message.includes("INVALID_TRANSITION") || message.includes("NOT_FOUND")) {
+      // 이미 다른 처리(수락/취소 등)로 상태가 바뀐 경우(레이스) — 조용히 스킵.
+      return;
+    }
+    console.error("cancelNoRider: 취소 실패", rpcErr);
     return;
   }
-  if (!cancelledOrder) return; // 이미 다른 처리로 상태가 바뀐 경우(레이스) — 조용히 스킵.
-
-  const { error: eventErr } = await admin.from("order_events").insert({
-    order_id: orderId,
-    from_status: "REQUESTED",
-    to_status: "CANCELLED",
-    actor_id: null,
-    payload: { reason: "NO_RIDER" },
-  });
-  if (eventErr) {
-    console.error("cancelNoRider: order_events insert 실패", eventErr);
-  }
+  if (!order) return;
 
   await sendPush(
     admin,
