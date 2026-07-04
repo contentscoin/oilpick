@@ -397,6 +397,32 @@ import_map = "./functions/import_map.json"
 verify_jwt = true
 import_map = "./functions/import_map.json"
 
+# T5: withdraw-request/withdraw-process/price-set/point-adjust/rider-verify/rider-location.
+# verify_jwt는 기본값(true) 유지 — 02-api.md 공통 규칙.
+[functions.withdraw-request]
+verify_jwt = true
+import_map = "./functions/import_map.json"
+
+[functions.withdraw-process]
+verify_jwt = true
+import_map = "./functions/import_map.json"
+
+[functions.price-set]
+verify_jwt = true
+import_map = "./functions/import_map.json"
+
+[functions.point-adjust]
+verify_jwt = true
+import_map = "./functions/import_map.json"
+
+[functions.rider-verify]
+verify_jwt = true
+import_map = "./functions/import_map.json"
+
+[functions.rider-location]
+verify_jwt = true
+import_map = "./functions/import_map.json"
+
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 

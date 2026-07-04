@@ -115,3 +115,26 @@
   EXECUTE GRANT 재적용은 불필요. 사람 actor가 이 경로를 오용할 수 없는 이유: Edge Function은
   항상 _shared/auth.ts에서 profiles 재조회한 role을 넘기므로 사람 호출에서 actor_role=NULL이
   나올 수 없다(클라이언트가 role을 자칭해도 무시됨 — CLAUDE.md 절대 규칙 3).
+- (T5) 02-api.md "withdraw-request"는 "RPC 트랜잭션: v_point_balance.available >= amount 검증
+  (행 잠금은 원장 insert 직렬화로) → WITHDRAW_REQUEST(-amount) → withdrawals insert"라고 명시하지만
+  기존 RPC(fn_post_ledger/fn_transition_order)에는 "잔액 확인 + 차감을 원자적으로 묶는" 함수가
+  없었다 — v_point_balance는 point_ledger 위 집계 뷰라 "확인 후 잠글 행"이 존재하지 않는다. 태스크
+  지시사항대로 이는 새 설계가 아니라 00-domain.md "포인트 원장 규칙"(잔액 부족 400, 최소 출금
+  10,000P)을 만족시키기 위한 구현 세부라서, `20260704000007_rpc_withdraw_request.sql`에
+  `fn_request_withdraw(user_id, amount, bank_name, bank_account, bank_holder)`를 추가했다.
+  구현: 동일 user_id의 point_ledger 행을 `for update`로 잠가(사실상 user 단위 직렬화) 잔액을
+  재계산 → 부족하면 INSUFFICIENT_BALANCE 예외 → withdrawals insert → fn_post_ledger로
+  WITHDRAW_REQUEST(-amount) 기록까지 단일 트랜잭션(단일 RPC 호출)으로 처리. 동시에 같은 잔액을
+  넘는 두 출금 요청이 들어와도 하나만 성공하도록 실제 동시 curl 2건으로 검증했다(레이스 테스트
+  결과: 60000 잔액에 40000 동시 요청 2건 → 정확히 1건 200, 1건 400 INSUFFICIENT_BALANCE, 최종
+  잔액 20000로 음수 없음 확인). 같은 이유로 withdraw-process(admin)도
+  `20260704000008_rpc_withdraw_process.sql`의 `fn_process_withdraw`로 상태 전이
+  (REQUESTED→APPROVED→PAID, REQUESTED→REJECTED+WITHDRAW_CANCEL 복구)를 단일 RPC 트랜잭션에서
+  처리하도록 구현했다(fn_transition_order와 동일 패턴 — 02-api.md 공통 규칙 "상태 전이+원장
+  기록은 단일 Postgres 함수 호출로 트랜잭션 보장"). 두 RPC 모두 service_role에만 EXECUTE를
+  부여했다(CLAUDE.md 절대 규칙 1).
+- (T5) rider-location: "진행중 주문이 있을 때만 last_location 갱신 허용"이 태스크 지시사항에
+  명시돼 있었으나 02-api.md 자체에는 "허용하지 않을 때의 처리"가 적혀 있지 않다. 임의 설계
+  판단 대신 가장 보수적인 해석(진행중 주문이 없으면 400 VALIDATION_ERROR로 거부, 위치를 저장하지
+  않음)을 택했다 — 운행과 무관한 위치 갱신은 스펙 범위 밖이고, 라이더 위치 추적을 운행 중으로
+  한정하는 것이 00-domain.md의 취지(공급자 지도용 실시간 위치)에 부합한다고 판단했다.
