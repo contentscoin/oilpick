@@ -86,3 +86,28 @@
 - pnpm lint/test/build 전부 green(컴포넌트 markup 변경 시 관련 테스트 동기 갱신).
 - 브라우저 프리뷰(5173 user / 5174 rider)로 U3/U7/U11/R2/R7 스크린샷 확인 — 평평함이 사라지고
   히어로/타임라인/카드 깊이가 반영됐는지 육안 검증. 콘솔 에러 0.
+
+## U7 주문상세 — 목업 확정 (2026-07-05 사용자 제공 목업 기준)
+
+사용자가 제공한 두 목업(ACCEPTED/"라이더 배정" 상태)을 U7의 픽셀 타겟으로 확정한다.
+요소 순서(위→아래): 헤더 → 상태 헤드라인 → 지도 → 라이더 카드 → 정보 스탯 카드 → 타임라인 → 하단 CTA.
+
+1. 헤더: `<` 뒤로 + "수거 상세"(중앙) + 우측 알림 벨 아이콘(안읽음 시 빨간 점, /notifications 링크).
+2. 상태 헤드라인: 제목은 **near-black(gray-900) 24px 800**(가독성) + 우측에 상태 pill("진행 중"=green,
+   "완료"=green, "취소됨"=danger, "확인 중"=wait, "요청됨"=active). 보조문구는 라이더 이름 포함 가능
+   (예 "김민준 라이더가 매장으로 이동 중이에요") — StatusHeadline에 optional subtitle/pill props 추가.
+3. 지도: 카카오키 없으면 MapView placeholder 유지(가짜 ETA/경로 만들지 말 것). ETA "○분 후 도착"은
+   실제 rider-location 데이터가 있을 때만 표시(없으면 생략 — 데이터 조작 금지).
+4. 라이더 카드: 기존 DriverCard 사용(아바타 이니셜/이름/인증완료 pill/차량번호/green 전화버튼).
+5. 정보 스탯 카드(신규, 핵심 누락분): 3열 — 예상 수량(order.requestedKg) / 오늘 매입가
+   (order.snapshotPricePerKg 원/kg) / 예상 포인트(round(requestedKg*snapshotPricePerKg), 앰버 강조).
+   하단에 info 아이콘 + "현장 계량 기준으로 확정됩니다". packages/ui에 InfoStatCard로 추가(3열+footnote).
+   ACCEPTED/ARRIVED/PICKED_UP 등 확정 전 상태에서 노출.
+6. 타임라인: OrderTimeline에 optional timestamps(각 스텝 우측 정렬, 완료/현재는 실제 시각
+   order.createdAt/acceptedAt/pickedUpAt/deliveredAt, 현재 스텝 시각은 green). 데이터 없으면 "-".
+7. 하단 CTA: **ACCEPTED/ARRIVED에서는 단일 "라이더에게 전화"(green, tel:)** — 목업 이미지2 기준.
+   ⚠️ 목업 이미지1의 "요청 취소"는 ACCEPTED에 넣지 않는다(00-domain.md: 수락 후 공급자 취소 불가,
+   admin만 가능). "요청 취소"는 REQUESTED 상태에서만(현행 유지).
+
+비고: 목업 이미지2의 "라이더 카드가 지도 하단에 겹쳐 뜨는" 플로팅은 선택 — 안정성 위해 지도 아래
+독립 카드로 둬도 무방(이미지1 스타일). 브랜드색/정보구조/절대규칙 불변.
