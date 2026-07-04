@@ -237,3 +237,31 @@
   `ActiveRunPage.tsx`의 계량 사진 업로드는 `upload()` 직후 `createSignedUrl()`(1년 만료)로 만든
   서명 URL을 photoUrls에 담아 SUBMIT_MEASURE에 전달하도록 구현했다. 실제 브라우저 E2E에서
   user 앱 계량 확인 화면에 사진이 정상 로드되는 것으로 검증했다.
+- (T10, 실사용 버그 수정) v_point_balance 뷰 SELECT GRANT 누락: 03-frontend.md U11 지갑
+  "PointBalanceCard"와 00-domain.md "포인트 원장 규칙"("잔액은 뷰(v_point_balance)로만 조회")이
+  이미 요구하는 화면인데, 실제 브라우저로 /wallet을 열어 보니 PointBalanceCard가 항상 "0P"로
+  보였다. 네트워크 로그를 확인해 `GET .../rest/v1/v_point_balance?...` 요청이 403 Forbidden으로
+  실패하는 것을 재현·특정했다 — 20260704000005_grants.sql(T4)이 base 테이블 목록
+  (profiles, point_ledger 등)에만 authenticated/anon select를 부여했고 "뷰"인 v_point_balance는
+  그 목록에서 빠져 있었다(실측: information_schema.role_table_grants에 SELECT 자체가 없음).
+  이는 T7 price_ticks·T9 rider_profiles와 동일한 종류(스펙이 이미 요구하는 기능을 위한 스키마
+  보완, 새 설계 판단 아님)라 판단해 `20260704000012_grant_point_balance_view.sql`로 GRANT를
+  추가했다. 다만 단순 GRANT만으로 끝내지 않은 이유: 이 뷰는 자체 필터 없이 point_ledger의
+  RLS(p_ledger_read)에 user_id별 접근 제한을 전적으로 위임하는데, 뷰 소유자(postgres)가
+  rolbypassrls=true라서(`select rolbypassrls from pg_roles where rolname='postgres'`로 실측
+  확인) security_invoker 옵션 없이 GRANT만 추가하면 임의 authenticated 사용자가
+  `?user_id=eq.<타인-uuid>`로 남의 잔액을 그대로 조회할 수 있는 정보 노출이 생긴다. PostgreSQL
+  17(로컬 스택 실측 버전)의 `security_invoker=true` 뷰 옵션을 함께 설정해(01-db-schema.sql
+  동기화) 뷰가 호출자 권한으로 point_ledger를 재조회하도록 고쳐 RLS가 실제로 evaluate되게
+  만들었다 — `set role authenticated` + `request.jwt.claims`로 본인 조회는 성공, 타인 조회는
+  0행인 것을 psql로 직접 검증했다.
+- (T10, 실사용 버그 수정) point_ledger Realtime publication 누락: apps/user useWallet.ts와
+  apps/rider useEarnings.ts는 point_ledger INSERT를 구독해 출금 승인/반려 결과를 폴링 없이
+  반영하도록(03-frontend.md 공통 규칙 "Realtime 이벤트 수신 시 해당 queryKey invalidate")
+  작성했지만, point_ledger가 supabase_realtime publication에 없어(T7 price_ticks 때와 동일한
+  종류의 공백) 아무 이벤트도 오지 않았다 — admin RPC로 출금을 반려해도 지갑 화면이 갱신되지
+  않는 것으로 먼저 재현했다. `20260704000013_realtime_point_ledger.sql`로 추가(01-db-schema.sql
+  동기화)한 뒤, 실제 브라우저에서 지갑 화면을 새로고침 없이 열어 둔 채 admin RPC로 출금을
+  반려하니 화면이 즉시 갱신되는 것(WITHDRAW_CANCEL +금액 원장 행 표시, 잔액 즉시 반영)을
+  확인했다 — 이것이 이번 태스크 DoD("출금 신청→admin 승인→원장 반영 확인")의 실제 검증
+  결과다.
