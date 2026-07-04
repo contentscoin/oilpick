@@ -1,0 +1,17 @@
+-- T10: apps/user U11 지갑, apps/rider R7/R8 정산의 PointBalanceCard/LedgerList가 출금
+-- 승인/반려 등 관리자 처리 결과를 폴링 없이 반영하려면 point_ledger의 INSERT를 Realtime으로
+-- 구독해야 한다(03-frontend.md 공통 규칙: "Realtime 이벤트 수신 시 해당 queryKey invalidate",
+-- T7 price_ticks·T9 rider_profiles와 동일한 종류의 공백).
+--
+-- 문제(실제 브라우저 검증 중 발견): apps/user/src/hooks/useWallet.ts와
+-- apps/rider/src/hooks/useEarnings.ts가 이미 `point_ledger` INSERT를 구독하는 Realtime 채널을
+-- 열어 두고 있었지만, 이 테이블이 supabase_realtime publication에 없어 아무 이벤트도
+-- 오지 않았다(실측: `select * from pg_publication_tables where pubname='supabase_realtime'`에
+-- point_ledger가 없음을 확인 — admin RPC로 출금을 반려해 WITHDRAW_CANCEL 원장을 추가했는데도
+-- 화면이 갱신되지 않는 것으로 재현). 20260704000009_realtime_price_ticks.sql,
+-- 20260704000011_realtime_rider_profiles.sql과 동일하게 스펙이 이미 요구하는 기능(공통 규칙의
+-- Realtime invalidate 패턴)을 실제로 동작시키기 위한 스키마 보완이며 새로운 설계 판단이 아니다.
+--
+-- point_ledger는 RLS(p_ledger_read: 본인 또는 admin)가 이미 걸려 있어 Realtime도 이 RLS를
+-- 그대로 적용해 본인 행 변경만 전달한다(Supabase Realtime의 postgres_changes는 RLS를 준수).
+alter publication supabase_realtime add table point_ledger;

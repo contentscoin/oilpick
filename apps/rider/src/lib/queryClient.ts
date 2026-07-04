@@ -21,4 +21,8 @@ export const queryKeys = {
   callDetail: (orderId: string) => ["orders", "detail", orderId] as const,
   activeRun: (riderId: string) => ["orders", "activeRun", riderId] as const,
   todayStats: (riderId: string) => ["riderStats", "today", riderId] as const,
+  balance: (userId: string) => ["balance", userId] as const,
+  ledger: (userId: string) => ["ledger", userId] as const,
+  bankAccount: (userId: string) => ["bankAccount", userId] as const,
+  notifications: (userId: string) => ["notifications", userId] as const,
 };

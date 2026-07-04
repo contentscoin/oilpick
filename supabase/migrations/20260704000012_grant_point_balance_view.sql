@@ -1,0 +1,34 @@
+-- v_point_balance 뷰에 authenticated/anon SELECT GRANT 보강 + security_invoker 설정.
+--
+-- 문제 1(T10 실사용 버그, 실제 브라우저 검증 중 발견): U11 지갑(/wallet) PointBalanceCard가
+-- 항상 "0P"로 보였다. 네트워크 로그를 확인한 결과
+-- `GET .../rest/v1/v_point_balance?select=available,held&user_id=eq.<uuid>` 요청이
+-- 403 Forbidden으로 실패하고 있었다 — 20260704000005_grants.sql은 base 테이블
+-- (profiles, point_ledger 등) 목록에는 authenticated/anon select를 명시했지만
+-- v_point_balance "뷰"는 그 목록에 없었다(실측: information_schema.role_table_grants로
+-- authenticated/anon에 SELECT가 아예 없음을 확인). 이는 새로운 설계 판단이 아니라
+-- 03-frontend.md U11("PointBalanceCard")과 00-domain.md "포인트 원장 규칙"("잔액은
+-- 뷰(v_point_balance)로만 조회" — CLAUDE.md 절대 규칙 1)이 이미 요구하는 기능을 실제로
+-- 동작시키기 위한 20260704000005_grants.sql과 동일 종류의 GRANT 보강이다.
+--
+-- 문제 2(문제 1을 고치는 과정에서 발견한 별개의 보안 이슈 — 단순 GRANT만으로 끝내면 안
+-- 되는 이유): v_point_balance는 point_ledger 위에서 "user_id로 group by"만 할 뿐 자체
+-- 필터가 없고, RLS로 각 user_id를 걸러내는 책임을 point_ledger의 p_ledger_read 정책
+-- ("user_id = auth.uid() or is_admin()")에 전적으로 위임하고 있다. 그런데 이 뷰의
+-- 소유자는 `postgres`이고 `postgres` role은 rolbypassrls=true(실측 확인:
+-- `select rolbypassrls from pg_roles where rolname='postgres'` → t) — Postgres는
+-- PG15 미만은 물론 PG15+에서도 `security_invoker`를 명시하지 않으면 뷰를 "소유자 권한"으로
+-- 실행한다(뷰 정의 자체가 SECURITY DEFINER 함수처럼 동작). 즉 단순히
+-- `grant select on v_point_balance to authenticated`만 추가하면 point_ledger의 RLS가
+-- BYPASSRLS 소유자 권한에 가려 평가되지 않아, 어떤 authenticated 사용자든
+-- `?user_id=eq.<다른-사용자-uuid>`로 남의 포인트 잔액을 그대로 읽을 수 있는 정보 노출이
+-- 생긴다(실제로 취약점을 재현하기보다, pg_roles.rolbypassrls 조회로 사전에 확인하고 여기서
+-- 차단). PostgreSQL 17(로컬 스택 실측 버전)은 `security_invoker=true` 뷰 옵션을 지원하므로
+-- 이를 켜서 뷰가 "쿼리를 실행하는 role"(PostgREST의 authenticated/anon)의 권한으로
+-- point_ledger를 재조회하게 만든다 — 이러면 p_ledger_read RLS가 정상적으로 evaluate되어
+-- 본인(또는 admin) 행만 합산된다. CLAUDE.md 절대 규칙 3 "모든 테이블에 RLS 필수"의 취지가
+-- 뷰를 통한 우회로 무력화되지 않도록 하는 필수 보완이며, 새로운 설계 판단이 아니라 이미
+-- 존재하는 RLS 정책을 뷰에서도 실제로 적용시키는 구현 세부다.
+alter view v_point_balance set (security_invoker = true);
+
+grant select on v_point_balance to authenticated, anon;

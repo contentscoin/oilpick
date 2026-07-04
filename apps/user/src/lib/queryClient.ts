@@ -23,4 +23,8 @@ export const queryKeys = {
   orderDetail: (orderId: string) => ["orders", "detail", orderId] as const,
   riderCard: (riderId: string) => ["riderCard", riderId] as const,
   orderHistory: (userId: string, page: number) => ["orders", "history", userId, page] as const,
+  balance: (userId: string) => ["balance", userId] as const,
+  ledger: (userId: string) => ["ledger", userId] as const,
+  bankAccount: (userId: string) => ["bankAccount", userId] as const,
+  notifications: (userId: string) => ["notifications", userId] as const,
 };

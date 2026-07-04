@@ -133,7 +133,14 @@ create trigger trg_ledger_no_update before update or delete on point_ledger
   for each row execute function forbid_ledger_mutation();
 
 -- 잔액 뷰: HOLD는 held로, RELEASE 시 available로 이동
-create view v_point_balance as
+-- 이 뷰는 자체 필터가 없고 point_ledger의 RLS(p_ledger_read: 본인 또는 admin)에 전적으로
+-- 의존해 user_id별 접근을 제한한다 — 뷰 소유자(postgres)가 rolbypassrls이므로 반드시
+-- `security_invoker = true`로 설정해야(20260704000012_grant_point_balance_view.sql) 호출자
+-- 권한으로 point_ledger를 재조회해 RLS가 실제로 평가된다. 이 옵션 없이 authenticated에
+-- select만 부여하면 임의 user_id로 타인의 잔액을 조회할 수 있는 정보 노출이 생긴다.
+create view v_point_balance
+  with (security_invoker = true)
+as
 select
   user_id,
   coalesce(sum(case
@@ -248,7 +255,10 @@ create policy p_noti_read on notifications for select using (user_id = auth.uid(
 create policy p_noti_update on notifications for update using (user_id = auth.uid()); -- read_at 갱신
 
 -- Storage 버킷: order-photos (관련자 read / rider write), rider-docs (본인 write, admin read)
--- Realtime publication: pickup_orders, notifications, price_ticks, rider_profiles 활성화
+-- Realtime publication: pickup_orders, notifications, price_ticks, rider_profiles, point_ledger 활성화
 -- (price_ticks는 03-frontend.md U3 "PriceCard(최신 tick, Realtime 구독)"에 필요 — T7에서 추가.
 --  rider_profiles는 apps/rider R1 "PENDING 대기 화면(Realtime으로 verify_status 변경 감지)"에
---  필요 — T9에서 추가)
+--  필요 — T9에서 추가. point_ledger는 apps/user U11 지갑·apps/rider R7/R8 정산의
+--  PointBalanceCard/LedgerList가 출금 승인/반려 등을 폴링 없이 반영하는 데 필요(공통 규칙
+--  "Realtime 이벤트 수신 시 해당 queryKey invalidate") — T10에서 추가. RLS(p_ledger_read)가
+--  그대로 적용되어 본인 행 변경만 전달된다)

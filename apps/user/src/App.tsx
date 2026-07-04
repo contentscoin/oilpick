@@ -10,6 +10,10 @@ import { PricePage } from "./pages/PricePage";
 import { RequestPage } from "./pages/RequestPage";
 import { OrderDetailPage } from "./pages/OrderDetailPage";
 import { OrdersHistoryPage } from "./pages/OrdersHistoryPage";
+import { WalletPage } from "./pages/WalletPage";
+import { WithdrawPage } from "./pages/WithdrawPage";
+import { NotificationsPage } from "./pages/NotificationsPage";
+import { MyPage } from "./pages/MyPage";
 
 /**
  * 루트("/") 진입 가드. U1 온보딩을 아직 안 봤으면 /onboarding으로,
@@ -67,6 +71,38 @@ export function App() {
           element={
             <AuthGuard>
               <OrderDetailPage />
+            </AuthGuard>
+          }
+        />
+        <Route
+          path="/wallet"
+          element={
+            <AuthGuard>
+              <WalletPage />
+            </AuthGuard>
+          }
+        />
+        <Route
+          path="/wallet/withdraw"
+          element={
+            <AuthGuard>
+              <WithdrawPage />
+            </AuthGuard>
+          }
+        />
+        <Route
+          path="/notifications"
+          element={
+            <AuthGuard>
+              <NotificationsPage />
+            </AuthGuard>
+          }
+        />
+        <Route
+          path="/my"
+          element={
+            <AuthGuard>
+              <MyPage />
             </AuthGuard>
           }
         />
