@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { colors } from "../tokens";
+import { colors, gray, surface } from "../tokens";
 
 /**
  * 03-frontend.md "packages/ui 컴포넌트" — TabBar(하단 탭).
@@ -27,9 +27,11 @@ export function TabBar({ items, activeKey, onSelect, className }: TabBarProps) {
       data-testid="tab-bar"
       style={{
         display: "flex",
-        borderTop: "1px solid #e4e4e7",
-        backgroundColor: "#fff",
-        height: 64,
+        borderTop: `1px solid ${surface.border}`,
+        backgroundColor: surface.card,
+        // 안전영역(safe-area-inset-bottom) 패딩. 홈 인디케이터/노치 대응.
+        paddingBottom: "env(safe-area-inset-bottom, 0px)",
+        minHeight: 60,
       }}
     >
       {items.map((item) => {
@@ -42,23 +44,31 @@ export function TabBar({ items, activeKey, onSelect, className }: TabBarProps) {
             aria-current={active ? "page" : undefined}
             onClick={() => onSelect(item.key)}
             style={{
-              flex: 1,
+              // 균등 분배 + min-width 0으로 라벨 잘림 방지.
+              flex: "1 1 0",
+              minWidth: 0,
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
               justifyContent: "center",
-              gap: 2,
-              minHeight: 48,
+              gap: 3,
+              minHeight: 56,
+              padding: "8px 2px",
               border: "none",
               background: "none",
-              color: active ? colors.primary.DEFAULT : colors.status.wait,
+              color: active ? colors.primary.DEFAULT : gray[400],
               fontWeight: active ? 700 : 500,
               fontSize: 12,
+              lineHeight: 1.2,
               cursor: "pointer",
             }}
           >
-            {item.icon}
-            <span>{item.label}</span>
+            {item.icon && (
+              <span aria-hidden style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 24 }}>
+                {item.icon}
+              </span>
+            )}
+            <span style={{ whiteSpace: "nowrap" }}>{item.label}</span>
           </button>
         );
       })}

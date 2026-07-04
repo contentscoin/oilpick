@@ -18,4 +18,6 @@ export * from "./components/EmptyState";
 export * from "./components/PhotoUploader";
 export * from "./components/MapView";
 export * from "./components/StatusBadge";
+export * from "./components/StatusHeadline";
+export * from "./components/DriverCard";
 export * from "./components/LedgerList";

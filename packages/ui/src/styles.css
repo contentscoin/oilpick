@@ -25,3 +25,15 @@ body {
 .oilpick-tabular-nums {
   font-variant-numeric: tabular-nums;
 }
+
+/* 05-design-upgrade.md "버튼/입력": BigButton active 시 살짝 눌림(scale .99). */
+.oilpick-big-button {
+  transition:
+    transform 0.08s ease,
+    box-shadow 0.12s ease,
+    filter 0.12s ease;
+}
+.oilpick-big-button:not(:disabled):active {
+  transform: scale(0.99);
+  filter: brightness(0.97);
+}

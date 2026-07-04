@@ -1,5 +1,12 @@
 import { useNavigate } from "react-router-dom";
-import { BigButton, EmptyState, LedgerList, PointBalanceCard, colors, radius } from "@oilpick/ui";
+import {
+  EmptyState,
+  LedgerList,
+  PointBalanceCard,
+  PointHeroAction,
+  colors,
+  radius,
+} from "@oilpick/ui";
 import { formatPoint } from "@oilpick/core";
 import { useSession } from "../hooks/useSession";
 import { usePointBalance, useLedger, useEarningsSummary } from "../hooks/useEarnings";
@@ -25,7 +32,19 @@ export function EarningsPage() {
       {balanceLoading ? (
         <div data-testid="balance-skeleton" style={{ borderRadius: 16, height: 96, backgroundColor: "#f4f4f5" }} />
       ) : (
-        <PointBalanceCard available={balance?.available ?? 0} held={balance?.held ?? 0} />
+        <PointBalanceCard
+          available={balance?.available ?? 0}
+          held={balance?.held ?? 0}
+          heldLabel="배송완료 시 확정"
+          action={
+            <PointHeroAction
+              data-testid="withdraw-request-button"
+              onClick={() => navigate("/earnings/withdraw")}
+            >
+              출금 신청
+            </PointHeroAction>
+          }
+        />
       )}
 
       <section style={{ display: "flex", gap: 12 }}>
@@ -50,10 +69,6 @@ export function EarningsPage() {
           <p style={{ margin: "4px 0 0", fontSize: 12, color: colors.status.wait }}>{week.count}건</p>
         </div>
       </section>
-
-      <BigButton data-testid="withdraw-request-button" onClick={() => navigate("/earnings/withdraw")}>
-        출금 신청
-      </BigButton>
 
       <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         <h2 style={{ fontSize: 16, margin: 0, color: colors.status.wait }}>포인트 내역</h2>

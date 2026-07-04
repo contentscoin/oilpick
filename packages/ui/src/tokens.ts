@@ -103,10 +103,53 @@ export const spacing = {
 /** 터치 타깃 최소 크기(px). 03-frontend.md spacing 절. */
 export const touchTarget = 48;
 
-/** 모서리 반경. 03-frontend.md: "radius: 카드 16px, 버튼 12px". */
+/**
+ * 모서리 반경. 03-frontend.md: "radius: 카드 16px, 버튼 12px".
+ * 05-design-upgrade.md "토큰 확장": 히어로 카드 20px, pill 999px 추가.
+ */
 export const radius = {
   card: 16,
+  hero: 20,
   button: 12,
+  pill: 999,
+} as const;
+
+/**
+ * 05-design-upgrade.md "토큰 확장" — surface 색.
+ * 평평한 회색 배경 위에 흰 카드가 떠 보이도록 앱 배경/카드/경계 색을 분리한다.
+ */
+export const surface = {
+  /** 앱 배경(약간 웜뉴트럴). */
+  app: "#F5F6F5",
+  /** 카드/시트 표면. */
+  card: "#FFFFFF",
+  /** 카드·구획 경계선(zinc-100). */
+  border: gray[100],
+} as const;
+
+/**
+ * 05-design-upgrade.md "토큰 확장" — elevation(그림자) 스케일.
+ * 평평한 회색 배경 위 카드가 떠 보이게 한다. inline style/Tailwind 양쪽에서 쓰도록
+ * CSS box-shadow 문자열로 정의.
+ */
+export const elevation = {
+  /** 기본 카드(PriceCard/CallCard 등). */
+  card: "0 1px 3px rgba(16,24,40,0.06), 0 1px 2px rgba(16,24,40,0.04)",
+  /** 히어로/떠있는 카드(PointBalanceCard 등). */
+  raised: "0 4px 16px rgba(16,24,40,0.08)",
+  /** 눌림(선택). 버튼 active 등에서 참조. */
+  pressed: "inset 0 1px 2px rgba(16,24,40,0.10)",
+} as const;
+
+/**
+ * 05-design-upgrade.md "토큰 확장" — gradient 토큰.
+ * 돈/포인트/시세 히어로 배경. 브랜드 색(딥그린/앰버) 계열만 사용(리브랜딩 아님).
+ */
+export const gradient = {
+  /** 딥그린 계열 히어로 배경. */
+  brand: `linear-gradient(135deg, ${colors.primary.DEFAULT}, ${colors.primary.dark})`,
+  /** 앰버 계열 포인트 히어로 배경. */
+  point: `linear-gradient(135deg, ${colors.accent.DEFAULT}, #E08A00)`,
 } as const;
 
 export const tokens = {
@@ -118,6 +161,9 @@ export const tokens = {
   spacing,
   touchTarget,
   radius,
+  surface,
+  elevation,
+  gradient,
 } as const;
 
 export type Tokens = typeof tokens;

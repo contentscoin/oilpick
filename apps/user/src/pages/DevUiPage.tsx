@@ -3,17 +3,21 @@ import {
   BigButton,
   BottomSheet,
   CallCard,
+  DriverCard,
   EmptyState,
   LedgerList,
   MapView,
   OrderTimeline,
   PhotoUploader,
   PointBalanceCard,
+  PointHeroAction,
   PriceCard,
   QtyStepper,
   StatusBadge,
+  StatusHeadline,
   TabBar,
   Toast,
+  surface,
   type PhotoAsset,
 } from "@oilpick/ui";
 
@@ -29,7 +33,18 @@ export function DevUiPage() {
   const [photos, setPhotos] = useState<PhotoAsset[]>([]);
 
   return (
-    <main style={{ padding: 24, display: "flex", flexDirection: "column", gap: 32, maxWidth: 480 }}>
+    <main
+      style={{
+        padding: 20,
+        display: "flex",
+        flexDirection: "column",
+        gap: 32,
+        maxWidth: 480,
+        margin: "0 auto",
+        backgroundColor: surface.app,
+        minHeight: "100vh",
+      }}
+    >
       <h1>packages/ui 컴포넌트 미리보기</h1>
 
       <section>
@@ -38,18 +53,38 @@ export function DevUiPage() {
       </section>
 
       <section>
+        <h2>StatusHeadline</h2>
+        <StatusHeadline status="ACCEPTED" />
+      </section>
+
+      <section>
         <h2>OrderTimeline</h2>
         <OrderTimeline currentStatus="ARRIVED" />
       </section>
 
       <section>
+        <h2>DriverCard</h2>
+        <DriverCard name="김철수" vehicleNo="12가 3456" phone="01000000000" />
+      </section>
+
+      <section>
         <h2>CallCard</h2>
-        <CallCard distanceKm={3.2} estimatedKg={45} pickupFee={5000} onClick={() => {}} />
+        <CallCard
+          distanceKm={3.2}
+          estimatedKg={45}
+          pickupFee={5000}
+          address="서울시 강남구 테헤란로 123"
+          onClick={() => {}}
+        />
       </section>
 
       <section>
         <h2>PointBalanceCard</h2>
-        <PointBalanceCard available={128000} held={15000} />
+        <PointBalanceCard
+          available={128000}
+          held={15000}
+          action={<PointHeroAction>출금 신청</PointHeroAction>}
+        />
       </section>
 
       <section>

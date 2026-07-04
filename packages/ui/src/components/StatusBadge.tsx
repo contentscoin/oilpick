@@ -1,5 +1,5 @@
 import { ORDER_STATUS_LABEL, type OrderStatus } from "@oilpick/core";
-import { colors } from "../tokens";
+import { colors, radius } from "../tokens";
 
 /**
  * 03-frontend.md "packages/ui 컴포넌트" — StatusBadge.
@@ -32,11 +32,11 @@ export function StatusBadge({ status, className }: StatusBadgeProps) {
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: 4,
-        padding: "4px 10px",
-        borderRadius: 999,
+        gap: 5,
+        padding: "4px 11px",
+        borderRadius: radius.pill,
         fontSize: 13,
-        fontWeight: 600,
+        fontWeight: 700,
         color,
         backgroundColor: `${color}1A`,
       }}

@@ -1,16 +1,30 @@
 import type { ButtonHTMLAttributes } from "react";
-import { colors, radius } from "../tokens";
+import { colors, elevation, radius } from "../tokens";
+import { cx } from "../cx";
 
-/** 03-frontend.md "packages/ui 컴포넌트" — BigButton(높이 56px CTA). */
+/**
+ * 03-frontend.md "packages/ui 컴포넌트" — BigButton(높이 56px CTA).
+ * 05-design-upgrade.md "버튼/입력": green 유지 + shadow-card, active 시 살짝 눌림(scale .99).
+ * secondary는 아웃라인. 눌림/호버는 styles.css의 .oilpick-big-button에서 처리.
+ */
 export interface BigButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: "primary" | "secondary" | "danger";
   loading?: boolean;
 }
 
-const VARIANT_STYLE: Record<NonNullable<BigButtonProps["variant"]>, { bg: string; fg: string }> = {
-  primary: { bg: colors.primary.DEFAULT, fg: "#fff" },
-  secondary: { bg: colors.primary.light, fg: colors.primary.dark },
-  danger: { bg: colors.status.danger, fg: "#fff" },
+const VARIANT_STYLE: Record<
+  NonNullable<BigButtonProps["variant"]>,
+  { bg: string; fg: string; border: string; shadow: string }
+> = {
+  primary: { bg: colors.primary.DEFAULT, fg: "#fff", border: "none", shadow: elevation.card },
+  // 보조 버튼: 아웃라인.
+  secondary: {
+    bg: "#fff",
+    fg: colors.primary.DEFAULT,
+    border: `1.5px solid ${colors.primary.DEFAULT}`,
+    shadow: "none",
+  },
+  danger: { bg: colors.status.danger, fg: "#fff", border: "none", shadow: elevation.card },
 };
 
 export function BigButton({
@@ -19,25 +33,29 @@ export function BigButton({
   disabled,
   children,
   style,
+  className,
   ...rest
 }: BigButtonProps) {
-  const { bg, fg } = VARIANT_STYLE[variant];
+  const { bg, fg, border, shadow } = VARIANT_STYLE[variant];
+  const isDisabled = disabled || loading;
   return (
     <button
       type="button"
       data-testid="big-button"
-      disabled={disabled || loading}
+      className={cx("oilpick-big-button", className)}
+      disabled={isDisabled}
       style={{
         height: 56,
         width: "100%",
         borderRadius: radius.button,
-        border: "none",
+        border,
         backgroundColor: bg,
         color: fg,
         fontSize: 16,
         fontWeight: 700,
-        cursor: disabled || loading ? "not-allowed" : "pointer",
-        opacity: disabled || loading ? 0.6 : 1,
+        boxShadow: isDisabled ? "none" : shadow,
+        cursor: isDisabled ? "not-allowed" : "pointer",
+        opacity: isDisabled ? 0.6 : 1,
         ...style,
       }}
       {...rest}

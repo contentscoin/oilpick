@@ -1,5 +1,11 @@
 import { useNavigate } from "react-router-dom";
-import { BigButton, EmptyState, LedgerList, PointBalanceCard, colors } from "@oilpick/ui";
+import {
+  EmptyState,
+  LedgerList,
+  PointBalanceCard,
+  PointHeroAction,
+  colors,
+} from "@oilpick/ui";
 import { useSession } from "../hooks/useSession";
 import { usePointBalance, useLedger } from "../hooks/useWallet";
 import { UserShell } from "../components/UserShell";
@@ -24,12 +30,19 @@ export function WalletPage() {
         {balanceLoading ? (
           <div data-testid="balance-skeleton" style={{ borderRadius: 16, height: 96, backgroundColor: "#f4f4f5" }} />
         ) : (
-          <PointBalanceCard available={balance?.available ?? 0} held={balance?.held ?? 0} />
+          <PointBalanceCard
+            available={balance?.available ?? 0}
+            held={balance?.held ?? 0}
+            action={
+              <PointHeroAction
+                data-testid="withdraw-request-button"
+                onClick={() => navigate("/wallet/withdraw")}
+              >
+                출금 신청
+              </PointHeroAction>
+            }
+          />
         )}
-
-        <BigButton data-testid="withdraw-request-button" onClick={() => navigate("/wallet/withdraw")}>
-          출금 신청
-        </BigButton>
 
         <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <h2 style={{ fontSize: 16, margin: 0, color: colors.status.wait }}>포인트 내역</h2>

@@ -113,6 +113,7 @@ export function CallHomePage() {
               distanceKm={position ? distanceKm(position, { lat: call.pickupLat, lng: call.pickupLng }) : 0}
               estimatedKg={call.requestedKg}
               pickupFee={call.snapshotRiderFee}
+              address={call.pickupAddress}
               onClick={() => navigate(`/calls/${call.id}`)}
             />
           ))}

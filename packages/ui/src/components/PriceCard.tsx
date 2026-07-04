@@ -1,5 +1,5 @@
 import { formatKrw } from "@oilpick/core";
-import { colors, radius } from "../tokens";
+import { colors, elevation, gray, radius, surface } from "../tokens";
 
 /**
  * 03-frontend.md "packages/ui 컴포넌트" — PriceCard(현재가+등락+스파크라인).
@@ -19,20 +19,24 @@ export interface PriceCardProps {
 
 function Sparkline({ values }: { values: number[] }) {
   if (values.length < 2) return null;
-  const width = 120;
-  const height = 32;
+  const width = 88;
+  const height = 44;
+  // 위/아래로 선이 잘리지 않도록 상하 여백 확보.
+  const pad = 4;
   const min = Math.min(...values);
   const max = Math.max(...values);
   const range = max - min || 1;
   const step = width / (values.length - 1);
-  const points = values
-    .map((v, i) => {
-      const x = i * step;
-      const y = height - ((v - min) / range) * height;
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(" ");
+  const coords = values.map((v, i) => {
+    const x = i * step;
+    const y = pad + (height - pad * 2) - ((v - min) / range) * (height - pad * 2);
+    return { x, y };
+  });
+  const line = coords.map(({ x, y }) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+  // 은은한 면 채움으로 깊이감.
+  const area = `${coords[0]!.x},${height} ${line} ${coords[coords.length - 1]!.x},${height}`;
   const trendUp = (values[values.length - 1] ?? 0) >= (values[0] ?? 0);
+  const stroke = trendUp ? colors.up : colors.down;
 
   return (
     <svg
@@ -43,13 +47,20 @@ function Sparkline({ values }: { values: number[] }) {
       aria-label="최근 시세 추이"
       data-testid="price-card-sparkline"
     >
+      <polygon points={area} fill={stroke} fillOpacity={0.1} stroke="none" />
       <polyline
         fill="none"
-        stroke={trendUp ? colors.up : colors.down}
+        stroke={stroke}
         strokeWidth={2}
         strokeLinecap="round"
         strokeLinejoin="round"
-        points={points}
+        points={line}
+      />
+      <circle
+        cx={coords[coords.length - 1]!.x}
+        cy={coords[coords.length - 1]!.y}
+        r={2.5}
+        fill={stroke}
       />
     </svg>
   );
@@ -68,32 +79,69 @@ export function PriceCard({ pricePerKg, changeAmount, history = [], className }:
       style={{
         borderRadius: radius.card,
         padding: 20,
-        backgroundColor: "#fff",
-        boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
+        backgroundColor: surface.card,
+        border: `1px solid ${surface.border}`,
+        boxShadow: elevation.card,
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
         gap: 16,
       }}
     >
-      <div>
-        <p style={{ margin: 0, fontSize: 14, color: colors.status.wait }}>현재 매입가</p>
+      <div style={{ minWidth: 0 }}>
+        <p style={{ margin: 0, fontSize: 14, fontWeight: 500, color: colors.status.wait }}>
+          오늘 매입가
+        </p>
         <p
           className="oilpick-tabular-nums"
-          style={{ margin: "4px 0 0", fontSize: 32, fontWeight: 700, color: colors.primary.DEFAULT }}
+          style={{
+            margin: "6px 0 0",
+            fontSize: 34,
+            lineHeight: 1.1,
+            fontWeight: 800,
+            letterSpacing: "-0.02em",
+            color: colors.primary.DEFAULT,
+            whiteSpace: "nowrap",
+          }}
         >
           {formatKrw(pricePerKg)}
-          <span style={{ fontSize: 16, fontWeight: 500 }}>/kg</span>
+          <span style={{ fontSize: 16, fontWeight: 500, color: colors.status.wait }}>/kg</span>
         </p>
-        <p
+        {/* 등락 pill(▲ 빨강 / ▼ 파랑 / - 회색) + "전일 대비". 05-design-upgrade.md PriceCard. */}
+        <span
           className="oilpick-tabular-nums"
           data-testid="price-card-change"
-          style={{ margin: "4px 0 0", fontSize: 14, fontWeight: 600, color: changeColor }}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
+            marginTop: 10,
+            padding: "3px 10px",
+            borderRadius: radius.pill,
+            fontSize: 13,
+            fontWeight: 700,
+            color: changeColor,
+            backgroundColor: `${changeColor}14`,
+          }}
         >
           {arrow} {formatKrw(Math.abs(changeAmount))}
-        </p>
+          <span style={{ fontWeight: 500, color: colors.status.wait }}>전일 대비</span>
+        </span>
       </div>
-      <Sparkline values={history} />
+      <div
+        aria-hidden={history.length < 2}
+        style={{
+          flexShrink: 0,
+          alignSelf: "stretch",
+          display: "flex",
+          alignItems: "center",
+          borderRadius: 12,
+          background: history.length >= 2 ? gray[50] : "transparent",
+          padding: history.length >= 2 ? "8px 10px" : 0,
+        }}
+      >
+        <Sparkline values={history} />
+      </div>
     </div>
   );
 }

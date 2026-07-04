@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { estimateKg, formatKg, KG_PER_CAN } from "@oilpick/core";
-import { colors, radius } from "../tokens";
+import { colors, elevation, radius } from "../tokens";
 
 /**
  * 03-frontend.md "packages/ui 컴포넌트" — QtyStepper(통/kg 토글).
@@ -56,20 +56,26 @@ export function QtyStepper({ value, onChange, min = 1, max = 99, className }: Qt
             width: 48,
             height: 48,
             borderRadius: "50%",
-            border: `1px solid ${colors.primary.DEFAULT}`,
+            border: `1.5px solid ${colors.primary.DEFAULT}`,
             backgroundColor: "#fff",
-            fontSize: 20,
+            color: colors.primary.DEFAULT,
+            fontSize: 22,
+            fontWeight: 700,
+            boxShadow: value <= min ? "none" : elevation.card,
             cursor: value <= min ? "not-allowed" : "pointer",
             opacity: value <= min ? 0.4 : 1,
           }}
         >
           −
         </button>
-        <div style={{ textAlign: "center", minWidth: 96 }}>
-          <p className="oilpick-tabular-nums" style={{ margin: 0, fontSize: 24, fontWeight: 700 }}>
+        <div style={{ textAlign: "center", minWidth: 112 }}>
+          <p
+            className="oilpick-tabular-nums"
+            style={{ margin: 0, fontSize: 32, fontWeight: 800, lineHeight: 1.1, letterSpacing: "-0.01em" }}
+          >
             {value}통
           </p>
-          <p style={{ margin: 0, fontSize: 13, color: colors.status.wait }} data-testid="qty-stepper-kg">
+          <p style={{ margin: "4px 0 0", fontSize: 13, color: colors.status.wait }} data-testid="qty-stepper-kg">
             약 {formatKg(estimateKg(value))} (통당 {KG_PER_CAN}kg)
           </p>
         </div>
@@ -83,10 +89,12 @@ export function QtyStepper({ value, onChange, min = 1, max = 99, className }: Qt
             width: 48,
             height: 48,
             borderRadius: "50%",
-            border: `1px solid ${colors.primary.DEFAULT}`,
+            border: `1.5px solid ${colors.primary.DEFAULT}`,
             backgroundColor: colors.primary.DEFAULT,
             color: "#fff",
-            fontSize: 20,
+            fontSize: 22,
+            fontWeight: 700,
+            boxShadow: value >= max ? "none" : elevation.card,
             cursor: value >= max ? "not-allowed" : "pointer",
             opacity: value >= max ? 0.4 : 1,
           }}
