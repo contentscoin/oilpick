@@ -1,0 +1,228 @@
+-- OilPick DB Schema v1 (단일 진실 — 마이그레이션 작성 시 이 파일 기준)
+-- Postgres 15 + PostGIS. Supabase auth.users를 FK 기준으로 사용.
+
+create extension if not exists postgis;
+
+-- ===== enums =====
+create type user_role as enum ('supplier','rider','admin');
+create type order_status as enum ('REQUESTED','ACCEPTED','ARRIVED','PICKED_UP','DELIVERED','COMPLETED','CANCELLED','DISPUTED');
+create type ledger_type as enum ('EARN','HOLD','RELEASE','WITHDRAW_REQUEST','WITHDRAW_CANCEL','ADJUST','PURCHASE');
+create type verify_status as enum ('PENDING','APPROVED','REJECTED');
+create type withdraw_status as enum ('REQUESTED','APPROVED','REJECTED','PAID');
+
+-- ===== profiles =====
+create table profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  role user_role not null,
+  phone text not null,
+  display_name text not null,          -- 상호 또는 라이더 이름
+  fcm_token text,
+  created_at timestamptz not null default now()
+);
+
+create table supplier_profiles (
+  id uuid primary key references profiles(id) on delete cascade,
+  biz_number text not null,            -- 사업자번호
+  store_name text not null,
+  address text not null,
+  location geography(point,4326) not null,
+  bank_name text, bank_account text, bank_holder text,  -- 출금 계좌
+  created_at timestamptz not null default now()
+);
+create index idx_supplier_location on supplier_profiles using gist(location);
+
+create table rider_profiles (
+  id uuid primary key references profiles(id) on delete cascade,
+  biz_number text not null,
+  vehicle_number text not null,
+  verify_status verify_status not null default 'PENDING',
+  reject_reason text,
+  doc_biz_url text, doc_vehicle_url text, doc_permit_url text,  -- Storage 경로
+  is_online boolean not null default false,
+  last_location geography(point,4326),
+  last_location_at timestamptz,
+  work_radius_km int not null default 15,
+  bank_name text, bank_account text, bank_holder text,
+  created_at timestamptz not null default now()
+);
+create index idx_rider_location on rider_profiles using gist(last_location);
+
+-- ===== 시세 =====
+create table price_ticks (
+  id bigint generated always as identity primary key,
+  price_per_kg int not null check (price_per_kg > 0),   -- 원/kg
+  rider_fee int not null check (rider_fee > 0),          -- 기본 수거비 P
+  effective_at timestamptz not null default now(),
+  created_by uuid not null references profiles(id)
+);
+create index idx_price_ticks_effective on price_ticks (effective_at desc);
+
+-- ===== 집하장 =====
+create table depots (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  address text not null,
+  location geography(point,4326) not null,
+  qr_secret text not null default encode(gen_random_bytes(16),'hex'),
+  is_active boolean not null default true
+);
+
+-- ===== 주문 =====
+create table pickup_orders (
+  id uuid primary key default gen_random_uuid(),
+  supplier_id uuid not null references supplier_profiles(id),
+  rider_id uuid references rider_profiles(id),
+  depot_id uuid references depots(id),
+  status order_status not null default 'REQUESTED',
+  -- 요청 정보
+  requested_cans int,                       -- 통 수 (nullable: kg 직접입력 시)
+  requested_kg numeric(8,1) not null,       -- 예상 kg
+  pickup_address text not null,
+  pickup_location geography(point,4326) not null,
+  preferred_time text,                      -- '지금' 또는 'YYYY-MM-DD HH:mm'
+  -- 스냅샷 (생성 시 고정)
+  snapshot_price_per_kg int not null,
+  snapshot_rider_fee int not null,
+  -- 확정 정보
+  measured_kg numeric(8,1),                 -- 라이더 계량
+  final_kg numeric(8,1),                    -- 확정(중재 반영) — EARN 계산 기준
+  supplier_point int,                       -- 지급된 EARN
+  photo_urls text[] not null default '{}',
+  cancel_reason text,
+  dispute_reason text,
+  broadcast_radius_km int not null default 3,
+  created_at timestamptz not null default now(),
+  accepted_at timestamptz, picked_up_at timestamptz, delivered_at timestamptz
+);
+create index idx_orders_status on pickup_orders (status, created_at desc);
+create index idx_orders_supplier on pickup_orders (supplier_id, created_at desc);
+create index idx_orders_rider on pickup_orders (rider_id, created_at desc);
+
+create table order_events (
+  id bigint generated always as identity primary key,
+  order_id uuid not null references pickup_orders(id) on delete cascade,
+  from_status order_status,
+  to_status order_status not null,
+  actor_id uuid references profiles(id),    -- null = 시스템
+  payload jsonb not null default '{}',
+  created_at timestamptz not null default now()
+);
+create index idx_order_events_order on order_events (order_id, created_at);
+
+-- ===== 포인트 원장 (append-only) =====
+create table point_ledger (
+  id bigint generated always as identity primary key,
+  user_id uuid not null references profiles(id),
+  entry_type ledger_type not null,
+  amount int not null,                      -- 양수=증가, 음수=감소. HOLD/RELEASE 부호는 뷰에서 처리
+  order_id uuid references pickup_orders(id),
+  withdrawal_id uuid,
+  memo text,
+  created_by uuid references profiles(id),  -- ADJUST 시 admin
+  created_at timestamptz not null default now(),
+  -- 멱등성: 같은 주문에 같은 타입 중복 지급 방지
+  unique (order_id, entry_type, user_id)
+);
+create index idx_ledger_user on point_ledger (user_id, created_at desc);
+
+-- append-only 강제
+create or replace function forbid_ledger_mutation() returns trigger as $$
+begin raise exception 'point_ledger is append-only'; end;
+$$ language plpgsql;
+create trigger trg_ledger_no_update before update or delete on point_ledger
+  for each row execute function forbid_ledger_mutation();
+
+-- 잔액 뷰: HOLD는 held로, RELEASE 시 available로 이동
+create view v_point_balance as
+select
+  user_id,
+  coalesce(sum(case
+    when entry_type = 'HOLD' then 0
+    when entry_type = 'RELEASE' then amount
+    else amount end),0)::int as available,
+  coalesce(sum(case when entry_type='HOLD' then amount
+                    when entry_type='RELEASE' then -amount
+                    else 0 end),0)::int as held
+from point_ledger group by user_id;
+
+-- ===== 출금 =====
+create table withdrawals (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references profiles(id),
+  amount int not null check (amount >= 10000),
+  status withdraw_status not null default 'REQUESTED',
+  bank_name text not null, bank_account text not null, bank_holder text not null,
+  admin_memo text,
+  processed_by uuid references profiles(id),
+  created_at timestamptz not null default now(),
+  processed_at timestamptz
+);
+
+-- ===== 알림 =====
+create table notifications (
+  id bigint generated always as identity primary key,
+  user_id uuid not null references profiles(id) on delete cascade,
+  title text not null,
+  body text not null,
+  link text,                                -- 앱 내 딥링크 경로
+  read_at timestamptz,
+  created_at timestamptz not null default now()
+);
+create index idx_notifications_user on notifications (user_id, created_at desc);
+
+-- ===== RLS =====
+alter table profiles enable row level security;
+alter table supplier_profiles enable row level security;
+alter table rider_profiles enable row level security;
+alter table price_ticks enable row level security;
+alter table depots enable row level security;
+alter table pickup_orders enable row level security;
+alter table order_events enable row level security;
+alter table point_ledger enable row level security;
+alter table withdrawals enable row level security;
+alter table notifications enable row level security;
+
+create or replace function is_admin() returns boolean as
+$$ select exists(select 1 from profiles where id = auth.uid() and role='admin') $$
+language sql security definer stable;
+
+-- profiles: 본인 R/W(role 변경 불가는 컬럼 권한으로), admin 전체 R
+create policy p_profiles_self on profiles for select using (id = auth.uid() or is_admin());
+create policy p_profiles_update on profiles for update using (id = auth.uid());
+create policy p_profiles_insert on profiles for insert with check (id = auth.uid() and role <> 'admin');
+
+-- supplier/rider_profiles: 본인 R/W, admin 전체. 단 rider verify_status는 클라이언트 update 금지(컬럼 분리 함수로만)
+create policy p_sup_self on supplier_profiles for all using (id = auth.uid() or is_admin());
+create policy p_rider_self on rider_profiles for all using (id = auth.uid() or is_admin());
+
+-- price_ticks: 전체 공개 read, insert는 admin만
+create policy p_price_read on price_ticks for select using (true);
+create policy p_price_write on price_ticks for insert with check (is_admin());
+
+-- depots: read는 인증 사용자, write는 admin
+create policy p_depot_read on depots for select using (auth.uid() is not null);
+create policy p_depot_write on depots for all using (is_admin());
+
+-- pickup_orders: supplier 본인 것 / 배정 rider 본인 것 / REQUESTED는 verified 라이더 콜 목록용 read / admin 전체
+create policy p_order_supplier on pickup_orders for select using (supplier_id = auth.uid() or is_admin());
+create policy p_order_rider on pickup_orders for select using (rider_id = auth.uid());
+create policy p_order_open_calls on pickup_orders for select using (
+  status = 'REQUESTED' and exists(
+    select 1 from rider_profiles r where r.id = auth.uid() and r.verify_status='APPROVED')
+);
+-- insert/update는 클라이언트 금지 → Edge Function(service_role)만. 정책 없음 = 차단.
+
+-- order_events: 관련자 read only
+create policy p_events_read on order_events for select using (
+  is_admin() or exists(select 1 from pickup_orders o where o.id = order_id
+    and (o.supplier_id = auth.uid() or o.rider_id = auth.uid()))
+);
+
+-- point_ledger / withdrawals / notifications: 본인 read, admin 전체. 쓰기는 Edge Function만
+create policy p_ledger_read on point_ledger for select using (user_id = auth.uid() or is_admin());
+create policy p_withdraw_read on withdrawals for select using (user_id = auth.uid() or is_admin());
+create policy p_noti_read on notifications for select using (user_id = auth.uid());
+create policy p_noti_update on notifications for update using (user_id = auth.uid()); -- read_at 갱신
+
+-- Storage 버킷: order-photos (관련자 read / rider write), rider-docs (본인 write, admin read)
+-- Realtime publication: pickup_orders, notifications 활성화
