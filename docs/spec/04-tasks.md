@@ -138,3 +138,16 @@
   판단 대신 가장 보수적인 해석(진행중 주문이 없으면 400 VALIDATION_ERROR로 거부, 위치를 저장하지
   않음)을 택했다 — 운행과 무관한 위치 갱신은 스펙 범위 밖이고, 라이더 위치 추적을 운행 중으로
   한정하는 것이 00-domain.md의 취지(공급자 지도용 실시간 위치)에 부합한다고 판단했다.
+- (T6) MapView: 이 개발 환경에는 실제 카카오맵 JS SDK API 키가 없다. `apiKey`를 prop으로
+  주입받게 하고(앱은 `import.meta.env.VITE_KAKAO_KEY`를 읽어 넘기면 됨), 키가 없거나
+  `https://dapi.kakao.com/v2/maps/sdk.js` 스크립트 로드가 실패하면 크래시 없이 자리표시자
+  UI(`data-testid="map-view-placeholder"`)를 렌더하도록 구현했다. 실제 키가 주입되고 SDK 로드가
+  성공하면 컨테이너 div에 `kakao.maps.Map`/`Marker` 인스턴스를 마운트한다(`packages/ui/src/components/MapView.tsx`).
+  실제 키로 지도가 정상 렌더되는지는 이 환경에서 검증 불가 — 실 키 주입 후 사람이 육안 확인 필요.
+- (T6) PhotoUploader: 최종 형태는 Capacitor Camera 플러그인이지만 Capacitor는 T12에서 추가된다.
+  지금은 표준 웹 `<input type="file" accept="image/*" capture="environment">`로 구현했고,
+  공개 API를 `photos: PhotoAsset[]`(`{ url, file }`) + `onChange(photos)` 콜백으로 고정했다
+  (`packages/ui/src/components/PhotoUploader.tsx`). T12에서 @capacitor/camera로 내부 구현만
+  교체하면 되도록 설계했다 — `url`은 표시용(webPath/dataUrl/objectURL 어느 쪽이든 `<img src>`로만
+  소비), `file`은 Storage 업로드용 File/Blob이라는 계약만 유지하면 소비 측(R4 계량 제출 등) 코드는
+  변경이 필요 없다.
