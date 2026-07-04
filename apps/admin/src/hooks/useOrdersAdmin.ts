@@ -37,6 +37,7 @@ export interface AdminOrderRow {
   riderId: string | null;
   riderName: string | null;
   requestedKg: number;
+  measuredKg: number | null;
   finalKg: number | null;
   pickupAddress: string;
   createdAt: string;
@@ -51,7 +52,7 @@ export function useAdminOrders(statusFilter: string) {
     queryFn: async (): Promise<AdminOrderRow[]> => {
       let q = supabase
         .from("pickup_orders")
-        .select("id, status, supplier_id, rider_id, requested_kg, final_kg, pickup_address, created_at")
+        .select("id, status, supplier_id, rider_id, requested_kg, measured_kg, final_kg, pickup_address, created_at")
         .order("created_at", { ascending: false })
         .limit(200);
       if (statusFilter !== "ALL") {
@@ -67,6 +68,7 @@ export function useAdminOrders(statusFilter: string) {
         riderId: row.rider_id,
         riderName: row.rider_id ? (riderNames.get(row.rider_id) ?? row.rider_id.slice(0, 8)) : null,
         requestedKg: Number(row.requested_kg),
+        measuredKg: row.measured_kg !== null ? Number(row.measured_kg) : null,
         finalKg: row.final_kg !== null ? Number(row.final_kg) : null,
         pickupAddress: row.pickup_address,
         createdAt: row.created_at,

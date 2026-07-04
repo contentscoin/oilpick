@@ -76,7 +76,15 @@ export function OrdersPage() {
                   <td className="px-4 py-3">{o.supplierName}</td>
                   <td className="px-4 py-3">{o.riderName ?? "-"}</td>
                   <td className="px-4 py-3 tabular-nums">
-                    {o.finalKg !== null ? `${formatKg(o.finalKg)} (확정)` : `${formatKg(o.requestedKg)} (예상)`}
+                    {o.finalKg !== null ? (
+                      `${formatKg(o.finalKg)} (확정)`
+                    ) : o.status === "DISPUTED" && o.measuredKg !== null ? (
+                      <span className="text-status-danger">
+                        계량 {formatKg(o.measuredKg)} / 예상 {formatKg(o.requestedKg)}
+                      </span>
+                    ) : (
+                      `${formatKg(o.requestedKg)} (예상)`
+                    )}
                   </td>
                   <td className="max-w-xs truncate px-4 py-3 text-zinc-600">{o.pickupAddress}</td>
                   <td className="px-4 py-3 text-zinc-500">{new Date(o.createdAt).toLocaleString("ko-KR")}</td>
