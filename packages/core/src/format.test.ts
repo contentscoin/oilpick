@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatPoint, formatKrw, formatKg, formatRelativeTime } from "./format";
+import { formatPoint, formatKrw, formatKg, formatRelativeTime, formatTimeOfDay } from "./format";
 
 describe("formatPoint", () => {
   it("formats with thousands separators and P suffix", () => {
@@ -58,5 +58,24 @@ describe("formatRelativeTime", () => {
   it("accepts string and number date inputs", () => {
     expect(formatRelativeTime("2026-07-04T11:55:00Z", now)).toBe("5분 전");
     expect(formatRelativeTime(new Date("2026-07-04T11:55:00Z").getTime(), now)).toBe("5분 전");
+  });
+});
+
+describe("formatTimeOfDay", () => {
+  // 로컬 시각 기준으로 판정하므로 테스트도 로컬 Date로 구성(타임존 무관하게 안정적).
+  const now = new Date(2026, 6, 4, 12, 0); // 2026-07-04 12:00 local
+
+  it("prefixes '오늘' with HH:mm for same-day times", () => {
+    expect(formatTimeOfDay(new Date(2026, 6, 4, 14, 5), now)).toBe("오늘 14:05");
+    expect(formatTimeOfDay(new Date(2026, 6, 4, 9, 30), now)).toBe("오늘 09:30");
+  });
+
+  it("uses 'M/D HH:mm' for other days", () => {
+    expect(formatTimeOfDay(new Date(2026, 6, 1, 14, 5), now)).toBe("7/1 14:05");
+    expect(formatTimeOfDay(new Date(2026, 11, 25, 8, 3), now)).toBe("12/25 08:03");
+  });
+
+  it("accepts a numeric now for the same-day comparison", () => {
+    expect(formatTimeOfDay(new Date(2026, 6, 4, 14, 5), now.getTime())).toBe("오늘 14:05");
   });
 });

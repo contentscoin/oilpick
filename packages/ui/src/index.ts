@@ -20,4 +20,5 @@ export * from "./components/MapView";
 export * from "./components/StatusBadge";
 export * from "./components/StatusHeadline";
 export * from "./components/DriverCard";
+export * from "./components/InfoStatCard";
 export * from "./components/LedgerList";

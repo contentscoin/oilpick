@@ -45,6 +45,8 @@ const ORDER_ROW = {
   dispute_reason: null,
   created_at: "2026-07-01T00:00:00Z",
   accepted_at: "2026-07-01T00:05:00Z",
+  picked_up_at: null,
+  delivered_at: null,
 };
 
 describe("useOrder", () => {
@@ -84,6 +86,8 @@ describe("useOrder", () => {
       disputeReason: null,
       createdAt: "2026-07-01T00:00:00Z",
       acceptedAt: "2026-07-01T00:05:00Z",
+      pickedUpAt: null,
+      deliveredAt: null,
     });
   });
 

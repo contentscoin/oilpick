@@ -19,6 +19,12 @@ const HAPPY_PATH: OrderStatus[] = [
 
 export interface OrderTimelineProps {
   currentStatus: OrderStatus;
+  /**
+   * 각 스텝 우측에 정렬 표시할 시각(포맷된 문자열, 예 "오늘 14:05").
+   * 완료/현재 스텝은 실제 시각, 현재 스텝 시각은 green, 미래 스텝은 "-".
+   * 미전달 시 시각 컬럼을 아예 렌더하지 않아 기존 사용처 무영향.
+   */
+  timestamps?: Partial<Record<OrderStatus, string>>;
   className?: string;
 }
 
@@ -36,7 +42,7 @@ function CheckIcon() {
   );
 }
 
-export function OrderTimeline({ currentStatus, className }: OrderTimelineProps) {
+export function OrderTimeline({ currentStatus, timestamps, className }: OrderTimelineProps) {
   const isExceptional = currentStatus === "CANCELLED" || currentStatus === "DISPUTED";
   const currentIndex = HAPPY_PATH.indexOf(currentStatus);
 
@@ -103,17 +109,43 @@ export function OrderTimeline({ currentStatus, className }: OrderTimelineProps) 
                 />
               )}
             </div>
-            <span
+            <div
               style={{
-                fontSize: 16,
-                fontWeight: active ? 700 : 500,
-                color: active ? green : done ? gray[900] : colors.status.wait,
+                flex: 1,
+                minWidth: 0,
+                display: "flex",
+                alignItems: "baseline",
+                justifyContent: "space-between",
+                gap: 8,
                 paddingTop: 1,
                 paddingBottom: 12,
               }}
             >
-              {ORDER_STATUS_LABEL[step]}
-            </span>
+              <span
+                style={{
+                  fontSize: 16,
+                  fontWeight: active ? 700 : 500,
+                  color: active ? green : done ? gray[900] : colors.status.wait,
+                }}
+              >
+                {ORDER_STATUS_LABEL[step]}
+              </span>
+              {timestamps && (
+                <span
+                  data-testid={`order-timeline-time-${step}`}
+                  className="oilpick-tabular-nums"
+                  style={{
+                    flexShrink: 0,
+                    fontSize: 13,
+                    fontWeight: active ? 700 : 500,
+                    // 현재 스텝 시각은 green, 완료 스텝은 회색, 미래("-")는 옅은 회색.
+                    color: active ? green : timestamps[step] ? colors.status.wait : gray[400],
+                  }}
+                >
+                  {timestamps[step] ?? "-"}
+                </span>
+              )}
+            </div>
           </li>
         );
       })}

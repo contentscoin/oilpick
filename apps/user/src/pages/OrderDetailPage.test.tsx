@@ -32,6 +32,8 @@ const BASE_ORDER = {
   disputeReason: null as string | null,
   createdAt: "2026-07-01T00:00:00Z",
   acceptedAt: null as string | null,
+  pickedUpAt: null as string | null,
+  deliveredAt: null as string | null,
 };
 
 function renderPage() {
@@ -40,6 +42,7 @@ function renderPage() {
       <Routes>
         <Route path="/orders/:id" element={<OrderDetailPage />} />
         <Route path="/" element={<div>HOME_PAGE</div>} />
+        <Route path="/notifications" element={<div>NOTIFICATIONS_PAGE</div>} />
       </Routes>
     </MemoryRouter>,
   );
@@ -73,8 +76,18 @@ describe("OrderDetailPage", () => {
     );
   });
 
-  it("shows the rider card with a tel: link once a rider is assigned", () => {
-    mockUseOrder.mockReturnValue({ data: { ...BASE_ORDER, status: "ACCEPTED", riderId: "rider-1" }, isLoading: false });
+  it("renders the mockup header with title and notifications bell", () => {
+    mockUseOrder.mockReturnValue({ data: { ...BASE_ORDER, status: "REQUESTED" }, isLoading: false });
+    renderPage();
+    expect(screen.getByRole("heading", { name: "수거 상세" })).toBeInTheDocument();
+    expect(screen.getByTestId("order-detail-notifications")).toHaveAttribute("href", "/notifications");
+  });
+
+  it("shows the rider card, info stat card, and a single call CTA once a rider is assigned (ACCEPTED)", () => {
+    mockUseOrder.mockReturnValue({
+      data: { ...BASE_ORDER, status: "ACCEPTED", riderId: "rider-1", requestedKg: 15, snapshotPricePerKg: 700 },
+      isLoading: false,
+    });
     mockUseAssignedRiderCard.mockReturnValue({
       data: { id: "rider-1", displayName: "박라이더", phone: "01011112222", vehicleNumber: "12가3456", verifyStatus: "APPROVED" },
     });
@@ -83,6 +96,30 @@ describe("OrderDetailPage", () => {
     expect(screen.getByTestId("driver-card")).toHaveTextContent("박라이더");
     expect(screen.getByTestId("driver-card-verified")).toBeInTheDocument();
     expect(screen.getByTestId("driver-card-call")).toHaveAttribute("href", "tel:01011112222");
+
+    // 상태 헤드라인: pill + 라이더명 보조문구.
+    expect(screen.getByTestId("status-headline-pill")).toHaveTextContent("진행 중");
+    expect(screen.getByText("박라이더 라이더가 매장으로 이동 중이에요")).toBeInTheDocument();
+
+    // 정보 스탯 카드: 예상 수량 / 오늘 매입가 / 예상 포인트(15 * 700 = 10,500P).
+    expect(screen.getByTestId("info-stat-card")).toBeInTheDocument();
+    expect(screen.getByText("15.0kg")).toBeInTheDocument();
+    expect(screen.getByText("700원/kg")).toBeInTheDocument();
+    expect(screen.getByText("10,500P")).toBeInTheDocument();
+
+    // 하단 단일 CTA: 라이더에게 전화(tel:).
+    const cta = screen.getByTestId("order-call-rider");
+    expect(cta).toHaveAttribute("href", "tel:01011112222");
+    expect(cta).toHaveTextContent("라이더에게 전화");
+  });
+
+  it("does not show a cancel button for ACCEPTED orders (supplier cannot cancel after acceptance)", () => {
+    mockUseOrder.mockReturnValue({ data: { ...BASE_ORDER, status: "ACCEPTED", riderId: "rider-1" }, isLoading: false });
+    mockUseAssignedRiderCard.mockReturnValue({
+      data: { id: "rider-1", displayName: "박라이더", phone: "01011112222", vehicleNumber: "12가3456", verifyStatus: "APPROVED" },
+    });
+    renderPage();
+    expect(screen.queryByTestId("order-cancel-button")).not.toBeInTheDocument();
   });
 
   it("shows the measure confirmation UI with confirm/dispute actions when ARRIVED with measuredKg", () => {

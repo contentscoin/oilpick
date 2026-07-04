@@ -5,6 +5,7 @@ import {
   CallCard,
   DriverCard,
   EmptyState,
+  InfoStatCard,
   LedgerList,
   MapView,
   OrderTimeline,
@@ -52,19 +53,36 @@ export function DevUiPage() {
         <PriceCard pricePerKg={1250} changeAmount={30} history={[1180, 1200, 1190, 1220, 1250]} />
       </section>
 
-      <section>
+      <section style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         <h2>StatusHeadline</h2>
-        <StatusHeadline status="ACCEPTED" />
+        <StatusHeadline status="ACCEPTED" subtitle="김민준 라이더가 매장으로 이동 중이에요" />
+        <StatusHeadline status="COMPLETED" />
+        <StatusHeadline status="CANCELLED" />
       </section>
 
       <section>
         <h2>OrderTimeline</h2>
-        <OrderTimeline currentStatus="ARRIVED" />
+        <OrderTimeline
+          currentStatus="ARRIVED"
+          timestamps={{ REQUESTED: "오늘 09:00", ACCEPTED: "오늘 09:05" }}
+        />
       </section>
 
       <section>
         <h2>DriverCard</h2>
         <DriverCard name="김철수" vehicleNo="12가 3456" phone="01000000000" />
+      </section>
+
+      <section>
+        <h2>InfoStatCard</h2>
+        <InfoStatCard
+          stats={[
+            { label: "예상 수량", value: "15.0kg" },
+            { label: "오늘 매입가", value: "700원/kg" },
+            { label: "예상 포인트", value: "10,500P", accent: true },
+          ]}
+          footnote="현장 계량 기준으로 확정됩니다"
+        />
       </section>
 
       <section>

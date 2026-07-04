@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { BigButton, DriverCard, MapView, OrderTimeline, StatusHeadline, colors, elevation, radius, surface } from "@oilpick/ui";
-import { formatKg, formatPoint } from "@oilpick/core";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { BigButton, DriverCard, InfoStatCard, MapView, OrderTimeline, StatusHeadline, colors, elevation, gray, radius, surface, touchTarget } from "@oilpick/ui";
+import { formatKg, formatKrw, formatPoint, formatTimeOfDay, type OrderStatus } from "@oilpick/core";
 import { KAKAO_KEY } from "../lib/env";
 import { invokeEdgeFunction } from "../lib/edgeFunction";
 import { useOrder } from "../hooks/useOrder";
@@ -92,26 +92,64 @@ export function OrderDetailPage() {
 
   const showMeasureConfirmUi = order.status === "ARRIVED" && order.measuredKg != null;
   const showRiderCard = order.status !== "REQUESTED" && order.status !== "CANCELLED";
+  const showMapAndTimeline = order.status !== "REQUESTED" && order.status !== "CANCELLED";
+
+  // 확정 전(계량 전) 상태에서만 예상 스탯 카드 노출. COMPLETED는 지급포인트 패널을 대신 쓴다.
+  const showInfoStatCard =
+    order.status === "ACCEPTED" || order.status === "ARRIVED" || order.status === "PICKED_UP";
+  const estimatedPoint = Math.round(order.requestedKg * order.snapshotPricePerKg);
+
+  // U7 목업: 라이더 배정 이후 보조문구에 라이더명 포함. 배정 전/취소는 status 기본값 사용.
+  const headlineSubtitle =
+    rider && (order.status === "ACCEPTED" || order.status === "ARRIVED")
+      ? `${rider.displayName} 라이더가 매장으로 이동 중이에요`
+      : undefined;
+
+  // 타임라인 각 스텝의 실제 시각. 스키마에 arrived_at/completed_at 컬럼이 없어(01-db-schema.sql)
+  // ARRIVED/COMPLETED 노드는 값이 없으면 OrderTimeline이 "-"로 렌더한다(데이터 조작 금지).
+  const timelineTimestamps: Partial<Record<OrderStatus, string>> = {};
+  if (order.createdAt) timelineTimestamps.REQUESTED = formatTimeOfDay(order.createdAt);
+  if (order.acceptedAt) timelineTimestamps.ACCEPTED = formatTimeOfDay(order.acceptedAt);
+  if (order.pickedUpAt) timelineTimestamps.PICKED_UP = formatTimeOfDay(order.pickedUpAt);
+  if (order.deliveredAt) timelineTimestamps.COMPLETED = formatTimeOfDay(order.deliveredAt);
 
   return (
     <main style={{ display: "flex", flexDirection: "column", gap: 20, padding: 20, maxWidth: 480, margin: "0 auto" }}>
+      {/* U7 목업 헤더: 뒤로(<) + "수거 상세"(중앙) + 우측 알림 벨. */}
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         <button
           type="button"
           data-testid="order-detail-back"
           aria-label="뒤로가기"
           onClick={() => navigate("/")}
-          style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", padding: 0 }}
+          style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", padding: 0, color: gray[900], lineHeight: 1 }}
         >
           &lt;
         </button>
-        <h1 style={{ fontSize: 15, margin: 0, flex: 1, fontWeight: 600, color: colors.status.wait }}>
-          수거 요청 상세
+        <h1 style={{ fontSize: 16, margin: 0, flex: 1, fontWeight: 700, textAlign: "center", color: gray[900] }}>
+          수거 상세
         </h1>
+        <Link
+          to="/notifications"
+          data-testid="order-detail-notifications"
+          aria-label="알림"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 32,
+            height: 32,
+            color: gray[900],
+            textDecoration: "none",
+          }}
+        >
+          <BellIcon />
+        </Link>
       </div>
 
-      {/* 05-design-upgrade.md "주문 상세 상태 헤드라인": 배지 대신 큰 상태 문장 + 보조설명. */}
-      <StatusHeadline status={order.status} />
+      {/* 05-design-upgrade.md "## U7 주문상세 — 목업 확정": 상태 헤드라인(near-black 제목 + 우측 pill
+          + 라이더명 보조문구). */}
+      <StatusHeadline status={order.status} subtitle={headlineSubtitle} />
 
       {actionError && (
         <p role="alert" data-testid="order-action-error" style={{ color: colors.status.danger, fontSize: 14, margin: 0 }}>
@@ -145,8 +183,9 @@ export function OrderDetailPage() {
         </section>
       )}
 
-      {order.status !== "REQUESTED" && order.status !== "CANCELLED" && (
-        <OrderTimeline currentStatus={order.status} />
+      {/* 목업 요소 순서: 지도 → 라이더 카드 → 정보 스탯 카드 → 타임라인. */}
+      {showMapAndTimeline && (
+        <MapView apiKey={KAKAO_KEY} center={{ lat: 37.5509, lng: 126.8225 }} />
       )}
 
       {/* 05-design-upgrade.md "라이더/기사 카드": 아바타 이니셜+이름+인증 pill+차량번호+전화 버튼. */}
@@ -159,8 +198,20 @@ export function OrderDetailPage() {
         />
       )}
 
-      {order.status !== "REQUESTED" && order.status !== "CANCELLED" && (
-        <MapView apiKey={KAKAO_KEY} center={{ lat: 37.5509, lng: 126.8225 }} />
+      {/* 05-design-upgrade.md "## U7 주문상세 — 목업 확정" 5번: 3열 정보 스탯 카드(확정 전). */}
+      {showInfoStatCard && (
+        <InfoStatCard
+          stats={[
+            { label: "예상 수량", value: formatKg(order.requestedKg) },
+            { label: "오늘 매입가", value: `${formatKrw(order.snapshotPricePerKg)}/kg` },
+            { label: "예상 포인트", value: formatPoint(estimatedPoint), accent: true },
+          ]}
+          footnote="현장 계량 기준으로 확정됩니다"
+        />
+      )}
+
+      {showMapAndTimeline && (
+        <OrderTimeline currentStatus={order.status} timestamps={timelineTimestamps} />
       )}
 
       {showMeasureConfirmUi && !showDisputeForm && (
@@ -272,7 +323,64 @@ export function OrderDetailPage() {
           </p>
         </section>
       )}
+
+      {/* U7 목업 하단 CTA: ACCEPTED/ARRIVED(계량 확인 UI 전)에서는 단일 "라이더에게 전화"만.
+          00-domain.md — 수락 후 공급자 취소 불가이므로 "요청 취소"는 넣지 않는다. */}
+      {(order.status === "ACCEPTED" || (order.status === "ARRIVED" && !showMeasureConfirmUi)) && rider?.phone && (
+        <a
+          href={`tel:${rider.phone}`}
+          data-testid="order-call-rider"
+          aria-label={`${rider.displayName} 라이더에게 전화`}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+            width: "100%",
+            minHeight: touchTarget,
+            padding: "14px 20px",
+            borderRadius: radius.button,
+            backgroundColor: colors.primary.DEFAULT,
+            color: "#fff",
+            fontSize: 17,
+            fontWeight: 700,
+            textDecoration: "none",
+          }}
+        >
+          <PhoneCtaIcon />
+          라이더에게 전화
+        </a>
+      )}
     </main>
+  );
+}
+
+/** U7 헤더 우측 알림 벨 아이콘. */
+function BellIcon() {
+  return (
+    <svg width={22} height={22} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M6 9a6 6 0 0 1 12 0c0 4 1.2 5.4 2 6.2.5.5.1 1.3-.6 1.3H4.6c-.7 0-1.1-.8-.6-1.3.8-.8 2-2.2 2-6.2Z"
+        stroke="currentColor"
+        strokeWidth={1.7}
+        strokeLinejoin="round"
+      />
+      <path d="M9.5 19a2.5 2.5 0 0 0 5 0" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/** 하단 CTA용 전화 아이콘(흰색). */
+function PhoneCtaIcon() {
+  return (
+    <svg width={20} height={20} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M6.5 4h3l1.2 3.2-1.8 1.4a11 11 0 0 0 4.5 4.5l1.4-1.8L18.5 12.5V15.5c0 1-.8 1.8-1.8 1.7A13.5 13.5 0 0 1 4.8 5.8C4.7 4.8 5.5 4 6.5 4Z"
+        stroke="#fff"
+        strokeWidth={1.6}
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 

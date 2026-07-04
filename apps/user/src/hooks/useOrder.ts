@@ -24,6 +24,8 @@ export interface OrderDetail {
   disputeReason: string | null;
   createdAt: string;
   acceptedAt: string | null;
+  pickedUpAt: string | null;
+  deliveredAt: string | null;
 }
 
 function mapRow(row: {
@@ -46,6 +48,8 @@ function mapRow(row: {
   dispute_reason: string | null;
   created_at: string;
   accepted_at: string | null;
+  picked_up_at: string | null;
+  delivered_at: string | null;
 }): OrderDetail {
   return {
     id: row.id,
@@ -67,11 +71,13 @@ function mapRow(row: {
     disputeReason: row.dispute_reason,
     createdAt: row.created_at,
     acceptedAt: row.accepted_at,
+    pickedUpAt: row.picked_up_at,
+    deliveredAt: row.delivered_at,
   };
 }
 
 const ORDER_DETAIL_COLUMNS =
-  "id, status, supplier_id, rider_id, depot_id, requested_cans, requested_kg, pickup_address, preferred_time, snapshot_price_per_kg, snapshot_rider_fee, measured_kg, final_kg, supplier_point, photo_urls, cancel_reason, dispute_reason, created_at, accepted_at";
+  "id, status, supplier_id, rider_id, depot_id, requested_cans, requested_kg, pickup_address, preferred_time, snapshot_price_per_kg, snapshot_rider_fee, measured_kg, final_kg, supplier_point, photo_urls, cancel_reason, dispute_reason, created_at, accepted_at, picked_up_at, delivered_at";
 
 /**
  * 단일 주문 상세 조회 + Realtime 구독. 03-frontend.md U6~U9 "/orders/:id":

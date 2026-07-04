@@ -18,6 +18,24 @@ export function formatKg(n: number): string {
   return `${n.toFixed(1)}kg`;
 }
 
+/**
+ * 시각 표시(타임라인 등). 오늘이면 "오늘 HH:mm", 다른 날이면 "M/D HH:mm".
+ * 예(오늘): "오늘 14:05", 예(다른 날): "7/1 14:05".
+ * now는 "오늘" 판정 기준(기본값 현재 시각, 테스트용으로 주입 가능).
+ */
+export function formatTimeOfDay(date: Date | string | number, now: Date | number = new Date()): string {
+  const target = typeof date === "object" ? date : new Date(date);
+  const base = typeof now === "number" ? new Date(now) : now;
+  const hh = String(target.getHours()).padStart(2, "0");
+  const mm = String(target.getMinutes()).padStart(2, "0");
+  const time = `${hh}:${mm}`;
+  const sameDay =
+    target.getFullYear() === base.getFullYear() &&
+    target.getMonth() === base.getMonth() &&
+    target.getDate() === base.getDate();
+  return sameDay ? `오늘 ${time}` : `${target.getMonth() + 1}/${target.getDate()} ${time}`;
+}
+
 const RELATIVE_UNITS: Array<{ limitMs: number; divisor: number; unit: string }> = [
   { limitMs: 60_000, divisor: 1, unit: "초" },
   { limitMs: 3_600_000, divisor: 60_000, unit: "분" },
