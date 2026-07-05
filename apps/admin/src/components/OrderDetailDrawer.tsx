@@ -71,105 +71,111 @@ export function OrderDetailDrawer({ order, events, isLoading, onClose, onMutated
   return (
     <div className="fixed inset-0 z-40 flex justify-end bg-black/30" onClick={onClose} data-testid="order-drawer-backdrop">
       <div
-        className="h-full w-full max-w-lg overflow-y-auto bg-white p-6 shadow-xl"
+        className="h-full w-full max-w-lg overflow-y-auto bg-surface-app p-6 shadow-raised"
         onClick={(e) => e.stopPropagation()}
         data-testid="order-drawer"
       >
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-zinc-900">주문 상세</h2>
-          <button type="button" onClick={onClose} className="text-sm text-zinc-400 hover:text-zinc-700" data-testid="order-drawer-close">
+          <h2 className="text-lg font-bold text-gray-900">주문 상세</h2>
+          <button type="button" onClick={onClose} className="text-sm text-gray-400 hover:text-gray-700" data-testid="order-drawer-close">
             닫기
           </button>
         </div>
 
         {isLoading || !order ? (
-          <p className="text-sm text-zinc-400">불러오는 중...</p>
+          <p className="text-sm text-gray-400">불러오는 중...</p>
         ) : (
-          <div className="flex flex-col gap-5">
-            <section>
-              <p className="text-xs font-medium text-zinc-400">상태</p>
-              <p className="text-base font-semibold text-zinc-900">{ORDER_STATUS_LABEL[order.status]}</p>
+          <div className="flex flex-col gap-4">
+            <section className="rounded-card bg-white p-4 shadow-card">
+              <p className="text-xs font-medium text-gray-400">상태</p>
+              <p className="mt-0.5 text-lg font-bold text-gray-900">{ORDER_STATUS_LABEL[order.status]}</p>
             </section>
 
-            <section className="grid grid-cols-2 gap-3 text-sm">
+            <section className="grid grid-cols-2 gap-3 rounded-card bg-white p-4 text-sm shadow-card">
               <div>
-                <p className="text-xs text-zinc-400">공급업체</p>
-                <p className="font-medium text-zinc-800">{order.supplierName}</p>
+                <p className="text-xs text-gray-400">공급업체</p>
+                <p className="font-medium text-gray-800">{order.supplierName}</p>
               </div>
               <div>
-                <p className="text-xs text-zinc-400">라이더</p>
-                <p className="font-medium text-zinc-800">{order.riderName ?? "미배정"}</p>
+                <p className="text-xs text-gray-400">라이더</p>
+                <p className="font-medium text-gray-800">{order.riderName ?? "미배정"}</p>
               </div>
               <div>
-                <p className="text-xs text-zinc-400">예상 kg</p>
-                <p className="font-medium tabular-nums text-zinc-800">{formatKg(order.requestedKg)}</p>
+                <p className="text-xs text-gray-400">예상 kg</p>
+                <p className="font-medium tabular-nums text-gray-800">{formatKg(order.requestedKg)}</p>
               </div>
               <div>
-                <p className="text-xs text-zinc-400">계량 kg</p>
-                <p className="font-medium tabular-nums text-zinc-800">
+                <p className="text-xs text-gray-400">계량 kg</p>
+                <p className="font-medium tabular-nums text-gray-800">
                   {order.measuredKg !== null ? formatKg(order.measuredKg) : "-"}
                 </p>
               </div>
               <div>
-                <p className="text-xs text-zinc-400">확정 kg</p>
-                <p className="font-medium tabular-nums text-zinc-800">
+                <p className="text-xs text-gray-400">확정 kg</p>
+                <p className="font-medium tabular-nums text-gray-800">
                   {order.finalKg !== null ? formatKg(order.finalKg) : "-"}
                 </p>
               </div>
               <div>
-                <p className="text-xs text-zinc-400">지급 포인트</p>
-                <p className="font-medium tabular-nums text-primary">
+                <p className="text-xs text-gray-400">지급 포인트</p>
+                <p className="font-bold tabular-nums text-accent">
                   {order.supplierPoint !== null ? formatPoint(order.supplierPoint) : "-"}
                 </p>
               </div>
-            </section>
-
-            <section>
-              <p className="text-xs text-zinc-400">수거 주소</p>
-              <p className="text-sm text-zinc-700">{order.pickupAddress}</p>
+              <div className="col-span-2 border-t border-gray-50 pt-3">
+                <p className="text-xs text-gray-400">수거 주소</p>
+                <p className="text-sm text-gray-700">{order.pickupAddress}</p>
+              </div>
             </section>
 
             {order.disputeReason && (
-              <section className="rounded-xl bg-accent-light p-3">
+              <section className="rounded-card bg-accent-light p-4 shadow-card">
                 <p className="text-xs font-medium text-accent">이의신청 사유</p>
-                <p className="text-sm text-zinc-800">{order.disputeReason}</p>
+                <p className="text-sm text-gray-800">{order.disputeReason}</p>
               </section>
             )}
             {order.cancelReason && (
-              <section className="rounded-xl bg-zinc-100 p-3">
-                <p className="text-xs font-medium text-zinc-500">취소 사유</p>
-                <p className="text-sm text-zinc-800">{order.cancelReason}</p>
+              <section className="rounded-card bg-white p-4 shadow-card">
+                <p className="text-xs font-medium text-gray-500">취소 사유</p>
+                <p className="text-sm text-gray-800">{order.cancelReason}</p>
               </section>
             )}
 
             {order.photoUrls.length > 0 && (
-              <section>
-                <p className="mb-2 text-xs font-medium text-zinc-400">계량 사진</p>
+              <section className="rounded-card bg-white p-4 shadow-card">
+                <p className="mb-2 text-xs font-medium text-gray-400">계량 사진</p>
                 <div className="flex flex-wrap gap-2">
                   {order.photoUrls.map((url) => (
-                    <img
-                      key={url}
-                      src={url}
-                      alt="계량 사진"
-                      className="h-24 w-24 rounded-xl border border-zinc-100 object-cover"
-                    />
+                    <a key={url} href={url} target="_blank" rel="noreferrer" className="block">
+                      <img
+                        src={url}
+                        alt="계량 사진"
+                        className="h-24 w-24 rounded-button border border-gray-100 object-cover transition-shadow hover:shadow-card"
+                      />
+                    </a>
                   ))}
                 </div>
               </section>
             )}
 
-            <section>
-              <p className="mb-2 text-xs font-medium text-zinc-400">이벤트 타임라인</p>
-              <ol className="flex flex-col gap-2" data-testid="order-event-timeline">
-                {events.map((ev) => (
-                  <li key={ev.id} className="rounded-xl border border-zinc-100 px-3 py-2 text-sm">
-                    <p className="font-medium text-zinc-800">
-                      {ev.fromStatus ? ORDER_STATUS_LABEL[ev.fromStatus as keyof typeof ORDER_STATUS_LABEL] : "생성"} →{" "}
-                      {ORDER_STATUS_LABEL[ev.toStatus as keyof typeof ORDER_STATUS_LABEL]}
-                    </p>
-                    <p className="text-xs text-zinc-400">
-                      {ev.actorId ? `actor: ${ev.actorId.slice(0, 8)}` : "시스템"} · {formatRelativeTime(ev.createdAt)}
-                    </p>
+            <section className="rounded-card bg-white p-4 shadow-card">
+              <p className="mb-3 text-xs font-medium text-gray-400">이벤트 타임라인</p>
+              <ol className="flex flex-col" data-testid="order-event-timeline">
+                {events.map((ev, i) => (
+                  <li key={ev.id} className="relative flex gap-3 pb-4 last:pb-0">
+                    <div className="flex flex-col items-center">
+                      <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-pill bg-primary" />
+                      {i < events.length - 1 && <span className="w-px flex-1 bg-gray-200" />}
+                    </div>
+                    <div className="-mt-0.5 text-sm">
+                      <p className="font-medium text-gray-800">
+                        {ev.fromStatus ? ORDER_STATUS_LABEL[ev.fromStatus as keyof typeof ORDER_STATUS_LABEL] : "생성"} →{" "}
+                        {ORDER_STATUS_LABEL[ev.toStatus as keyof typeof ORDER_STATUS_LABEL]}
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        {ev.actorId ? `actor: ${ev.actorId.slice(0, 8)}` : "시스템"} · {formatRelativeTime(ev.createdAt)}
+                      </p>
+                    </div>
                   </li>
                 ))}
               </ol>
@@ -179,24 +185,24 @@ export function OrderDetailDrawer({ order, events, isLoading, onClose, onMutated
             {message && <p className="text-sm font-medium text-primary">{message}</p>}
 
             {order.status === "DISPUTED" && (
-              <form onSubmit={handleResolveDispute} className="rounded-xl border border-zinc-200 p-4">
-                <p className="mb-2 text-sm font-semibold text-zinc-800">분쟁 중재</p>
+              <form onSubmit={handleResolveDispute} className="rounded-card bg-white p-4 shadow-card">
+                <p className="mb-2 text-sm font-semibold text-gray-800">분쟁 중재</p>
                 <label className="mb-3 block">
-                  <span className="mb-1 block text-xs text-zinc-500">확정 kg</span>
+                  <span className="mb-1 block text-xs text-gray-500">확정 kg</span>
                   <input
                     type="number"
                     step="0.1"
                     min={0}
                     value={finalKg}
                     onChange={(e) => setFinalKg(e.target.value)}
-                    className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-primary"
+                    className="w-full rounded-button border border-gray-200 px-3 py-2 text-sm outline-none focus:border-primary"
                     data-testid="resolve-dispute-final-kg"
                   />
                 </label>
                 <button
                   type="submit"
                   disabled={busy}
-                  className="h-10 w-full rounded-lg bg-primary text-sm font-semibold text-white disabled:opacity-60"
+                  className="h-10 w-full rounded-button bg-primary text-sm font-semibold text-white shadow-card disabled:opacity-60"
                   data-testid="resolve-dispute-submit"
                 >
                   중재 확정
@@ -205,21 +211,21 @@ export function OrderDetailDrawer({ order, events, isLoading, onClose, onMutated
             )}
 
             {(order.status === "REQUESTED" || order.status === "ACCEPTED") && (
-              <div className="rounded-xl border border-status-danger/30 p-4">
+              <div className="rounded-card border border-status-danger/20 bg-white p-4 shadow-card">
                 <p className="mb-2 text-sm font-semibold text-status-danger">주문 취소</p>
                 <input
                   type="text"
                   placeholder="취소 사유(선택)"
                   value={cancelReason}
                   onChange={(e) => setCancelReason(e.target.value)}
-                  className="mb-3 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-status-danger"
+                  className="mb-3 w-full rounded-button border border-gray-200 px-3 py-2 text-sm outline-none focus:border-status-danger"
                   data-testid="cancel-reason-input"
                 />
                 <button
                   type="button"
                   onClick={handleCancel}
                   disabled={busy}
-                  className="h-10 w-full rounded-lg bg-status-danger text-sm font-semibold text-white disabled:opacity-60"
+                  className="h-10 w-full rounded-button bg-status-danger text-sm font-semibold text-white disabled:opacity-60"
                   data-testid="cancel-order-button"
                 >
                   주문 취소

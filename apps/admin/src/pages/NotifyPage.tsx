@@ -48,17 +48,17 @@ export function NotifyPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-bold text-zinc-900">공지</h1>
-        <p className="text-sm text-zinc-500">전체 또는 역할별로 공지를 보내요.</p>
+        <h1 className="text-2xl font-bold text-gray-900">공지</h1>
+        <p className="text-sm text-gray-500">전체 또는 역할별로 공지를 보내요.</p>
       </div>
 
-      <form onSubmit={handleSubmit} className="max-w-lg rounded-card bg-white p-6 shadow-sm">
+      <form onSubmit={handleSubmit} className="max-w-lg rounded-card bg-white p-6 shadow-card">
         <label className="mb-3 block">
-          <span className="mb-1 block text-sm font-medium text-zinc-700">대상</span>
+          <span className="mb-1 block text-sm font-medium text-gray-700">대상</span>
           <select
             value={target}
             onChange={(e) => setTarget(e.target.value as typeof target)}
-            className="w-full rounded-xl border border-zinc-200 px-3 py-2.5 text-base outline-none focus:border-primary"
+            className="w-full rounded-button border border-gray-200 px-3 py-2.5 text-base outline-none focus:border-primary"
             data-testid="notify-target-select"
           >
             {TARGET_OPTIONS.map((opt) => (
@@ -70,22 +70,22 @@ export function NotifyPage() {
         </label>
 
         <label className="mb-3 block">
-          <span className="mb-1 block text-sm font-medium text-zinc-700">제목</span>
+          <span className="mb-1 block text-sm font-medium text-gray-700">제목</span>
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="w-full rounded-xl border border-zinc-200 px-3 py-2.5 text-base outline-none focus:border-primary"
+            className="w-full rounded-button border border-gray-200 px-3 py-2.5 text-base outline-none focus:border-primary"
             data-testid="notify-title-input"
           />
         </label>
 
         <label className="mb-4 block">
-          <span className="mb-1 block text-sm font-medium text-zinc-700">내용</span>
+          <span className="mb-1 block text-sm font-medium text-gray-700">내용</span>
           <textarea
             value={body}
             onChange={(e) => setBody(e.target.value)}
             rows={4}
-            className="w-full rounded-xl border border-zinc-200 px-3 py-2.5 text-base outline-none focus:border-primary"
+            className="w-full rounded-button border border-gray-200 px-3 py-2.5 text-base outline-none focus:border-primary"
             data-testid="notify-body-input"
           />
         </label>
@@ -96,7 +96,7 @@ export function NotifyPage() {
         <button
           type="submit"
           disabled={busy}
-          className="h-12 w-full rounded-xl bg-primary text-base font-semibold text-white disabled:opacity-60"
+          className="h-12 w-full rounded-button bg-primary text-base font-semibold text-white shadow-card disabled:opacity-60"
           data-testid="notify-submit"
         >
           {busy ? "발송 중..." : "발송"}

@@ -28,11 +28,16 @@ export function AdminShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen bg-zinc-50">
-      <aside className="flex w-56 shrink-0 flex-col border-r border-zinc-200 bg-white">
-        <div className="px-5 py-6">
-          <p className="text-lg font-bold text-primary">OilPick</p>
-          <p className="text-xs text-zinc-400">관리자</p>
+    <div className="flex min-h-screen bg-surface-app">
+      <aside className="flex w-56 shrink-0 flex-col border-r border-gray-100 bg-white shadow-card">
+        <div className="flex items-center gap-2.5 px-5 py-6">
+          <span className="flex h-9 w-9 items-center justify-center rounded-card bg-primary-light text-base font-bold text-primary">
+            O
+          </span>
+          <div>
+            <p className="text-lg font-bold leading-tight text-primary">OilPick</p>
+            <p className="text-xs text-gray-400">관리자</p>
+          </div>
         </div>
         <nav className="flex flex-1 flex-col gap-1 px-3">
           {NAV_ITEMS.map((item) => (
@@ -41,8 +46,8 @@ export function AdminShell({ children }: { children: ReactNode }) {
               to={item.to}
               end={item.end}
               className={({ isActive }) =>
-                `rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
-                  isActive ? "bg-primary-light text-primary" : "text-zinc-600 hover:bg-zinc-100"
+                `rounded-card px-3 py-2.5 text-sm font-medium transition-colors ${
+                  isActive ? "bg-primary-light text-primary" : "text-gray-600 hover:bg-gray-100"
                 }`
               }
             >
@@ -54,7 +59,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
           <button
             type="button"
             onClick={handleLogout}
-            className="w-full rounded-xl px-3 py-2.5 text-left text-sm font-medium text-zinc-500 hover:bg-zinc-100"
+            className="w-full rounded-card px-3 py-2.5 text-left text-sm font-medium text-gray-500 hover:bg-gray-100"
             data-testid="logout-button"
           >
             로그아웃

@@ -11,38 +11,38 @@ export function DepotsPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-bold text-zinc-900">집하장</h1>
-        <p className="text-sm text-zinc-500">집하장을 등록하고 QR 코드를 인쇄해요.</p>
+        <h1 className="text-2xl font-bold text-gray-900">집하장</h1>
+        <p className="text-sm text-gray-500">집하장을 등록하고 QR 코드를 인쇄해요.</p>
       </div>
 
       <NewDepotForm onCreate={createDepot} />
 
-      <div className="rounded-card bg-white p-6 shadow-sm">
-        <h2 className="mb-4 text-lg font-semibold text-zinc-900">등록된 집하장</h2>
+      <div className="rounded-card bg-white p-6 shadow-card">
+        <h2 className="mb-4 text-lg font-semibold text-gray-900">등록된 집하장</h2>
         {isLoading ? (
-          <p className="text-sm text-zinc-400">불러오는 중...</p>
+          <p className="text-sm text-gray-400">불러오는 중...</p>
         ) : depots && depots.length > 0 ? (
           <div className="flex flex-col gap-3" data-testid="depot-list">
             {depots.map((depot) => (
               <div
                 key={depot.id}
-                className="flex flex-col gap-2 rounded-xl border border-zinc-100 p-4 sm:flex-row sm:items-center sm:justify-between"
+                className="flex flex-col gap-2 rounded-card border border-gray-100 p-4 transition-colors hover:bg-gray-50 sm:flex-row sm:items-center sm:justify-between"
                 data-testid={`depot-row-${depot.id}`}
               >
                 <div>
-                  <p className="font-semibold text-zinc-900">
+                  <p className="font-semibold text-gray-900">
                     {depot.name}{" "}
                     {!depot.isActive && (
-                      <span className="ml-1 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500">비활성</span>
+                      <span className="ml-1 rounded-pill bg-gray-100 px-2 py-0.5 text-xs text-gray-500">비활성</span>
                     )}
                   </p>
-                  <p className="text-sm text-zinc-500">{depot.address}</p>
+                  <p className="text-sm text-gray-500">{depot.address}</p>
                 </div>
                 <div className="flex gap-2">
                   <button
                     type="button"
                     onClick={() => updateDepot(depot.id, { isActive: !depot.isActive })}
-                    className="rounded-lg border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+                    className="rounded-button border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100"
                     data-testid={`depot-toggle-${depot.id}`}
                   >
                     {depot.isActive ? "비활성화" : "활성화"}
@@ -50,7 +50,7 @@ export function DepotsPage() {
                   <button
                     type="button"
                     onClick={() => setPrintDepot(depot)}
-                    className="rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-white"
+                    className="rounded-button bg-primary px-3 py-1.5 text-sm font-medium text-white shadow-card"
                     data-testid={`depot-qr-${depot.id}`}
                   >
                     QR 보기
@@ -60,7 +60,7 @@ export function DepotsPage() {
             ))}
           </div>
         ) : (
-          <p className="text-sm text-zinc-400">등록된 집하장이 없어요.</p>
+          <p className="text-sm text-gray-400">등록된 집하장이 없어요.</p>
         )}
       </div>
 
@@ -99,41 +99,41 @@ function NewDepotForm({ onCreate }: { onCreate: (input: { name: string; address:
   }
 
   return (
-    <form onSubmit={handleSubmit} className="rounded-card bg-white p-6 shadow-sm">
-      <h2 className="mb-4 text-lg font-semibold text-zinc-900">새 집하장 등록</h2>
+    <form onSubmit={handleSubmit} className="rounded-card bg-white p-6 shadow-card">
+      <h2 className="mb-4 text-lg font-semibold text-gray-900">새 집하장 등록</h2>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <label className="block">
-          <span className="mb-1 block text-sm font-medium text-zinc-700">이름</span>
+          <span className="mb-1 block text-sm font-medium text-gray-700">이름</span>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full rounded-xl border border-zinc-200 px-3 py-2.5 text-base outline-none focus:border-primary"
+            className="w-full rounded-button border border-gray-200 px-3 py-2.5 text-base outline-none focus:border-primary"
             data-testid="depot-name-input"
           />
         </label>
         <label className="block">
-          <span className="mb-1 block text-sm font-medium text-zinc-700">주소</span>
+          <span className="mb-1 block text-sm font-medium text-gray-700">주소</span>
           <input
             value={address}
             onChange={(e) => setAddress(e.target.value)}
-            className="w-full rounded-xl border border-zinc-200 px-3 py-2.5 text-base outline-none focus:border-primary"
+            className="w-full rounded-button border border-gray-200 px-3 py-2.5 text-base outline-none focus:border-primary"
             data-testid="depot-address-input"
           />
         </label>
         <label className="block">
-          <span className="mb-1 block text-sm font-medium text-zinc-700">위도</span>
+          <span className="mb-1 block text-sm font-medium text-gray-700">위도</span>
           <input
             value={lat}
             onChange={(e) => setLat(e.target.value)}
-            className="w-full rounded-xl border border-zinc-200 px-3 py-2.5 text-base outline-none focus:border-primary"
+            className="w-full rounded-button border border-gray-200 px-3 py-2.5 text-base outline-none focus:border-primary"
           />
         </label>
         <label className="block">
-          <span className="mb-1 block text-sm font-medium text-zinc-700">경도</span>
+          <span className="mb-1 block text-sm font-medium text-gray-700">경도</span>
           <input
             value={lng}
             onChange={(e) => setLng(e.target.value)}
-            className="w-full rounded-xl border border-zinc-200 px-3 py-2.5 text-base outline-none focus:border-primary"
+            className="w-full rounded-button border border-gray-200 px-3 py-2.5 text-base outline-none focus:border-primary"
           />
         </label>
       </div>
@@ -141,7 +141,7 @@ function NewDepotForm({ onCreate }: { onCreate: (input: { name: string; address:
       <button
         type="submit"
         disabled={busy}
-        className="mt-4 h-11 rounded-xl bg-primary px-5 text-sm font-semibold text-white disabled:opacity-60"
+        className="mt-4 h-11 rounded-button bg-primary px-5 text-sm font-semibold text-white shadow-card disabled:opacity-60"
         data-testid="depot-create-submit"
       >
         {busy ? "등록 중..." : "집하장 등록"}
@@ -164,18 +164,18 @@ function DepotQrModal({ depot, onClose }: { depot: AdminDepotRow; onClose: () =>
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40" onClick={onClose}>
       <div
-        className="flex flex-col items-center gap-4 rounded-card bg-white p-8 shadow-xl"
+        className="flex flex-col items-center gap-4 rounded-hero bg-white p-8 shadow-raised"
         onClick={(e) => e.stopPropagation()}
         data-testid="depot-qr-modal"
       >
-        <h2 className="text-lg font-bold text-zinc-900">{depot.name}</h2>
-        <p className="text-sm text-zinc-500">{depot.address}</p>
+        <h2 className="text-lg font-bold text-gray-900">{depot.name}</h2>
+        <p className="text-sm text-gray-500">{depot.address}</p>
         <canvas ref={canvasRef} data-testid="depot-qr-canvas" />
-        <p className="max-w-xs break-all text-center text-xs text-zinc-400">{depot.qrSecret}</p>
+        <p className="max-w-xs break-all text-center text-xs text-gray-400">{depot.qrSecret}</p>
         <button
           type="button"
           onClick={() => window.print()}
-          className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white"
+          className="rounded-button bg-primary px-4 py-2 text-sm font-semibold text-white shadow-card"
         >
           인쇄
         </button>

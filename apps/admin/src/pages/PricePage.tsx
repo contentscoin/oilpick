@@ -65,48 +65,48 @@ export function PricePage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-bold text-zinc-900">시세 관리</h1>
-        <p className="text-sm text-zinc-500">매입가/수거비를 설정하면 즉시 새 시세로 반영돼요.</p>
+        <h1 className="text-2xl font-bold text-gray-900">시세 관리</h1>
+        <p className="text-sm text-gray-500">매입가/수거비를 설정하면 즉시 새 시세로 반영돼요.</p>
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <div className="rounded-card bg-white p-6 shadow-sm">
-          <p className="text-sm text-zinc-500">현재 매입가</p>
+        <div className="rounded-card bg-white p-6 shadow-card">
+          <p className="text-sm text-gray-500">현재 매입가</p>
           <p className="mt-1 text-4xl font-bold tabular-nums text-primary">
             {latest ? formatKrw(latest.pricePerKg) : "-"}
             <span className="text-base font-medium">/kg</span>
           </p>
-          <p className="mt-3 text-sm text-zinc-500">
-            수거비 기본값 <span className="font-semibold text-zinc-800">{latest ? formatKrw(latest.riderFee) : "-"}</span>
+          <p className="mt-3 text-sm text-gray-500">
+            수거비 기본값 <span className="font-semibold text-accent">{latest ? formatKrw(latest.riderFee) : "-"}</span>
           </p>
           {latest && (
-            <p className="mt-1 text-xs text-zinc-400">{formatRelativeTime(latest.effectiveAt)} 갱신</p>
+            <p className="mt-1 text-xs text-gray-400">{formatRelativeTime(latest.effectiveAt)} 갱신</p>
           )}
         </div>
 
-        <form onSubmit={handleSubmit} className="rounded-card bg-white p-6 shadow-sm">
-          <h2 className="mb-4 text-lg font-semibold text-zinc-900">새 시세 등록</h2>
+        <form onSubmit={handleSubmit} className="rounded-card bg-white p-6 shadow-card">
+          <h2 className="mb-4 text-lg font-semibold text-gray-900">새 시세 등록</h2>
           <label className="mb-3 block">
-            <span className="mb-1 block text-sm font-medium text-zinc-700">매입가(원/kg)</span>
+            <span className="mb-1 block text-sm font-medium text-gray-700">매입가(원/kg)</span>
             <input
               type="number"
               min={1}
               required
               value={pricePerKg}
               onChange={(e) => setPricePerKg(e.target.value)}
-              className="w-full rounded-xl border border-zinc-200 px-3 py-2.5 text-base outline-none focus:border-primary"
+              className="w-full rounded-button border border-gray-200 px-3 py-2.5 text-base outline-none focus:border-primary"
               data-testid="price-input"
             />
           </label>
           <label className="mb-4 block">
-            <span className="mb-1 block text-sm font-medium text-zinc-700">수거비 기본값(P)</span>
+            <span className="mb-1 block text-sm font-medium text-gray-700">수거비 기본값(P)</span>
             <input
               type="number"
               min={1}
               required
               value={riderFee}
               onChange={(e) => setRiderFee(e.target.value)}
-              className="w-full rounded-xl border border-zinc-200 px-3 py-2.5 text-base outline-none focus:border-primary"
+              className="w-full rounded-button border border-gray-200 px-3 py-2.5 text-base outline-none focus:border-primary"
               data-testid="rider-fee-input"
             />
           </label>
@@ -115,7 +115,7 @@ export function PricePage() {
           <button
             type="submit"
             disabled={submitting}
-            className="h-12 w-full rounded-xl bg-primary text-base font-semibold text-white disabled:opacity-60"
+            className="h-12 w-full rounded-button bg-primary text-base font-semibold text-white shadow-card disabled:opacity-60"
             data-testid="price-submit"
           >
             {submitting ? "등록 중..." : "시세 등록"}
@@ -123,8 +123,8 @@ export function PricePage() {
         </form>
       </div>
 
-      <div className="rounded-card bg-white p-6 shadow-sm">
-        <h2 className="mb-4 text-lg font-semibold text-zinc-900">시세 추이</h2>
+      <div className="rounded-card bg-white p-6 shadow-card">
+        <h2 className="mb-4 text-lg font-semibold text-gray-900">시세 추이</h2>
         <div style={{ width: "100%", height: 240 }}>
           <ResponsiveContainer>
             <LineChart data={chartData}>
@@ -138,15 +138,15 @@ export function PricePage() {
         </div>
       </div>
 
-      <div className="rounded-card bg-white p-6 shadow-sm">
-        <h2 className="mb-4 text-lg font-semibold text-zinc-900">이력 (최근 {history?.length ?? 0}건)</h2>
+      <div className="rounded-card bg-white p-6 shadow-card">
+        <h2 className="mb-4 text-lg font-semibold text-gray-900">이력 (최근 {history?.length ?? 0}건)</h2>
         {isLoading ? (
-          <p className="text-sm text-zinc-400">불러오는 중...</p>
+          <p className="text-sm text-gray-400">불러오는 중...</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm" data-testid="price-history-table">
               <thead>
-                <tr className="border-b border-zinc-100 text-zinc-500">
+                <tr className="border-b border-gray-100 text-gray-500">
                   <th className="py-2 font-medium">일시</th>
                   <th className="py-2 font-medium">매입가</th>
                   <th className="py-2 font-medium">수거비</th>
@@ -154,10 +154,10 @@ export function PricePage() {
               </thead>
               <tbody>
                 {(history ?? []).map((tick) => (
-                  <tr key={tick.id} className="border-b border-zinc-50">
-                    <td className="py-2 text-zinc-600">{new Date(tick.effectiveAt).toLocaleString("ko-KR")}</td>
-                    <td className="py-2 font-medium tabular-nums">{formatKrw(tick.pricePerKg)}</td>
-                    <td className="py-2 font-medium tabular-nums">{formatKrw(tick.riderFee)}</td>
+                  <tr key={tick.id} className="border-b border-gray-50 transition-colors hover:bg-gray-50">
+                    <td className="py-2 text-gray-600">{new Date(tick.effectiveAt).toLocaleString("ko-KR")}</td>
+                    <td className="py-2 font-medium tabular-nums text-primary">{formatKrw(tick.pricePerKg)}</td>
+                    <td className="py-2 font-medium tabular-nums text-accent">{formatKrw(tick.riderFee)}</td>
                   </tr>
                 ))}
               </tbody>

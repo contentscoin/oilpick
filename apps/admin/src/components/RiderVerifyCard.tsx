@@ -66,18 +66,18 @@ export function RiderVerifyCard({ rider, onProcessed }: { rider: AdminRiderRow; 
   }
 
   return (
-    <div className="rounded-card bg-white p-5 shadow-sm" data-testid={`rider-card-${rider.id}`}>
+    <div className="rounded-card bg-white p-5 shadow-card" data-testid={`rider-card-${rider.id}`}>
       <div className="mb-3 flex items-center justify-between">
         <div>
-          <p className="font-semibold text-zinc-900">
-            {rider.displayName} <span className="text-sm font-normal text-zinc-400">{rider.phone}</span>
+          <p className="font-semibold text-gray-900">
+            {rider.displayName} <span className="text-sm font-normal text-gray-400">{rider.phone}</span>
           </p>
-          <p className="text-sm text-zinc-500">
+          <p className="text-sm text-gray-500">
             사업자번호 {rider.bizNumber} · 차량번호 {rider.vehicleNumber}
           </p>
         </div>
         <span
-          className={`rounded-full px-3 py-1 text-xs font-semibold ${
+          className={`rounded-pill px-3 py-1 text-xs font-semibold ${
             rider.verifyStatus === "APPROVED"
               ? "bg-primary-light text-primary"
               : rider.verifyStatus === "REJECTED"
@@ -96,7 +96,7 @@ export function RiderVerifyCard({ rider, onProcessed }: { rider: AdminRiderRow; 
       </div>
 
       {rider.verifyStatus === "REJECTED" && rider.rejectReason && (
-        <p className="mb-3 text-sm text-status-danger">반려 사유: {rider.rejectReason}</p>
+        <p className="mb-3 rounded-card bg-status-danger/5 px-3 py-2 text-sm text-status-danger">반려 사유: {rider.rejectReason}</p>
       )}
 
       {rider.verifyStatus === "PENDING" && (
@@ -106,7 +106,7 @@ export function RiderVerifyCard({ rider, onProcessed }: { rider: AdminRiderRow; 
             placeholder="반려 사유(반려 시 필수)"
             value={rejectReason}
             onChange={(e) => setRejectReason(e.target.value)}
-            className="rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-primary"
+            className="rounded-button border border-gray-200 px-3 py-2 text-sm outline-none focus:border-primary"
             data-testid={`reject-reason-${rider.id}`}
           />
           {error && <p className="text-sm font-medium text-status-danger">{error}</p>}
@@ -115,7 +115,7 @@ export function RiderVerifyCard({ rider, onProcessed }: { rider: AdminRiderRow; 
               type="button"
               disabled={busy}
               onClick={() => handleDecision("APPROVED")}
-              className="h-10 flex-1 rounded-lg bg-primary text-sm font-semibold text-white disabled:opacity-60"
+              className="h-10 flex-1 rounded-button bg-primary text-sm font-semibold text-white shadow-card disabled:opacity-60"
               data-testid={`approve-rider-${rider.id}`}
             >
               승인
@@ -124,7 +124,7 @@ export function RiderVerifyCard({ rider, onProcessed }: { rider: AdminRiderRow; 
               type="button"
               disabled={busy}
               onClick={() => handleDecision("REJECTED")}
-              className="h-10 flex-1 rounded-lg bg-status-danger text-sm font-semibold text-white disabled:opacity-60"
+              className="h-10 flex-1 rounded-button border border-status-danger text-sm font-semibold text-status-danger hover:bg-status-danger/5 disabled:opacity-60"
               data-testid={`reject-rider-${rider.id}`}
             >
               반려
@@ -142,16 +142,16 @@ function DocThumb({ label, url }: { label: string; url: string | null | undefine
       href={url ?? undefined}
       target="_blank"
       rel="noreferrer"
-      className="block w-28 rounded-xl border border-zinc-100 p-1 text-center"
+      className="block w-28 rounded-card border border-gray-100 p-1 text-center transition-shadow hover:shadow-card"
     >
       {url ? (
-        <img src={url} alt={label} className="h-20 w-full rounded-lg object-cover" />
+        <img src={url} alt={label} className="h-20 w-full rounded-button object-cover" />
       ) : (
-        <div className="flex h-20 w-full items-center justify-center rounded-lg bg-zinc-100 text-xs text-zinc-400">
+        <div className="flex h-20 w-full items-center justify-center rounded-button bg-gray-100 text-xs text-gray-400">
           없음
         </div>
       )}
-      <p className="mt-1 truncate text-xs text-zinc-500">{label}</p>
+      <p className="mt-1 truncate text-xs text-gray-500">{label}</p>
     </a>
   );
 }

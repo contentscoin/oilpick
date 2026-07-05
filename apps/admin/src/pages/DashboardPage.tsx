@@ -5,11 +5,11 @@ import { useDashboardKpi, useDashboardOrders, useDashboardRiders } from "../hook
 
 const SEOUL_CENTER = { lat: 37.5509, lng: 126.8225 }; // 집하장 인근(seed.sql) 기본 중심.
 
-function KpiCard({ label, value }: { label: string; value: string }) {
+function KpiCard({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
   return (
-    <div className="rounded-card bg-white p-5 shadow-sm">
-      <p className="text-sm text-zinc-500">{label}</p>
-      <p className="mt-1 text-3xl font-bold tabular-nums text-zinc-900">{value}</p>
+    <div className="rounded-card bg-white p-5 shadow-card">
+      <p className="text-sm text-gray-500">{label}</p>
+      <p className={`mt-1 text-3xl font-bold tabular-nums ${accent ? "text-accent" : "text-gray-900"}`}>{value}</p>
     </div>
   );
 }
@@ -36,8 +36,8 @@ export function DashboardPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-bold text-zinc-900">대시보드</h1>
-        <p className="text-sm text-zinc-500">오늘의 현황과 진행 중인 주문을 한눈에 확인해요.</p>
+        <h1 className="text-2xl font-bold text-gray-900">대시보드</h1>
+        <p className="text-sm text-gray-500">오늘의 현황과 진행 중인 주문을 한눈에 확인해요.</p>
       </div>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -46,12 +46,13 @@ export function DashboardPage() {
         <KpiCard
           label="오늘 발행 포인트"
           value={kpiLoading ? "-" : `${(kpi?.issuedPoint ?? 0).toLocaleString("ko-KR")}P`}
+          accent
         />
         <KpiCard label="활성 라이더" value={kpiLoading ? "-" : `${kpi?.activeRiderCount ?? 0}명`} />
       </div>
 
-      <div className="rounded-card bg-white p-5 shadow-sm">
-        <h2 className="mb-3 text-lg font-semibold text-zinc-900">실시간 지도</h2>
+      <div className="rounded-card bg-white p-5 shadow-card">
+        <h2 className="mb-3 text-lg font-semibold text-gray-900">실시간 지도</h2>
         <MapView
           apiKey={KAKAO_KEY}
           center={SEOUL_CENTER}
@@ -62,50 +63,50 @@ export function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <div className="rounded-card bg-white p-5 shadow-sm">
-          <h2 className="mb-3 text-lg font-semibold text-zinc-900">
+        <div className="rounded-card bg-white p-5 shadow-card">
+          <h2 className="mb-3 text-lg font-semibold text-gray-900">
             진행 중인 주문 ({orders?.length ?? 0}건)
           </h2>
           {ordersLoading ? (
-            <p className="text-sm text-zinc-400">불러오는 중...</p>
+            <p className="text-sm text-gray-400">불러오는 중...</p>
           ) : orders && orders.length > 0 ? (
             <ul className="flex flex-col gap-2" data-testid="dashboard-order-list">
               {orders.map((o) => (
                 <li
                   key={o.id}
-                  className="flex items-center justify-between rounded-xl border border-zinc-100 px-3 py-2 text-sm"
+                  className="flex items-center justify-between rounded-card border border-gray-100 px-3 py-2 text-sm"
                 >
                   <div>
-                    <p className="font-medium text-zinc-800">{o.pickupAddress}</p>
-                    <p className="text-xs text-zinc-500">{o.requestedKg}kg 예상</p>
+                    <p className="font-medium text-gray-800">{o.pickupAddress}</p>
+                    <p className="text-xs text-gray-500">{o.requestedKg}kg 예상</p>
                   </div>
-                  <span className="rounded-full bg-primary-light px-2 py-1 text-xs font-semibold text-primary">
+                  <span className="rounded-pill bg-primary-light px-2 py-1 text-xs font-semibold text-primary">
                     {ORDER_STATUS_LABEL[o.status as keyof typeof ORDER_STATUS_LABEL] ?? o.status}
                   </span>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-zinc-400">진행 중인 주문이 없어요.</p>
+            <p className="text-sm text-gray-400">진행 중인 주문이 없어요.</p>
           )}
         </div>
 
-        <div className="rounded-card bg-white p-5 shadow-sm">
-          <h2 className="mb-3 text-lg font-semibold text-zinc-900">
+        <div className="rounded-card bg-white p-5 shadow-card">
+          <h2 className="mb-3 text-lg font-semibold text-gray-900">
             온라인 라이더 ({riders?.length ?? 0}명)
           </h2>
           {ridersLoading ? (
-            <p className="text-sm text-zinc-400">불러오는 중...</p>
+            <p className="text-sm text-gray-400">불러오는 중...</p>
           ) : riders && riders.length > 0 ? (
             <ul className="flex flex-col gap-2" data-testid="dashboard-rider-list">
               {riders.map((r) => (
-                <li key={r.id} className="rounded-xl border border-zinc-100 px-3 py-2 text-sm text-zinc-700">
+                <li key={r.id} className="rounded-card border border-gray-100 px-3 py-2 text-sm text-gray-700">
                   라이더 {r.id.slice(0, 8)}
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-zinc-400">온라인 라이더가 없어요.</p>
+            <p className="text-sm text-gray-400">온라인 라이더가 없어요.</p>
           )}
         </div>
       </div>

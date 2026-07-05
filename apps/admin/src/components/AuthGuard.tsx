@@ -25,11 +25,11 @@ export function AuthGuard({ children }: { children: ReactNode }) {
 
 function AccessDenied() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-white p-6 text-center">
-      <p className="text-lg font-semibold text-zinc-900">관리자 계정만 접근할 수 있어요.</p>
+    <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-surface-app p-6 text-center">
+      <p className="text-lg font-semibold text-gray-900">관리자 계정만 접근할 수 있어요.</p>
       <button
         type="button"
-        className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-white"
+        className="rounded-button bg-primary px-4 py-2 text-sm font-medium text-white shadow-card"
         onClick={async () => {
           await supabase.auth.signOut();
           window.location.href = "/login";

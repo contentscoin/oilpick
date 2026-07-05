@@ -38,20 +38,20 @@ export function SettlementPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-bold text-zinc-900">정산</h1>
-        <p className="text-sm text-zinc-500">출금 신청을 처리하고 원장을 감사해요.</p>
+        <h1 className="text-2xl font-bold text-gray-900">정산</h1>
+        <p className="text-sm text-gray-500">출금 신청을 처리하고 원장을 감사해요.</p>
       </div>
 
-      <div className="rounded-card bg-white p-6 shadow-sm">
-        <h2 className="mb-4 text-lg font-semibold text-zinc-900">출금 큐</h2>
+      <div className="rounded-card bg-white p-6 shadow-card">
+        <h2 className="mb-4 text-lg font-semibold text-gray-900">출금 큐</h2>
         <div className="mb-4 flex gap-2">
           {["REQUESTED", "APPROVED", "PAID", "REJECTED", "ALL"].map((s) => (
             <button
               key={s}
               type="button"
               onClick={() => setStatusFilter(s)}
-              className={`rounded-full px-3 py-1.5 text-sm font-medium ${
-                statusFilter === s ? "bg-primary text-white" : "bg-zinc-100 text-zinc-600"
+              className={`rounded-pill px-3 py-1.5 text-sm font-medium transition-colors ${
+                statusFilter === s ? "bg-primary text-white shadow-card" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
               }`}
               data-testid={`withdraw-filter-${s}`}
             >
@@ -61,7 +61,7 @@ export function SettlementPage() {
         </div>
 
         {isLoading ? (
-          <p className="text-sm text-zinc-400">불러오는 중...</p>
+          <p className="text-sm text-gray-400">불러오는 중...</p>
         ) : withdrawals && withdrawals.length > 0 ? (
           <div className="flex flex-col gap-3" data-testid="withdrawal-list">
             {withdrawals.map((w) => (
@@ -69,16 +69,16 @@ export function SettlementPage() {
             ))}
           </div>
         ) : (
-          <p className="text-sm text-zinc-400">해당 상태의 출금 신청이 없어요.</p>
+          <p className="text-sm text-gray-400">해당 상태의 출금 신청이 없어요.</p>
         )}
       </div>
 
-      <div className="rounded-card bg-white p-6 shadow-sm">
-        <h2 className="mb-4 text-lg font-semibold text-zinc-900">일별 합계 (최근 14일)</h2>
+      <div className="rounded-card bg-white p-6 shadow-card">
+        <h2 className="mb-4 text-lg font-semibold text-gray-900">일별 합계 (최근 14일)</h2>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm" data-testid="daily-totals-table">
             <thead>
-              <tr className="border-b border-zinc-100 text-zinc-500">
+              <tr className="border-b border-gray-100 text-gray-500">
                 <th className="py-2 font-medium">날짜</th>
                 <th className="py-2 font-medium">EARN</th>
                 <th className="py-2 font-medium">HOLD</th>
@@ -88,17 +88,17 @@ export function SettlementPage() {
             </thead>
             <tbody>
               {(dailyTotals ?? []).map((row) => (
-                <tr key={row.day} className="border-b border-zinc-50">
-                  <td className="py-2">{row.day}</td>
-                  <td className="py-2 tabular-nums">{formatPoint(row.earn)}</td>
-                  <td className="py-2 tabular-nums">{formatPoint(row.hold)}</td>
-                  <td className="py-2 tabular-nums">{formatPoint(row.release)}</td>
-                  <td className="py-2 tabular-nums">{formatPoint(row.withdraw)}</td>
+                <tr key={row.day} className="border-b border-gray-50">
+                  <td className="py-2 text-gray-700">{row.day}</td>
+                  <td className="py-2 tabular-nums text-accent">{formatPoint(row.earn)}</td>
+                  <td className="py-2 tabular-nums text-gray-700">{formatPoint(row.hold)}</td>
+                  <td className="py-2 tabular-nums text-gray-700">{formatPoint(row.release)}</td>
+                  <td className="py-2 tabular-nums text-gray-700">{formatPoint(row.withdraw)}</td>
                 </tr>
               ))}
               {(!dailyTotals || dailyTotals.length === 0) && (
                 <tr>
-                  <td colSpan={5} className="py-6 text-center text-zinc-400">
+                  <td colSpan={5} className="py-6 text-center text-gray-400">
                     최근 14일 데이터가 없어요.
                   </td>
                 </tr>
@@ -108,15 +108,15 @@ export function SettlementPage() {
         </div>
       </div>
 
-      <div className="rounded-card bg-white p-6 shadow-sm">
-        <h2 className="mb-4 text-lg font-semibold text-zinc-900">원장 감사 (최근 100건)</h2>
+      <div className="rounded-card bg-white p-6 shadow-card">
+        <h2 className="mb-4 text-lg font-semibold text-gray-900">원장 감사 (최근 100건)</h2>
         {ledgerLoading ? (
-          <p className="text-sm text-zinc-400">불러오는 중...</p>
+          <p className="text-sm text-gray-400">불러오는 중...</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm" data-testid="ledger-audit-table">
               <thead>
-                <tr className="border-b border-zinc-100 text-zinc-500">
+                <tr className="border-b border-gray-100 text-gray-500">
                   <th className="py-2 font-medium">일시</th>
                   <th className="py-2 font-medium">사용자</th>
                   <th className="py-2 font-medium">유형</th>
@@ -126,15 +126,15 @@ export function SettlementPage() {
               </thead>
               <tbody>
                 {(ledger ?? []).map((row) => (
-                  <tr key={row.id} className="border-b border-zinc-50">
-                    <td className="py-2 text-zinc-500">{new Date(row.createdAt).toLocaleString("ko-KR")}</td>
-                    <td className="py-2">{row.userName}</td>
-                    <td className="py-2">{LEDGER_ENTRY_LABEL[row.entryType] ?? row.entryType}</td>
+                  <tr key={row.id} className="border-b border-gray-50">
+                    <td className="py-2 text-gray-500">{new Date(row.createdAt).toLocaleString("ko-KR")}</td>
+                    <td className="py-2 text-gray-800">{row.userName}</td>
+                    <td className="py-2 text-gray-700">{LEDGER_ENTRY_LABEL[row.entryType] ?? row.entryType}</td>
                     <td className={`py-2 tabular-nums font-medium ${row.amount >= 0 ? "text-primary" : "text-status-danger"}`}>
                       {row.amount >= 0 ? "+" : ""}
                       {formatPoint(row.amount)}
                     </td>
-                    <td className="py-2 text-zinc-500">{row.memo ?? "-"}</td>
+                    <td className="py-2 text-gray-500">{row.memo ?? "-"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -182,22 +182,31 @@ function WithdrawalRow({
     onProcessed();
   }
 
+  const statusColor =
+    withdrawal.status === "PAID"
+      ? "bg-primary-light text-primary"
+      : withdrawal.status === "REJECTED"
+        ? "bg-status-danger/10 text-status-danger"
+        : withdrawal.status === "APPROVED"
+          ? "bg-status-active/10 text-status-active"
+          : "bg-accent-light text-accent";
+
   return (
-    <div className="flex flex-col gap-2 rounded-xl border border-zinc-100 p-4" data-testid={`withdrawal-row-${withdrawal.id}`}>
+    <div className="flex flex-col gap-2 rounded-card border border-gray-100 bg-white p-4 shadow-card" data-testid={`withdrawal-row-${withdrawal.id}`}>
       <div className="flex items-center justify-between">
         <div>
-          <p className="font-semibold text-zinc-900">
-            {withdrawal.userName} · <span className="tabular-nums">{formatPoint(withdrawal.amount)}</span>
+          <p className="font-semibold text-gray-900">
+            {withdrawal.userName} · <span className="tabular-nums text-accent">{formatPoint(withdrawal.amount)}</span>
           </p>
-          <p className="text-sm text-zinc-500">
+          <p className="text-sm text-gray-500">
             {withdrawal.bankName} {withdrawal.bankAccount} ({withdrawal.bankHolder})
           </p>
         </div>
-        <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-semibold text-zinc-600">
+        <span className={`rounded-pill px-3 py-1 text-xs font-semibold ${statusColor}`}>
           {WITHDRAW_STATUS_LABEL[withdrawal.status]}
         </span>
       </div>
-      {withdrawal.adminMemo && <p className="text-xs text-zinc-400">메모: {withdrawal.adminMemo}</p>}
+      {withdrawal.adminMemo && <p className="text-xs text-gray-400">메모: {withdrawal.adminMemo}</p>}
       {error && <p className="text-sm font-medium text-status-danger">{error}</p>}
 
       {withdrawal.status === "REQUESTED" && (
@@ -207,14 +216,14 @@ function WithdrawalRow({
             placeholder="메모(선택)"
             value={memo}
             onChange={(e) => setMemo(e.target.value)}
-            className="flex-1 rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-primary"
+            className="flex-1 rounded-button border border-gray-200 px-3 py-2 text-sm outline-none focus:border-primary"
             data-testid={`withdrawal-memo-${withdrawal.id}`}
           />
           <button
             type="button"
             disabled={busy}
             onClick={() => process("APPROVED")}
-            className="h-9 rounded-lg bg-primary px-3 text-sm font-semibold text-white disabled:opacity-60"
+            className="h-9 rounded-button bg-primary px-3 text-sm font-semibold text-white shadow-card disabled:opacity-60"
             data-testid={`withdrawal-approve-${withdrawal.id}`}
           >
             승인
@@ -223,7 +232,7 @@ function WithdrawalRow({
             type="button"
             disabled={busy}
             onClick={() => process("REJECTED")}
-            className="h-9 rounded-lg bg-status-danger px-3 text-sm font-semibold text-white disabled:opacity-60"
+            className="h-9 rounded-button border border-status-danger px-3 text-sm font-semibold text-status-danger hover:bg-status-danger/5 disabled:opacity-60"
             data-testid={`withdrawal-reject-${withdrawal.id}`}
           >
             반려
@@ -237,7 +246,7 @@ function WithdrawalRow({
             type="button"
             disabled={busy}
             onClick={() => process("PAID")}
-            className="h-9 rounded-lg bg-primary px-3 text-sm font-semibold text-white disabled:opacity-60"
+            className="h-9 rounded-button bg-primary px-3 text-sm font-semibold text-white shadow-card disabled:opacity-60"
             data-testid={`withdrawal-paid-${withdrawal.id}`}
           >
             이체 완료 처리

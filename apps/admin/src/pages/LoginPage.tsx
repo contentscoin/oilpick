@@ -28,35 +28,42 @@ export function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-zinc-50 p-6">
+    <main className="flex min-h-screen items-center justify-center bg-surface-app p-6">
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-sm"
+        className="w-full max-w-sm rounded-hero bg-white p-8 shadow-raised"
       >
-        <h1 className="mb-1 text-xl font-bold text-primary">OilPick 관리자</h1>
-        <p className="mb-6 text-sm text-zinc-500">이메일과 비밀번호로 로그인하세요.</p>
+        <div className="mb-6 flex items-center gap-2.5">
+          <span className="flex h-10 w-10 items-center justify-center rounded-card bg-primary-light text-lg font-bold text-primary">
+            O
+          </span>
+          <div>
+            <h1 className="text-xl font-bold leading-tight text-primary">OilPick 관리자</h1>
+            <p className="text-sm text-gray-500">이메일과 비밀번호로 로그인하세요.</p>
+          </div>
+        </div>
 
         <label className="mb-3 block">
-          <span className="mb-1 block text-sm font-medium text-zinc-700">이메일</span>
+          <span className="mb-1 block text-sm font-medium text-gray-700">이메일</span>
           <input
             type="email"
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-xl border border-zinc-200 px-3 py-3 text-base outline-none focus:border-primary"
+            className="w-full rounded-button border border-gray-200 px-3 py-3 text-base outline-none focus:border-primary"
             placeholder="admin@oilpick.local"
             data-testid="login-email"
           />
         </label>
 
         <label className="mb-4 block">
-          <span className="mb-1 block text-sm font-medium text-zinc-700">비밀번호</span>
+          <span className="mb-1 block text-sm font-medium text-gray-700">비밀번호</span>
           <input
             type="password"
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-xl border border-zinc-200 px-3 py-3 text-base outline-none focus:border-primary"
+            className="w-full rounded-button border border-gray-200 px-3 py-3 text-base outline-none focus:border-primary"
             data-testid="login-password"
           />
         </label>
@@ -70,7 +77,7 @@ export function LoginPage() {
         <button
           type="submit"
           disabled={loading}
-          className="h-12 w-full rounded-xl bg-primary text-base font-semibold text-white disabled:opacity-60"
+          className="h-12 w-full rounded-button bg-primary text-base font-semibold text-white shadow-card transition-transform active:scale-[.99] disabled:opacity-60"
           data-testid="login-submit"
         >
           {loading ? "로그인 중..." : "로그인"}
