@@ -128,20 +128,28 @@ export function PriceCard({ pricePerKg, changeAmount, history = [], className }:
           <span style={{ fontWeight: 500, color: colors.status.wait }}>전일 대비</span>
         </span>
       </div>
-      <div
-        aria-hidden={history.length < 2}
-        style={{
-          flexShrink: 0,
-          alignSelf: "stretch",
-          display: "flex",
-          alignItems: "center",
-          borderRadius: 12,
-          background: history.length >= 2 ? gray[50] : "transparent",
-          padding: history.length >= 2 ? "8px 10px" : 0,
-        }}
-      >
-        <Sparkline values={history} />
-      </div>
+      {/* 스파크라인이 있을 때만 컨테이너를 마운트한다. history 개수에 따라 padding/background 값을
+          토글하면 React가 shorthand/longhand 스타일 diff 경고를 내므로, 값 토글 대신 조건부 렌더 +
+          longhand 속성으로 통일한다. */}
+      {history.length >= 2 && (
+        <div
+          aria-hidden
+          style={{
+            flexShrink: 0,
+            alignSelf: "stretch",
+            display: "flex",
+            alignItems: "center",
+            borderRadius: 12,
+            backgroundColor: gray[50],
+            paddingTop: 8,
+            paddingBottom: 8,
+            paddingLeft: 10,
+            paddingRight: 10,
+          }}
+        >
+          <Sparkline values={history} />
+        </div>
+      )}
     </div>
   );
 }
