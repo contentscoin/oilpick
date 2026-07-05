@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { BigButton, PointBalanceCard, Toast, colors, gray, radius } from "@oilpick/ui";
+import { BigButton, PointBalanceCard, Toast, colors, inputClassName, inputStyle, radius, surface } from "@oilpick/ui";
 import { MIN_WITHDRAW, formatPoint } from "@oilpick/core";
 import { useSession } from "../hooks/useSession";
 import { usePointBalance } from "../hooks/useWallet";
@@ -9,14 +9,6 @@ import { useBankAccount, useSaveBankAccount } from "../hooks/useBankAccount";
 import { queryKeys } from "../lib/queryClient";
 import { invokeEdgeFunction } from "../lib/edgeFunction";
 import type { WithdrawRequestOutput } from "@oilpick/core";
-
-const inputStyle = {
-  height: 48,
-  borderRadius: radius.button,
-  border: `1px solid ${gray[300]}`,
-  padding: "0 14px",
-  fontSize: 16,
-};
 
 /**
  * U12 출금 신청. 03-frontend.md:
@@ -123,7 +115,7 @@ export function WithdrawPage() {
         {showBankDisplay && bankAccount && (
           <div
             data-testid="bank-account-display"
-            style={{ borderRadius: radius.card, padding: 16, backgroundColor: "#fff", border: "1px solid #e4e4e7" }}
+            style={{ borderRadius: radius.card, padding: 16, backgroundColor: surface.card, border: `1px solid ${surface.border}` }}
           >
             <p style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>{bankAccount.bankName}</p>
             <p style={{ margin: "4px 0 0", fontSize: 14 }}>{bankAccount.bankAccount}</p>
@@ -150,6 +142,7 @@ export function WithdrawPage() {
               placeholder="은행명"
               value={bankName}
               onChange={(e) => setBankName(e.target.value)}
+              className={inputClassName}
               style={inputStyle}
             />
             <input
@@ -157,6 +150,7 @@ export function WithdrawPage() {
               placeholder="계좌번호"
               value={bankAccountNo}
               onChange={(e) => setBankAccountNo(e.target.value)}
+              className={inputClassName}
               style={inputStyle}
             />
             <input
@@ -164,6 +158,7 @@ export function WithdrawPage() {
               placeholder="예금주"
               value={bankHolder}
               onChange={(e) => setBankHolder(e.target.value)}
+              className={inputClassName}
               style={inputStyle}
             />
             <BigButton data-testid="bank-account-save-button" variant="secondary" onClick={handleSaveBank}>
@@ -182,6 +177,7 @@ export function WithdrawPage() {
           placeholder={`최소 ${formatPoint(MIN_WITHDRAW)}`}
           value={amountInput}
           onChange={(e) => setAmountInput(e.target.value)}
+          className={inputClassName}
           style={inputStyle}
         />
         <p style={{ margin: 0, fontSize: 12, color: colors.status.wait }}>

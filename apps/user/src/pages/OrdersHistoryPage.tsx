@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { EmptyState, StatusBadge, colors, radius } from "@oilpick/ui";
+import { EmptyState, StatusBadge, colors, gray, radius, surface } from "@oilpick/ui";
 import { formatKg, formatPoint } from "@oilpick/core";
 import { useSession } from "../hooks/useSession";
 import { useOrderHistory } from "../hooks/useOrderHistory";
@@ -31,7 +31,7 @@ export function OrdersHistoryPage() {
       </div>
 
       {isLoading && (
-        <div data-testid="orders-history-skeleton" style={{ height: 200, borderRadius: radius.card, backgroundColor: "#f4f4f5" }} />
+        <div data-testid="orders-history-skeleton" style={{ height: 200, borderRadius: radius.card, backgroundColor: gray[100] }} />
       )}
 
       {!isLoading && items.length === 0 && (
@@ -49,10 +49,10 @@ export function OrdersHistoryPage() {
                 style={{
                   width: "100%",
                   textAlign: "left",
-                  border: "1px solid #e4e4e7",
+                  border: `1px solid ${surface.border}`,
                   borderRadius: radius.card,
                   padding: 16,
-                  backgroundColor: "#fff",
+                  backgroundColor: surface.card,
                   cursor: "pointer",
                   display: "flex",
                   flexDirection: "column",
@@ -90,8 +90,8 @@ export function OrdersHistoryPage() {
               flex: 1,
               minHeight: 44,
               borderRadius: radius.button,
-              border: "1px solid #e4e4e7",
-              backgroundColor: "#fff",
+              border: `1px solid ${surface.border}`,
+              backgroundColor: surface.card,
               cursor: page === 0 ? "not-allowed" : "pointer",
               opacity: page === 0 ? 0.4 : 1,
             }}
@@ -107,8 +107,8 @@ export function OrdersHistoryPage() {
               flex: 1,
               minHeight: 44,
               borderRadius: radius.button,
-              border: "1px solid #e4e4e7",
-              backgroundColor: "#fff",
+              border: `1px solid ${surface.border}`,
+              backgroundColor: surface.card,
               cursor: !data?.hasNextPage ? "not-allowed" : "pointer",
               opacity: !data?.hasNextPage ? 0.4 : 1,
             }}

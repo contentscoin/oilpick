@@ -1,6 +1,6 @@
 import { type FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { BigButton, colors, radius } from "@oilpick/ui";
+import { BigButton, colors, inputClassName, inputStyle } from "@oilpick/ui";
 import { isValidKrMobilePhone, supplierSignupInputSchema, toE164Kr } from "@oilpick/core";
 import { supabase } from "../lib/supabaseClient";
 import { AddressField, type AddressValue } from "../components/AddressField";
@@ -181,13 +181,8 @@ export function AuthPage() {
               placeholder="010-1234-5678"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              style={{
-                minHeight: 48,
-                borderRadius: radius.button,
-                border: "1px solid #e4e4e7",
-                padding: "0 14px",
-                fontSize: 16,
-              }}
+              className={inputClassName}
+              style={inputStyle}
             />
           </div>
           <BigButton type="submit" loading={loading} data-testid="send-otp-button">
@@ -215,14 +210,8 @@ export function AuthPage() {
               placeholder="123456"
               value={code}
               onChange={(e) => setCode(e.target.value)}
-              style={{
-                minHeight: 48,
-                borderRadius: radius.button,
-                border: "1px solid #e4e4e7",
-                padding: "0 14px",
-                fontSize: 16,
-                letterSpacing: 4,
-              }}
+              className={inputClassName}
+              style={{ ...inputStyle, letterSpacing: 4 }}
             />
           </div>
           <BigButton type="submit" loading={loading} data-testid="verify-otp-button">
@@ -252,7 +241,8 @@ export function AuthPage() {
               required
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
-              style={{ minHeight: 48, borderRadius: radius.button, border: "1px solid #e4e4e7", padding: "0 14px", fontSize: 16 }}
+              className={inputClassName}
+              style={inputStyle}
             />
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -266,7 +256,8 @@ export function AuthPage() {
               required
               value={storeName}
               onChange={(e) => setStoreName(e.target.value)}
-              style={{ minHeight: 48, borderRadius: radius.button, border: "1px solid #e4e4e7", padding: "0 14px", fontSize: 16 }}
+              className={inputClassName}
+              style={inputStyle}
             />
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -281,7 +272,8 @@ export function AuthPage() {
               placeholder="000-00-00000"
               value={bizNumber}
               onChange={(e) => setBizNumber(e.target.value)}
-              style={{ minHeight: 48, borderRadius: radius.button, border: "1px solid #e4e4e7", padding: "0 14px", fontSize: 16 }}
+              className={inputClassName}
+              style={inputStyle}
             />
           </div>
           <AddressField value={addressValue} onChange={setAddressValue} />

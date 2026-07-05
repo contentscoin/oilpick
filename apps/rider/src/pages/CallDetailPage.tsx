@@ -42,7 +42,7 @@ export function CallDetailPage() {
   if (isLoading) {
     return (
       <main style={{ padding: 20, maxWidth: 480, margin: "0 auto" }}>
-        <div data-testid="call-detail-skeleton" style={{ height: 240, borderRadius: radius.card, backgroundColor: "#f4f4f5" }} />
+        <div data-testid="call-detail-skeleton" style={{ height: 240, borderRadius: radius.card, backgroundColor: gray[100] }} />
       </main>
     );
   }

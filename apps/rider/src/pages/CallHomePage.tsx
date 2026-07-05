@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { CallCard, EmptyState, colors, elevation, radius, surface } from "@oilpick/ui";
+import { CallCard, EmptyState, colors, elevation, gray, radius, surface } from "@oilpick/ui";
 import { formatPoint } from "@oilpick/core";
 import { useSession } from "../hooks/useSession";
 import { useRiderProfile } from "../hooks/useRiderProfile";
@@ -58,7 +58,7 @@ export function CallHomePage() {
             border: "none",
             borderRadius: 999,
             padding: "9px 16px",
-            backgroundColor: rider?.isOnline ? colors.primary.DEFAULT : "#e4e4e7",
+            backgroundColor: rider?.isOnline ? colors.primary.DEFAULT : gray[200],
             color: rider?.isOnline ? "#fff" : colors.status.wait,
             fontWeight: 700,
             fontSize: 14,
@@ -123,7 +123,7 @@ export function CallHomePage() {
       <section style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <h2 style={{ fontSize: 16, margin: 0 }}>주변 콜</h2>
         {isLoading && (
-          <div data-testid="open-calls-skeleton" style={{ height: 80, borderRadius: radius.card, backgroundColor: "#f4f4f5" }} />
+          <div data-testid="open-calls-skeleton" style={{ height: 80, borderRadius: radius.card, backgroundColor: gray[100] }} />
         )}
         {!isLoading && sortedCalls.length === 0 && (
           <EmptyState title="지금은 콜이 없어요" description="새 콜이 들어오면 알려드릴게요." />

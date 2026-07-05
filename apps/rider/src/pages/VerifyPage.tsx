@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { colors, radius } from "@oilpick/ui";
+import { colors, gray, radius } from "@oilpick/ui";
 import { useSession } from "../hooks/useSession";
 import { useRiderProfile } from "../hooks/useRiderProfile";
 
@@ -24,7 +24,7 @@ export function VerifyPage() {
   if (isLoading) {
     return (
       <main style={{ padding: 24, maxWidth: 420, margin: "0 auto" }}>
-        <div data-testid="verify-skeleton" style={{ height: 160, borderRadius: radius.card, backgroundColor: "#f4f4f5" }} />
+        <div data-testid="verify-skeleton" style={{ height: 160, borderRadius: radius.card, backgroundColor: gray[100] }} />
       </main>
     );
   }

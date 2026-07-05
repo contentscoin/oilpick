@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { BigButton, QtyStepper, colors, radius } from "@oilpick/ui";
+import { BigButton, QtyStepper, colors, gray, inputClassName, inputStyle, radius, surface } from "@oilpick/ui";
 import {
   estimateKg,
   estimatePoint,
@@ -109,7 +109,7 @@ export function RequestPage() {
               flex: 1,
               height: 4,
               borderRadius: 2,
-              backgroundColor: s <= step ? colors.primary.DEFAULT : "#e4e4e7",
+              backgroundColor: s <= step ? colors.primary.DEFAULT : surface.border,
             }}
           />
         ))}
@@ -148,7 +148,7 @@ export function RequestPage() {
                   flex: 1,
                   minHeight: 48,
                   borderRadius: radius.button,
-                  border: `1px solid ${preferredTime === "now" ? colors.primary.DEFAULT : "#e4e4e7"}`,
+                  border: `1px solid ${preferredTime === "now" ? colors.primary.DEFAULT : surface.border}`,
                   backgroundColor: preferredTime === "now" ? colors.primary.light : "#fff",
                   color: preferredTime === "now" ? colors.primary.dark : "#333",
                   fontWeight: 600,
@@ -166,7 +166,7 @@ export function RequestPage() {
                   flex: 1,
                   minHeight: 48,
                   borderRadius: radius.button,
-                  border: `1px solid ${preferredTime === "custom" ? colors.primary.DEFAULT : "#e4e4e7"}`,
+                  border: `1px solid ${preferredTime === "custom" ? colors.primary.DEFAULT : surface.border}`,
                   backgroundColor: preferredTime === "custom" ? colors.primary.light : "#fff",
                   color: preferredTime === "custom" ? colors.primary.dark : "#333",
                   fontWeight: 600,
@@ -182,13 +182,8 @@ export function RequestPage() {
                 type="datetime-local"
                 value={customTime}
                 onChange={(e) => setCustomTime(e.target.value)}
-                style={{
-                  minHeight: 48,
-                  borderRadius: radius.button,
-                  border: "1px solid #e4e4e7",
-                  padding: "0 14px",
-                  fontSize: 16,
-                }}
+                className={inputClassName}
+                style={inputStyle}
               />
             )}
           </div>
@@ -207,7 +202,7 @@ export function RequestPage() {
         <section data-testid="request-step-3" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <h2 style={{ fontSize: 16, margin: 0 }}>요청 내용을 확인해주세요</h2>
 
-          <div style={{ borderRadius: radius.card, backgroundColor: "#fafafa", padding: 16, display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ borderRadius: radius.card, backgroundColor: gray[50], padding: 16, display: "flex", flexDirection: "column", gap: 8 }}>
             <Row label="수량" value={`${cans}통 (약 ${formatKg(estimatedKg)})`} />
             <Row label="수거 주소" value={address.address} />
             <Row label="희망 시간" value={preferredTimeValue} />

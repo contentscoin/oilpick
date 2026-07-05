@@ -152,6 +152,28 @@ export const gradient = {
   point: `linear-gradient(135deg, ${colors.accent.DEFAULT}, #E08A00)`,
 } as const;
 
+/**
+ * 공용 텍스트 입력 스타일. 여러 화면(AuthPage/WithdrawPage/RequestPage 등)에서
+ * 반복되던 폼 입력 인라인 스타일(minHeight 48 / radius.button / 1px 경계 / padding "0 14px"
+ * / fontSize 16)을 단일 상수로 통일한 것. 각 화면은 이 스타일을 스프레드하고 필요한 값
+ * (letterSpacing, resize 등)만 덧붙인다. 03-frontend.md "터치 타깃 최소 48px, base 16px".
+ *
+ * 경계색은 gray[200](#e4e4e7) — 기존 하드코딩 값과 동일해 시각 변화 없이 토큰화만 한다.
+ * 포커스 링은 styles.css `.oilpick-input`에서 처리하므로 className과 함께 쓰는 것을 권장.
+ */
+export const inputStyle = {
+  minHeight: touchTarget,
+  borderRadius: radius.button,
+  border: `1px solid ${gray[200]}`,
+  padding: "0 14px",
+  fontSize: fontSize.base,
+  backgroundColor: surface.card,
+  color: gray[900],
+} as const;
+
+/** 공용 입력에 포커스 링을 붙이는 className. styles.css `.oilpick-input`과 짝. */
+export const inputClassName = "oilpick-input";
+
 export const tokens = {
   colors,
   gray,
@@ -164,6 +186,7 @@ export const tokens = {
   surface,
   elevation,
   gradient,
+  inputStyle,
 } as const;
 
 export type Tokens = typeof tokens;

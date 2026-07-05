@@ -30,6 +30,19 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* 공용 텍스트 입력(tokens.ts inputStyle과 짝). 포커스 시 브랜드 그린 링을 붙여
+   여러 화면의 폼 입력 포커스 상태를 일관되게 한다. 색/치수는 inputStyle과 동일. */
+.oilpick-input {
+  outline: none;
+  transition:
+    border-color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+.oilpick-input:focus {
+  border-color: #1b7a43;
+  box-shadow: 0 0 0 3px rgba(27, 122, 67, 0.14);
+}
+
 /* 05-design-upgrade.md "버튼/입력": BigButton active 시 살짝 눌림(scale .99). */
 .oilpick-big-button {
   transition:

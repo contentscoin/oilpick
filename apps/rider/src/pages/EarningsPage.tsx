@@ -6,6 +6,7 @@ import {
   PointHeroAction,
   colors,
   elevation,
+  gray,
   radius,
   surface,
 } from "@oilpick/ui";
@@ -32,7 +33,7 @@ export function EarningsPage() {
       <h1 style={{ fontSize: 20, margin: 0 }}>정산</h1>
 
       {balanceLoading ? (
-        <div data-testid="balance-skeleton" style={{ borderRadius: 16, height: 96, backgroundColor: "#f4f4f5" }} />
+        <div data-testid="balance-skeleton" style={{ borderRadius: 16, height: 96, backgroundColor: gray[100] }} />
       ) : (
         <PointBalanceCard
           available={balance?.available ?? 0}
@@ -75,7 +76,7 @@ export function EarningsPage() {
       <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         <h2 style={{ fontSize: 16, margin: 0, color: colors.status.wait }}>포인트 내역</h2>
         {ledgerLoading ? (
-          <div data-testid="ledger-skeleton" style={{ borderRadius: 16, height: 200, backgroundColor: "#f4f4f5" }} />
+          <div data-testid="ledger-skeleton" style={{ borderRadius: 16, height: 200, backgroundColor: gray[100] }} />
         ) : entries && entries.length > 0 ? (
           <LedgerList entries={entries} />
         ) : (

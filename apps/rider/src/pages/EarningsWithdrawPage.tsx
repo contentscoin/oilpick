@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { BigButton, PointBalanceCard, Toast, colors, gray, radius } from "@oilpick/ui";
+import { BigButton, PointBalanceCard, Toast, colors, inputClassName, inputStyle, radius, surface } from "@oilpick/ui";
 import { MIN_WITHDRAW, formatPoint } from "@oilpick/core";
 import type { WithdrawRequestOutput } from "@oilpick/core";
 import { useSession } from "../hooks/useSession";
@@ -9,14 +9,6 @@ import { usePointBalance } from "../hooks/useEarnings";
 import { useBankAccount, useSaveBankAccount } from "../hooks/useBankAccount";
 import { queryKeys } from "../lib/queryClient";
 import { invokeEdgeFunction } from "../lib/edgeFunction";
-
-const inputStyle = {
-  height: 48,
-  borderRadius: radius.button,
-  border: `1px solid ${gray[300]}`,
-  padding: "0 14px",
-  fontSize: 16,
-};
 
 /**
  * R8 출금 신청. apps/user/src/pages/WithdrawPage.tsx와 동일 구조(계좌 등록/표시 + 최소 10,000P
@@ -120,7 +112,7 @@ export function EarningsWithdrawPage() {
         {showBankDisplay && bankAccount && (
           <div
             data-testid="bank-account-display"
-            style={{ borderRadius: radius.card, padding: 16, backgroundColor: "#fff", border: "1px solid #e4e4e7" }}
+            style={{ borderRadius: radius.card, padding: 16, backgroundColor: surface.card, border: `1px solid ${surface.border}` }}
           >
             <p style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>{bankAccount.bankName}</p>
             <p style={{ margin: "4px 0 0", fontSize: 14 }}>{bankAccount.bankAccount}</p>
@@ -147,6 +139,7 @@ export function EarningsWithdrawPage() {
               placeholder="은행명"
               value={bankName}
               onChange={(e) => setBankName(e.target.value)}
+              className={inputClassName}
               style={inputStyle}
             />
             <input
@@ -154,6 +147,7 @@ export function EarningsWithdrawPage() {
               placeholder="계좌번호"
               value={bankAccountNo}
               onChange={(e) => setBankAccountNo(e.target.value)}
+              className={inputClassName}
               style={inputStyle}
             />
             <input
@@ -161,6 +155,7 @@ export function EarningsWithdrawPage() {
               placeholder="예금주"
               value={bankHolder}
               onChange={(e) => setBankHolder(e.target.value)}
+              className={inputClassName}
               style={inputStyle}
             />
             <BigButton data-testid="bank-account-save-button" variant="secondary" onClick={handleSaveBank}>
@@ -179,6 +174,7 @@ export function EarningsWithdrawPage() {
           placeholder={`최소 ${formatPoint(MIN_WITHDRAW)}`}
           value={amountInput}
           onChange={(e) => setAmountInput(e.target.value)}
+          className={inputClassName}
           style={inputStyle}
         />
         <p style={{ margin: 0, fontSize: 12, color: colors.status.wait }}>

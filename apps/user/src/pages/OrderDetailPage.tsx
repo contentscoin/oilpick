@@ -34,7 +34,7 @@ export function OrderDetailPage() {
   if (isLoading) {
     return (
       <main style={{ padding: 20, maxWidth: 480, margin: "0 auto" }}>
-        <div data-testid="order-detail-skeleton" style={{ height: 240, borderRadius: radius.card, backgroundColor: "#f4f4f5" }} />
+        <div data-testid="order-detail-skeleton" style={{ height: 240, borderRadius: radius.card, backgroundColor: gray[100] }} />
       </main>
     );
   }
@@ -270,7 +270,7 @@ export function OrderDetailPage() {
             onChange={(e) => setDisputeReason(e.target.value)}
             placeholder="계량 결과가 다른 이유를 알려주세요."
             rows={4}
-            style={{ borderRadius: radius.button, border: "1px solid #e4e4e7", padding: 12, fontSize: 15, resize: "vertical" }}
+            style={{ borderRadius: radius.button, border: `1px solid ${surface.border}`, padding: 12, fontSize: 15, resize: "vertical" }}
           />
           <BigButton
             variant="danger"

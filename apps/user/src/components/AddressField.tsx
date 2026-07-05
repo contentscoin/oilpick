@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { colors, radius } from "@oilpick/ui";
+import { colors, inputClassName, inputStyle } from "@oilpick/ui";
 import { KAKAO_KEY } from "../lib/env";
 
 export interface AddressValue {
@@ -47,13 +47,8 @@ export function AddressField({ value, onChange }: AddressFieldProps) {
         placeholder="예: 서울특별시 강서구 오일픽로 1"
         value={value.address}
         onChange={(e) => onChange({ ...value, address: e.target.value })}
-        style={{
-          minHeight: 48,
-          borderRadius: radius.button,
-          border: "1px solid #e4e4e7",
-          padding: "0 14px",
-          fontSize: 16,
-        }}
+        className={inputClassName}
+        style={inputStyle}
       />
       <button
         type="button"
@@ -81,14 +76,8 @@ export function AddressField({ value, onChange }: AddressFieldProps) {
             aria-label="위도"
             value={value.lat}
             onChange={(e) => onChange({ ...value, lat: Number(e.target.value) })}
-            style={{
-              flex: 1,
-              minHeight: 48,
-              borderRadius: radius.button,
-              border: "1px solid #e4e4e7",
-              padding: "0 14px",
-              fontSize: 14,
-            }}
+            className={inputClassName}
+            style={{ ...inputStyle, flex: 1, fontSize: 14 }}
           />
           <input
             data-testid="address-lng-input"
@@ -97,14 +86,8 @@ export function AddressField({ value, onChange }: AddressFieldProps) {
             aria-label="경도"
             value={value.lng}
             onChange={(e) => onChange({ ...value, lng: Number(e.target.value) })}
-            style={{
-              flex: 1,
-              minHeight: 48,
-              borderRadius: radius.button,
-              border: "1px solid #e4e4e7",
-              padding: "0 14px",
-              fontSize: 14,
-            }}
+            className={inputClassName}
+            style={{ ...inputStyle, flex: 1, fontSize: 14 }}
           />
         </div>
       )}

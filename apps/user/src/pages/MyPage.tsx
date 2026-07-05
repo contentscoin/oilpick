@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { colors, radius } from "@oilpick/ui";
+import { colors, radius, surface } from "@oilpick/ui";
 import { useSession } from "../hooks/useSession";
 import { useProfile } from "../hooks/useProfile";
 import { UserShell } from "../components/UserShell";
@@ -39,7 +39,7 @@ export function MyPage() {
 
         <section
           data-testid="store-info-card"
-          style={{ borderRadius: radius.card, padding: 16, backgroundColor: "#fff", border: "1px solid #e4e4e7" }}
+          style={{ borderRadius: radius.card, padding: 16, backgroundColor: surface.card, border: `1px solid ${surface.border}` }}
         >
           <p style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>{profile?.storeName || "매장 정보 없음"}</p>
           <p style={{ margin: "4px 0 0", fontSize: 13, color: colors.status.wait }}>{profile?.displayName}</p>
@@ -59,7 +59,7 @@ export function MyPage() {
               padding: "0 4px",
               background: "none",
               border: "none",
-              borderBottom: "1px solid #f4f4f5",
+              borderBottom: `1px solid ${surface.border}`,
               cursor: "pointer",
               fontSize: 15,
             }}
@@ -71,7 +71,7 @@ export function MyPage() {
           </button>
           <div
             data-testid="terms-placeholder"
-            style={{ display: "flex", alignItems: "center", minHeight: 48, padding: "0 4px", borderBottom: "1px solid #f4f4f5", fontSize: 15, color: colors.status.wait }}
+            style={{ display: "flex", alignItems: "center", minHeight: 48, padding: "0 4px", borderBottom: `1px solid ${surface.border}`, fontSize: 15, color: colors.status.wait }}
           >
             이용약관 · 개인정보처리방침 (준비 중)
           </div>

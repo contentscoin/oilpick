@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BigButton } from "@oilpick/ui";
-import { colors } from "@oilpick/ui";
+import { colors, surface } from "@oilpick/ui";
 
 /** U1: 최초 1회만 노출되는 온보딩 완료 플래그. 재방문 시 스킵(03-frontend.md). */
 export const ONBOARDING_DONE_KEY = "oilpick:onboarding-done";
@@ -69,7 +69,7 @@ export function OnboardingPage() {
               width: i === index ? 20 : 8,
               height: 8,
               borderRadius: 4,
-              backgroundColor: i === index ? colors.primary.DEFAULT : "#e4e4e7",
+              backgroundColor: i === index ? colors.primary.DEFAULT : surface.border,
               transition: "width 0.2s",
             }}
           />

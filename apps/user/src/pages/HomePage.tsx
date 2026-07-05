@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { BigButton, PriceCard, QtyStepper, StatusBadge, colors, elevation, radius, surface } from "@oilpick/ui";
+import { BigButton, PriceCard, QtyStepper, StatusBadge, colors, elevation, gray, radius, surface } from "@oilpick/ui";
 import { estimateKg, estimatePoint, formatPoint, ORDER_STATUS_LABEL } from "@oilpick/core";
 import { useSession } from "../hooks/useSession";
 import { useLatestPriceTick, usePriceTicks } from "../hooks/usePriceTicks";
@@ -85,7 +85,7 @@ export function HomePage() {
       {priceLoading ? (
         <div
           data-testid="price-card-skeleton"
-          style={{ borderRadius: radius.card, height: 96, backgroundColor: "#f4f4f5" }}
+          style={{ borderRadius: radius.card, height: 96, backgroundColor: gray[100] }}
         />
       ) : (
         latestTick && (

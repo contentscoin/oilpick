@@ -1,4 +1,4 @@
-import { EmptyState, colors, radius } from "@oilpick/ui";
+import { EmptyState, colors, gray, radius, surface } from "@oilpick/ui";
 import { formatRelativeTime } from "@oilpick/core";
 import { useNavigate } from "react-router-dom";
 import { useSession } from "../hooks/useSession";
@@ -28,7 +28,7 @@ export function NotificationsPage() {
       <h1 style={{ fontSize: 20, margin: 0 }}>알림</h1>
 
       {isLoading ? (
-        <div data-testid="notifications-skeleton" style={{ borderRadius: 16, height: 200, backgroundColor: "#f4f4f5" }} />
+        <div data-testid="notifications-skeleton" style={{ borderRadius: 16, height: 200, backgroundColor: gray[100] }} />
       ) : notifications && notifications.length > 0 ? (
         <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
           {notifications.map((n) => (
@@ -42,8 +42,8 @@ export function NotificationsPage() {
                   textAlign: "left",
                   borderRadius: radius.card,
                   padding: 16,
-                  border: "1px solid #e4e4e7",
-                  backgroundColor: n.readAt ? "#fff" : colors.primary.light,
+                  border: `1px solid ${surface.border}`,
+                  backgroundColor: n.readAt ? surface.card : colors.primary.light,
                   cursor: "pointer",
                 }}
               >

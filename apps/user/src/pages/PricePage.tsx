@@ -9,7 +9,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { colors, radius } from "@oilpick/ui";
+import { colors, gray, radius, surface } from "@oilpick/ui";
 import { formatKrw } from "@oilpick/core";
 import { usePriceTicks, type PriceTick } from "../hooks/usePriceTicks";
 
@@ -103,7 +103,7 @@ export function PricePage() {
               flex: 1,
               minHeight: 40,
               borderRadius: radius.button,
-              border: `1px solid ${range === r ? colors.primary.DEFAULT : "#e4e4e7"}`,
+              border: `1px solid ${range === r ? colors.primary.DEFAULT : surface.border}`,
               backgroundColor: range === r ? colors.primary.light : "#fff",
               color: range === r ? colors.primary.dark : "#333",
               fontWeight: 600,
@@ -116,12 +116,12 @@ export function PricePage() {
       </div>
 
       {isLoading ? (
-        <div data-testid="price-chart-skeleton" style={{ height: 240, borderRadius: radius.card, backgroundColor: "#f4f4f5" }} />
+        <div data-testid="price-chart-skeleton" style={{ height: 240, borderRadius: radius.card, backgroundColor: gray[100] }} />
       ) : (
         <div data-testid="price-chart" style={{ width: "100%", height: 240 }}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" />
+              <CartesianGrid strokeDasharray="3 3" stroke={surface.border} />
               <XAxis dataKey="label" tick={{ fontSize: 12 }} />
               <YAxis
                 width={56}
@@ -141,7 +141,7 @@ export function PricePage() {
         <div style={{ overflowX: "auto" }}>
           <table data-testid="price-history-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
             <thead>
-              <tr style={{ textAlign: "left", color: colors.status.wait, borderBottom: "1px solid #e4e4e7" }}>
+              <tr style={{ textAlign: "left", color: colors.status.wait, borderBottom: `1px solid ${surface.border}` }}>
                 <th style={{ padding: "8px 4px", fontWeight: 500 }}>적용 시각</th>
                 <th style={{ padding: "8px 4px", fontWeight: 500 }}>매입가(원/kg)</th>
                 <th style={{ padding: "8px 4px", fontWeight: 500 }}>수거비(P)</th>
@@ -149,7 +149,7 @@ export function PricePage() {
             </thead>
             <tbody>
               {historyDesc.map((tick) => (
-                <tr key={tick.id} style={{ borderBottom: "1px solid #f4f4f5" }}>
+                <tr key={tick.id} style={{ borderBottom: `1px solid ${surface.border}` }}>
                   <td style={{ padding: "8px 4px" }}>{new Date(tick.effectiveAt).toLocaleString("ko-KR")}</td>
                   <td className="oilpick-tabular-nums" style={{ padding: "8px 4px" }}>
                     {formatKrw(tick.pricePerKg)}

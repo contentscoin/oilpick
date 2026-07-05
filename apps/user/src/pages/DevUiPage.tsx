@@ -18,6 +18,8 @@ import {
   StatusHeadline,
   TabBar,
   Toast,
+  inputClassName,
+  inputStyle,
   surface,
   type PhotoAsset,
 } from "@oilpick/ui";
@@ -102,6 +104,20 @@ export function DevUiPage() {
           available={128000}
           held={15000}
           action={<PointHeroAction>출금 신청</PointHeroAction>}
+        />
+      </section>
+
+      <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <h2>공용 입력 (inputStyle)</h2>
+        <label htmlFor="dev-ui-input-sample" style={{ fontSize: 14, fontWeight: 600 }}>
+          담당자 이름
+        </label>
+        <input
+          id="dev-ui-input-sample"
+          className={inputClassName}
+          type="text"
+          placeholder="예: 홍길동"
+          style={inputStyle}
         />
       </section>
 
