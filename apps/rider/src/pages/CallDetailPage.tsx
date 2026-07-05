@@ -80,7 +80,12 @@ export function CallDetailPage() {
 
       {toast && <Toast data-testid="call-accept-toast" message={toast} variant="error" />}
 
-      <MapView apiKey={KAKAO_KEY} center={{ lat: call.pickupLat, lng: call.pickupLng }} markers={[{ lat: call.pickupLat, lng: call.pickupLng }]} />
+      <MapView
+        apiKey={KAKAO_KEY}
+        center={{ lat: call.pickupLat, lng: call.pickupLng }}
+        markers={[{ lat: call.pickupLat, lng: call.pickupLng }]}
+        pickupLabel={call.pickupAddress}
+      />
 
       {/* 주소 + 예상 수거량을 하나의 흰 카드로 묶어 배경 위에 띄운다. */}
       <section

@@ -78,7 +78,7 @@ export function ActiveRunPage() {
       {/* 진행 맥락: U7과 동일한 세로 타임라인으로 라이더도 현재 단계를 본다. */}
       <OrderTimeline currentStatus={run.status} />
 
-      {run.status === "ACCEPTED" && <AcceptedPanel orderId={run.id} />}
+      {run.status === "ACCEPTED" && <AcceptedPanel orderId={run.id} pickupAddress={run.pickupAddress} />}
       {run.status === "ARRIVED" && <ArrivedPanel orderId={run.id} measuredKg={run.measuredKg} snapshotPricePerKg={run.snapshotPricePerKg} />}
       {run.status === "PICKED_UP" && <PickedUpPanel orderId={run.id} depotId={run.depotId} />}
     </main>
@@ -172,7 +172,7 @@ const inputStyle: CSSProperties = {
 };
 
 /** R4 ACCEPTED: 지도+내비 딥링크+[도착]. */
-function AcceptedPanel({ orderId }: { orderId: string }) {
+function AcceptedPanel({ orderId, pickupAddress }: { orderId: string; pickupAddress: string }) {
   const [arriving, setArriving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -190,7 +190,7 @@ function AcceptedPanel({ orderId }: { orderId: string }) {
 
   return (
     <div data-testid="run-accepted-panel" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <MapView apiKey={KAKAO_KEY} center={{ lat: 37.5509, lng: 126.8225 }} />
+      <MapView apiKey={KAKAO_KEY} center={{ lat: 37.5509, lng: 126.8225 }} pickupLabel={pickupAddress} />
       <a
         href="kakaomap://route"
         data-testid="navigate-deeplink"
