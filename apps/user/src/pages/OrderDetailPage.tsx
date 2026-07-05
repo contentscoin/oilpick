@@ -94,9 +94,14 @@ export function OrderDetailPage() {
   const showRiderCard = order.status !== "REQUESTED" && order.status !== "CANCELLED";
   const showMapAndTimeline = order.status !== "REQUESTED" && order.status !== "CANCELLED";
 
-  // 확정 전(계량 전) 상태에서만 예상 스탯 카드 노출. COMPLETED는 지급포인트 패널을 대신 쓴다.
+  // "예상" 스탯 카드는 계량 확정 전에만 노출한다. 라이더가 계량을 제출(measuredKg 존재)하면
+  // 계량 확인 패널이 확정 수량·포인트를 보여주므로 예상 카드와 중복되면 안 되고(두 포인트 값이 한
+  // 화면에 뜨는 버그), PICKED_UP 이후는 이미 지급된 확정 포인트를 지급포인트 패널로 보여준다.
   const showInfoStatCard =
-    order.status === "ACCEPTED" || order.status === "ARRIVED" || order.status === "PICKED_UP";
+    order.status === "ACCEPTED" || (order.status === "ARRIVED" && order.measuredKg == null);
+  // 확정 포인트(EARN) 패널: 계량 확정(PICKED_UP)부터 COMPLETED까지 이미 지급된 supplier_point 표시.
+  const showPaidPointPanel =
+    (order.status === "PICKED_UP" || order.status === "COMPLETED") && order.supplierPoint != null;
   const estimatedPoint = Math.round(order.requestedKg * order.snapshotPricePerKg);
 
   // U7 목업: 라이더 배정 이후 보조문구에 라이더명 포함. 배정 전/취소는 status 기본값 사용.
@@ -307,7 +312,7 @@ export function OrderDetailPage() {
         </section>
       )}
 
-      {order.status === "COMPLETED" && (
+      {showPaidPointPanel && (
         <section
           data-testid="completed-panel"
           style={{
