@@ -184,13 +184,15 @@ export function OrderDetailPage() {
       )}
 
       {/* 목업 요소 순서: 지도 → 라이더 카드 → 정보 스탯 카드 → 타임라인.
-          카카오키가 있으면 실지도, 없으면 수거지 핀/경로가 담긴 지도 미리보기(장식). ETA는 실제
-          rider-location 데이터가 없으므로 전달하지 않는다(라이브 화면에 임의 시간 표기 금지). */}
+          카카오키가 있으면 실지도가 뜨고 아래 etaLabel은 무시된다. 키가 없을 때만 목업의 지도
+          영역을 재현하는 "지도 미리보기"(장식)가 렌더되며, 이때 ETA는 데모 표기다. 실제 rider-location
+          기반 ETA 계산은 후속 작업 — 그때 이 데모 문자열을 실ETA로 교체한다. */}
       {showMapAndTimeline && (
         <MapView
           apiKey={KAKAO_KEY}
           center={{ lat: 37.5509, lng: 126.8225 }}
           pickupLabel={order.pickupAddress}
+          etaLabel="12분 후 도착"
           style={{ minHeight: 220 }}
         />
       )}
