@@ -2,9 +2,11 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BigButton } from "@oilpick/ui";
 import { colors, surface } from "@oilpick/ui";
+import { ONBOARDING_DONE_KEY } from "./onboardingKey";
 
-/** U1: 최초 1회만 노출되는 온보딩 완료 플래그. 재방문 시 스킵(03-frontend.md). */
-export const ONBOARDING_DONE_KEY = "oilpick:onboarding-done";
+// 상수는 onboardingKey.ts로 분리(App.tsx eager 진입이 페이지 lazy 청크를 끌어오지 않도록).
+// 기존 import 경로 호환을 위해 여기서 재-export한다.
+export { ONBOARDING_DONE_KEY };
 
 interface Slide {
   title: string;
