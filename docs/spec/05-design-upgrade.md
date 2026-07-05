@@ -111,3 +111,29 @@
 
 비고: 목업 이미지2의 "라이더 카드가 지도 하단에 겹쳐 뜨는" 플로팅은 선택 — 안정성 위해 지도 아래
 독립 카드로 둬도 무방(이미지1 스타일). 브랜드색/정보구조/절대규칙 불변.
+
+## Admin 디자인 고도화 (2026-07-06, 이번에 범위 포함)
+
+이전까지 admin은 "기능 위주 유지"로 범위 밖이었으나, 커스터머 앱(user/rider) 고도화가 끝나
+admin만 담백한 zinc 일변도로 남았다. 커스터머 앱과 **같은 디자인 언어**를 admin에 일관 적용한다.
+
+원칙: admin은 계속 Tailwind(shadcn 톤) 사용 — packages/ui 컴포넌트를 강제로 끌어오지 않는다
+(MapView 예외 유지). packages/config Tailwind 프리셋에 이미 노출된 토큰 유틸을 쓴다:
+shadow-card/shadow-raised, text-accent/bg-accent(앰버=돈), bg-gradient-point, rounded-card/hero/pill,
+gray·surface·status 색, Pretendard. 로직/testid/데이터흐름/절대규칙 불변.
+
+- 대시보드: KPI 카드 4개를 흰 카드(bg-white shadow-card rounded-card) + 큰 tabular-nums 값,
+  "발행 포인트"는 text-accent(앰버) 강조. 실시간 지도(MapView)는 rounded-card+shadow-card 컨테이너.
+- 테이블(주문/회원/정산/시세 이력): 카드 컨테이너(bg-white shadow-card rounded-card overflow-hidden),
+  헤더 행 배경/구분선 정돈(text-gray-500), 행 hover:bg-gray-50, 숫자 컬럼 tabular-nums, 금액·포인트
+  컬럼 text-accent 앰버, 상태 컬럼은 rounded-pill status 색 매핑(ORDER_STATUS_LABEL 유지).
+- 정산: 출금 큐 카드에 금액 앰버 강조, 승인/반려/이체 버튼 톤(primary/outline/danger) 정돈.
+- 회원: rider PENDING 큐(RiderVerifyCard) shadow-card + 서류 이미지 뷰어 rounded 정돈, 승인/반려 버튼.
+- OrderDetailDrawer: 섹션 카드 elevation, 이벤트 타임라인 색 일관, 분쟁 RESOLVE 폼·사진 뷰어 정돈.
+- 시세 관리: 현재값 카드 강조(원/kg green, 수거비), price-set 폼 정돈.
+- 로그인: 브랜드 톤(로고+카드+primary 버튼) 정돈.
+- 사이드바: 활성 primary-light 유지 + 상단 로고 정돈.
+
+완료 기준: pnpm lint/test/build green(markup 변경 시 admin 테스트 동기 갱신). admin 로그인
+(admin@oilpick.local / oilpick-admin-seed) 후 대시보드/주문/정산 스크린샷으로 깊이+앰버 강조 반영,
+콘솔 에러 0. 브랜드색/정보구조/절대규칙 불변.
