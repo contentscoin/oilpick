@@ -266,3 +266,35 @@ create policy p_noti_update on notifications for update using (user_id = (select
 --  PointBalanceCard/LedgerList가 출금 승인/반려 등을 폴링 없이 반영하는 데 필요(공통 규칙
 --  "Realtime 이벤트 수신 시 해당 queryKey invalidate") — T10에서 추가. RLS(p_ledger_read)가
 --  그대로 적용되어 본인 행 변경만 전달된다)
+
+-- ===== 권한 상승/무결성 가드 (20260704000016_privilege_guards.sql, 어드버서리얼 리뷰 수정) =====
+-- 일반 인증 사용자(authenticated)가 자기 profiles.role, rider_profiles.verify_status/reject_reason를
+-- 셀프 변경하지 못하도록 트리거로 강제한다(insert/update 양쪽). service_role(Edge Function)과
+-- postgres/supabase_admin(마이그레이션·시드)만 예외. RLS(본인 행)와 별개의 컬럼 값 무결성 계층.
+create or replace function guard_profile_role() returns trigger
+  language plpgsql set search_path = public as $$
+begin
+  if current_user in ('service_role','postgres','supabase_admin') then return new; end if;
+  new.role := old.role;  -- authenticated는 role 변경 불가(기존값 강제)
+  return new;
+end; $$;
+create trigger trg_guard_profile_role before update on profiles
+  for each row execute function guard_profile_role();
+
+create or replace function guard_rider_verify() returns trigger
+  language plpgsql set search_path = public as $$
+begin
+  if current_user in ('service_role','postgres','supabase_admin') then return new; end if;
+  if tg_op = 'INSERT' then
+    new.verify_status := 'PENDING'; new.reject_reason := null;   -- 셀프 가입은 항상 미검수
+  else
+    new.verify_status := old.verify_status; new.reject_reason := old.reject_reason;
+  end if;
+  return new;
+end; $$;
+create trigger trg_guard_rider_verify before insert or update on rider_profiles
+  for each row execute function guard_rider_verify();
+
+-- 라이더당 활성 주문 1건 불변식: 동시 이중수락(TOCTOU)을 DB 유니크 제약으로 차단.
+create unique index idx_rider_single_active_order on pickup_orders (rider_id)
+  where status in ('ACCEPTED','ARRIVED','PICKED_UP','DISPUTED');
