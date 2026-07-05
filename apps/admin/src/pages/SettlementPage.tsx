@@ -76,7 +76,7 @@ export function SettlementPage() {
       <div className="rounded-card bg-white p-6 shadow-card">
         <h2 className="mb-4 text-lg font-semibold text-gray-900">일별 합계 (최근 14일)</h2>
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm" data-testid="daily-totals-table">
+          <table className="w-full whitespace-nowrap text-left text-sm" data-testid="daily-totals-table">
             <thead>
               <tr className="border-b border-gray-100 text-gray-500">
                 <th className="py-2 font-medium">날짜</th>
@@ -114,7 +114,7 @@ export function SettlementPage() {
           <p className="text-sm text-gray-400">불러오는 중...</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm" data-testid="ledger-audit-table">
+            <table className="w-full whitespace-nowrap text-left text-sm" data-testid="ledger-audit-table">
               <thead>
                 <tr className="border-b border-gray-100 text-gray-500">
                   <th className="py-2 font-medium">일시</th>

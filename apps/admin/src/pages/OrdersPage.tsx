@@ -49,8 +49,8 @@ export function OrdersPage() {
         ))}
       </div>
 
-      <div className="overflow-hidden rounded-card bg-white shadow-card">
-        <table className="w-full text-left text-sm" data-testid="orders-table">
+      <div className="overflow-x-auto rounded-card bg-white shadow-card">
+        <table className="w-full whitespace-nowrap text-left text-sm" data-testid="orders-table">
           <thead>
             <tr className="border-b border-gray-100 bg-gray-50 text-gray-500">
               <th className="px-4 py-3 font-medium">상태</th>

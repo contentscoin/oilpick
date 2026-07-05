@@ -144,7 +144,7 @@ export function PricePage() {
           <p className="text-sm text-gray-400">불러오는 중...</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm" data-testid="price-history-table">
+            <table className="w-full whitespace-nowrap text-left text-sm" data-testid="price-history-table">
               <thead>
                 <tr className="border-b border-gray-100 text-gray-500">
                   <th className="py-2 font-medium">일시</th>
