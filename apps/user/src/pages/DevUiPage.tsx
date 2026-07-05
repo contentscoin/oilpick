@@ -172,7 +172,12 @@ export function DevUiPage() {
 
       <section>
         <h2>MapView</h2>
-        <MapView center={{ lat: 37.5665, lng: 126.978 }} />
+        <MapView
+          center={{ lat: 37.5665, lng: 126.978 }}
+          pickupLabel="우리식당"
+          etaLabel="12분 후 도착"
+          style={{ minHeight: 220 }}
+        />
       </section>
 
       <section>

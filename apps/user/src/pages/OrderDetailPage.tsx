@@ -183,9 +183,16 @@ export function OrderDetailPage() {
         </section>
       )}
 
-      {/* 목업 요소 순서: 지도 → 라이더 카드 → 정보 스탯 카드 → 타임라인. */}
+      {/* 목업 요소 순서: 지도 → 라이더 카드 → 정보 스탯 카드 → 타임라인.
+          카카오키가 있으면 실지도, 없으면 수거지 핀/경로가 담긴 지도 미리보기(장식). ETA는 실제
+          rider-location 데이터가 없으므로 전달하지 않는다(라이브 화면에 임의 시간 표기 금지). */}
       {showMapAndTimeline && (
-        <MapView apiKey={KAKAO_KEY} center={{ lat: 37.5509, lng: 126.8225 }} />
+        <MapView
+          apiKey={KAKAO_KEY}
+          center={{ lat: 37.5509, lng: 126.8225 }}
+          pickupLabel={order.pickupAddress}
+          style={{ minHeight: 220 }}
+        />
       )}
 
       {/* 05-design-upgrade.md "라이더/기사 카드": 아바타 이니셜+이름+인증 pill+차량번호+전화 버튼. */}
