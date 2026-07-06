@@ -11,7 +11,8 @@
     "dev:admin": "turbo run dev --filter=@oilpick/admin",
     "lint": "turbo run lint",
     "test": "turbo run test",
-    "build": "turbo run build"
+    "build": "turbo run build",
+    "test:db": "supabase test db supabase/tests"
   },
   "devDependencies": {
     "turbo": "^2.1.3"
