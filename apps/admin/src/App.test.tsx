@@ -50,6 +50,6 @@ describe("App routing", () => {
         <App />
       </MemoryRouter>,
     );
-    expect(await screen.findByTestId("login-email")).toBeInTheDocument();
+    expect(await screen.findByTestId("login-username")).toBeInTheDocument();
   });
 });
