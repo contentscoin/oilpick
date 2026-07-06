@@ -30,9 +30,28 @@ supabase secrets set FCM_SERVICE_ACCOUNT="$(cat fcm-service-account.json)"
 ### 1-1. 프로덕션 초기 데이터(수동 — seed.sql은 로컬 전용)
 프로덕션 DB에는 admin·집하장·시세 tick이 없다. 대시보드 SQL Editor 또는 psql로 최소 1회 생성:
 
-- **admin 계정**: Supabase 대시보드 → Authentication → Add user로 이메일/비번 생성 후, 그 user id로
-  `insert into profiles(id, role, phone, display_name) values ('<uid>','admin','-','관리자');`
-  (권한가드 트리거상 role='admin' 삽입은 service_role/postgres에서만 가능 — SQL Editor는 postgres라 OK.)
+- **admin 계정**: 로그인은 **아이디/비밀번호**다(이메일 아님). LoginPage가 입력한 아이디를
+  `<아이디>@oilpick.local`로 매핑해 GoTrue에 넘긴다. 즉 아이디 `admin`은 내부적으로 이메일
+  `admin@oilpick.local`로 인증된다. 대시보드 SQL Editor(=postgres)에서 아래처럼 1회 생성:
+  ```sql
+  set search_path = public, extensions;
+  insert into auth.users (
+    id, instance_id, aud, role, email, encrypted_password, email_confirmed_at,
+    created_at, updated_at, raw_app_meta_data, raw_user_meta_data,
+    confirmation_token, recovery_token, email_change_token_new, email_change
+  ) values (
+    gen_random_uuid(), '00000000-0000-0000-0000-000000000000', 'authenticated','authenticated',
+    'admin@oilpick.local', crypt('<강한-비밀번호>', gen_salt('bf')), now(), now(), now(),
+    '{"provider":"email","providers":["email"]}','{}', '','','','' )
+  returning id;  -- 이 id로 아래 profiles insert
+  insert into profiles (id, role, phone, display_name)
+  values ('<위 id>','admin','-','관리자');
+  ```
+  빈 문자열 토큰 4개는 필수(GoTrue NULL-token 로그인 버그 회피). 권한가드 트리거상 role='admin'
+  삽입은 service_role/postgres에서만 가능 — SQL Editor는 postgres라 OK.
+  ⚠️ `crypt()`의 비밀번호는 반드시 강한 값으로 하고, **실제 비밀번호를 이 문서/리포지토리에 적지 말 것**.
+  임시/약한 비밀번호로 만들었다면 런칭 전 교체:
+  `update auth.users set encrypted_password=crypt('<강한값>',gen_salt('bf')) where email='admin@oilpick.local';`
 - **집하장 1개 이상**: admin 웹의 집하장 관리에서 생성(또는 SQL). QR secret 자동 생성됨.
 - **초기 시세 tick**: admin 웹의 시세 관리에서 첫 매입가·수거비 설정(`price-set`).
 

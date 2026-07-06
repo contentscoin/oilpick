@@ -3,13 +3,17 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 
 /**
- * 03-frontend.md apps/admin: "admin 로그인: 이메일/비밀번호 (admin 계정은 시드로 생성).
- * role≠admin이면 접근 차단." 시드 계정: supabase/seed.sql (admin@oilpick.local).
- * role 검증 자체는 AuthGuard가 profiles.role로 수행 — 이 화면은 Auth 로그인만 담당한다.
+ * admin 로그인 — 이메일이 아니라 **아이디/비밀번호**로 로그인한다(요청사항). Supabase Auth(GoTrue)는
+ * 내부적으로 이메일 기반이라, 입력한 아이디를 고정 도메인과 합쳐 이메일로 매핑해 인증한다
+ * (예: "admin" → "admin@oilpick.local"). 사용자는 이메일을 알 필요가 없다.
+ * role 검증은 AuthGuard가 profiles.role로 수행 — 이 화면은 Auth 로그인만 담당한다.
  */
+const ADMIN_LOGIN_DOMAIN = "oilpick.local";
+const usernameToEmail = (username: string) => `${username.trim().toLowerCase()}@${ADMIN_LOGIN_DOMAIN}`;
+
 export function LoginPage() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -18,10 +22,13 @@ export function LoginPage() {
     e.preventDefault();
     setError(null);
     setLoading(true);
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: usernameToEmail(username),
+      password,
+    });
     setLoading(false);
     if (signInError) {
-      setError("이메일 또는 비밀번호가 올바르지 않아요.");
+      setError("아이디 또는 비밀번호가 올바르지 않아요.");
       return;
     }
     navigate("/", { replace: true });
@@ -39,20 +46,23 @@ export function LoginPage() {
           </span>
           <div>
             <h1 className="text-xl font-bold leading-tight text-primary">OilPick 관리자</h1>
-            <p className="text-sm text-gray-500">이메일과 비밀번호로 로그인하세요.</p>
+            <p className="text-sm text-gray-500">아이디와 비밀번호로 로그인하세요.</p>
           </div>
         </div>
 
         <label className="mb-3 block">
-          <span className="mb-1 block text-sm font-medium text-gray-700">이메일</span>
+          <span className="mb-1 block text-sm font-medium text-gray-700">아이디</span>
           <input
-            type="email"
+            type="text"
             required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="username"
+            autoCapitalize="none"
+            spellCheck={false}
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
             className="w-full rounded-button border border-gray-200 px-3 py-3 text-base outline-none focus:border-primary"
-            placeholder="admin@oilpick.local"
-            data-testid="login-email"
+            placeholder="admin"
+            data-testid="login-username"
           />
         </label>
 
