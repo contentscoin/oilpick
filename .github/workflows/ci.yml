@@ -48,3 +48,35 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+  # 자금/보안 크리티컬 SQL(원장·상태전이·권한가드)의 pgTAP 회귀 테스트.
+  # 마이그레이션이 Supabase auth 스키마/롤·PostGIS에 의존하므로 plain Postgres가 아니라
+  # Supabase CLI로 실제 스택(db 중심)을 띄워 supabase test db로 검증한다.
+  db-tests:
+    name: db pgTAP tests
+    runs-on: ubuntu-latest
+    env:
+      # config.toml의 twilio 더미 설정이 참조하는 env — CI엔 실제 토큰이 없으니 더미로 채워
+      # auth 컨테이너 기동 경고/실패를 방지(테스트는 DB 직접 접속이라 SMS는 쓰지 않음).
+      SUPABASE_AUTH_SMS_TWILIO_AUTH_TOKEN: ci-dummy-twilio-token
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # 로컬 스택 기동(supabase/config.toml 기준) → 마이그레이션 + seed 적용. DB 테스트에
+      # 불필요한 무거운 서비스는 제외해 시간을 줄인다(auth/gotrue는 제외 불가라 항상 뜸 —
+      # auth 스키마·롤은 db 컨테이너에 있으므로 pgTAP에는 db만 있으면 충분).
+      - name: Start Supabase (db-focused)
+        run: supabase start -x studio,imgproxy,edge-runtime,realtime,storage,vector,inbucket
+
+      - name: Run pgTAP tests
+        run: supabase test db supabase/tests
+
+      - name: Stop Supabase
+        if: always()
+        run: supabase stop --no-backup
