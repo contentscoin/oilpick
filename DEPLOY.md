@@ -46,32 +46,40 @@ supabase secrets set FCM_SERVICE_ACCOUNT="$(cat fcm-service-account.json)"
 
 ---
 
-## 2. Vercel (앱 배포)
+## 2. Vercel (앱 배포 — 하나의 repo, 서브도메인 접속포인트)
 
-각 앱은 **독립 Vercel 프로젝트**로 배포한다(각자 도메인, base='/'). 앱마다 `vercel.json`이 이미 있어
-SPA 라우팅(BrowserRouter → 모든 경로를 index.html로 rewrite)을 처리한다.
+**구조**: 코드베이스(repo)는 하나. 접속포인트만 서브도메인으로 나눈다 —
+`admin.oilpick.kr`(관리자), `app.oilpick.kr`(공급업체=user), `rider.oilpick.kr`(라이더).
+같은 repo(contentscoin/oilpick)를 Vercel에 **앱 수만큼 import**해 각 프로젝트의 Root Directory만
+다르게 준다. push 한 번이면 관련 프로젝트가 모두 자동 재배포된다. 앱마다 `vercel.json`이 SPA
+라우팅(BrowserRouter → index.html rewrite)을 처리한다.
 
-### 프로젝트별 설정 (Vercel 대시보드에서 repo import 시)
-- **Root Directory**: `apps/user` / `apps/rider` / `apps/admin` 중 배포할 앱.
-  (Vercel이 Turborepo+pnpm 워크스페이스를 감지해 루트 lockfile로 install, 해당 앱만 build.)
-- **Framework Preset**: Vite (자동 감지). Output: `dist`(vercel.json framework=vite로 지정됨).
-- **환경변수**(Production/Preview):
+> 참고: "1개 Vercel 프로젝트로 3개 SPA를 서브도메인 라우팅"은 세 앱의 `/assets/*`가 한 출력 트리에서
+> 충돌해 base-path/미들웨어를 얽어야 하므로 취약하다. **repo 하나 + 서브도메인별 프로젝트**가 결과는
+> 동일(하나의 코드·push·CI)하면서 각 앱이 서브도메인 루트에서 base='/'로 깔끔히 뜬다.
+
+### 각 프로젝트 설정 (Vercel 대시보드 → Add New Project → 같은 repo import)
+프로젝트 3개(또는 필요한 앱만): 이름 예 `oilpick-admin` / `oilpick-user` / `oilpick-rider`.
+- **Root Directory**: `apps/admin` / `apps/user` / `apps/rider`.
+  (Vercel이 Turborepo+pnpm 워크스페이스를 감지 → 루트 lockfile로 install, 해당 앱만 build.)
+- **Framework Preset**: Vite(자동). Output: `dist`(vercel.json에 framework=vite 지정됨).
+- **환경변수**(Production + Preview):
   - `VITE_SUPABASE_URL` = `https://<ref>.supabase.co`
   - `VITE_SUPABASE_ANON_KEY` = anon(publishable) key
-  - `VITE_KAKAO_KEY` = 카카오 JS 앱 키(선택 — 없으면 MapView는 일러스트 프리뷰, 주소검색은 수동입력 폴백)
+  - `VITE_KAKAO_KEY` = 카카오 JS 앱 키(선택 — 없으면 MapView는 일러스트 프리뷰, 주소검색 수동입력 폴백)
 
-### 어느 앱을 Vercel에 올릴까
-- **admin**(관리자 웹): 웹 전용 → **Vercel 필수**.
-- **user / rider**: 최종 배포는 앱스토어/플레이스토어(Capacitor 모바일). 단 웹 PWA/테스트용으로 Vercel
-  배포도 가능(같은 코드가 브라우저에서 동작). 필요에 따라 선택.
+### 도메인/서브도메인 연결
+1. Vercel(아무 프로젝트나) → Settings → Domains에 apex 도메인 `oilpick.kr` 추가 → DNS 안내대로
+   네임서버/레코드 설정.
+2. 각 프로젝트에 서브도메인 배정: admin 프로젝트에 `admin.oilpick.kr`, user 프로젝트에
+   `app.oilpick.kr`, rider 프로젝트에 `rider.oilpick.kr`.
+3. 도메인 연결 전에는 각 프로젝트가 무료 `*.vercel.app` URL로도 접속된다(예 `oilpick-admin.vercel.app`).
+4. 배정한 서브도메인들을 Supabase Auth의 Site URL / Redirect URLs(1-3)에 추가.
 
-### CLI로 배포할 경우(대안)
-```bash
-cd apps/admin
-vercel link          # Vercel 프로젝트 연결(팀/스코프 선택)
-vercel env add VITE_SUPABASE_URL production      # 등 env 등록
-vercel --prod        # 배포
-```
+### 어느 앱을 올릴지
+- **admin**: 웹 전용 → 필수.
+- **user / rider**: 최종은 앱스토어/플레이스토어(Capacitor). 웹 PWA/데모/테스트용으로 Vercel 배포도
+  가능(같은 코드가 브라우저에서 동작).
 
 ---
 
