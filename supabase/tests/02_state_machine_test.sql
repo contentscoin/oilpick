@@ -45,9 +45,11 @@ select throws_ok(
   'INVALID_TRANSITION', '배정 안 된 라이더는 ARRIVE 불가');
 
 -- 4) 라이더당 활성 주문 1건: 라이더A가 두 번째 주문 수락 → 유니크 위반(23505)
+-- throws_ok에 SQLSTATE를 쓸 때는 4-인자 형태로: (sql, errcode, errmsg, description).
+-- errmsg=NULL이면 메시지는 검사하지 않고 errcode(23505)만 확인한다.
 select throws_ok(
   $$ select fn_transition_order('00000000-bbbb-0000-0000-000000000002','ACCEPT','22222222-2222-2222-2222-222222222222','rider') $$,
-  '23505', '라이더A 두 번째 주문 수락은 유니크 위반(이중배정 차단)');
+  '23505', NULL, '라이더A 두 번째 주문 수락은 유니크 위반(이중배정 차단)');
 
 -- 5) 수락 후 공급자 취소 불가(admin만) — ACCEPTED에서 supplier CANCEL
 select throws_ok(
