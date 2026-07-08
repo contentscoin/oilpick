@@ -11,6 +11,8 @@ export * from "./components/PointBalanceCard";
 export * from "./components/BigButton";
 export * from "./components/QtyStepper";
 export * from "./components/BottomSheet";
+export * from "./components/ConfirmSheet";
+export * from "./components/ErrorScreen";
 export * from "./components/TabBar";
 export * from "./components/Toast";
 export * from "./components/OfflineBanner";
