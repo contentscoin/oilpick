@@ -9,11 +9,11 @@ import {
 } from "@oilpick/ui";
 import { useSession } from "../hooks/useSession";
 import { usePointBalance, useLedger } from "../hooks/useWallet";
-import { UserShell } from "../components/UserShell";
 
 /**
  * U11 지갑. 03-frontend.md: "PointBalanceCard(packages/ui) + LedgerList(packages/ui,
- * point_ledger 조회) + [출금 신청] 버튼".
+ * point_ledger 조회) + [출금 신청] 버튼". 06-enhancement-plan.md E1: 탭바는 레이아웃(AppShell)이
+ * 제공하므로 이 화면은 UserShell로 감싸지 않는다.
  */
 export function WalletPage() {
   const navigate = useNavigate();
@@ -24,8 +24,7 @@ export function WalletPage() {
   const { data: entries, isLoading: ledgerLoading } = useLedger(userId);
 
   return (
-    <UserShell>
-      <main style={{ display: "flex", flexDirection: "column", gap: 20, padding: 20, maxWidth: 480, margin: "0 auto" }}>
+    <main style={{ display: "flex", flexDirection: "column", gap: 20, padding: 20, maxWidth: 480, margin: "0 auto" }}>
         <h1 style={{ fontSize: 20, margin: 0 }}>지갑</h1>
 
         {balanceLoading ? (
@@ -55,7 +54,6 @@ export function WalletPage() {
             <EmptyState title="아직 포인트 내역이 없어요" description="수거가 완료되면 여기에 표시돼요." />
           )}
         </section>
-      </main>
-    </UserShell>
+    </main>
   );
 }

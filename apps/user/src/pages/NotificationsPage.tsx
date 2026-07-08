@@ -3,11 +3,11 @@ import { formatRelativeTime } from "@oilpick/core";
 import { useNavigate } from "react-router-dom";
 import { useSession } from "../hooks/useSession";
 import { useMarkNotificationRead, useNotifications } from "../hooks/useNotifications";
-import { UserShell } from "../components/UserShell";
 
 /**
  * 알림함 공통 화면(U14). 03-frontend.md 작업 지시:
  * "notifications 테이블 조회 + Realtime 구독 + 읽음 처리(read_at update)".
+ * 06-enhancement-plan.md E1: 탭바는 레이아웃(AppShell)이 제공하므로 UserShell로 감싸지 않는다.
  */
 export function NotificationsPage() {
   const navigate = useNavigate();
@@ -25,9 +25,8 @@ export function NotificationsPage() {
   }
 
   return (
-    <UserShell>
-      <main style={{ display: "flex", flexDirection: "column", gap: 12, padding: 20, maxWidth: 480, margin: "0 auto" }}>
-        <h1 style={{ fontSize: 20, margin: 0 }}>알림</h1>
+    <main style={{ display: "flex", flexDirection: "column", gap: 12, padding: 20, maxWidth: 480, margin: "0 auto" }}>
+      <h1 style={{ fontSize: 20, margin: 0 }}>알림</h1>
 
         {isLoading ? (
           <div data-testid="notifications-skeleton" style={{ borderRadius: 16, height: 200, backgroundColor: gray[100] }} />
@@ -61,7 +60,6 @@ export function NotificationsPage() {
         ) : (
           <EmptyState title="아직 알림이 없어요" description="새 소식이 오면 여기에 표시돼요." />
         )}
-      </main>
-    </UserShell>
+    </main>
   );
 }
