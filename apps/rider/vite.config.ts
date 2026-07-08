@@ -34,5 +34,8 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./src/setupTests.ts"],
+    // 이 개발 머신은 부하 시 lazy 라우트 청크 로드가 수 초씩 걸려 기본 5s testTimeout으로는
+    // 라우팅 테스트가 플레이크난다. setupTests.ts의 asyncUtilTimeout(10s)과 짝으로 상향.
+    testTimeout: 20_000,
   },
 });
