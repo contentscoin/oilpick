@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { BigButton, DriverCard, InfoStatCard, MapView, OrderTimeline, StatusHeadline, colors, elevation, gray, radius, surface, touchTarget } from "@oilpick/ui";
+import { BigButton, ConfirmSheet, DriverCard, ErrorScreen, InfoStatCard, MapView, OrderTimeline, StatusHeadline, colors, elevation, gray, radius, surface, touchTarget } from "@oilpick/ui";
 import { formatKg, formatKrw, formatPoint, formatTimeOfDay, type OrderStatus } from "@oilpick/core";
 import { KAKAO_KEY } from "../lib/env";
 import { invokeEdgeFunction } from "../lib/edgeFunction";
@@ -25,6 +25,7 @@ export function OrderDetailPage() {
   const { data: rider } = useAssignedRiderCard(order?.riderId);
 
   const [cancelling, setCancelling] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [disputing, setDisputing] = useState(false);
   const [disputeReason, setDisputeReason] = useState("");
@@ -41,8 +42,21 @@ export function OrderDetailPage() {
 
   if (!order || !id) {
     return (
-      <main style={{ padding: 20, maxWidth: 480, margin: "0 auto" }}>
-        <p>주문을 찾을 수 없어요.</p>
+      <main style={{ padding: 20, maxWidth: 480, margin: "0 auto", minHeight: "70vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <ErrorScreen
+          title="주문을 찾을 수 없어요."
+          description="이미 삭제되었거나 잘못된 주소일 수 있어요."
+          action={
+            <>
+              <BigButton data-testid="order-notfound-home" onClick={() => navigate("/", { replace: true })}>
+                홈으로
+              </BigButton>
+              <BigButton variant="secondary" data-testid="order-notfound-history" onClick={() => navigate("/orders", { replace: true })}>
+                수거 이력 보기
+              </BigButton>
+            </>
+          }
+        />
       </main>
     );
   }
@@ -57,6 +71,7 @@ export function OrderDetailPage() {
       payload: { reason: "사용자 취소" },
     });
     setCancelling(false);
+    setShowCancelConfirm(false);
     if (!result.ok) setActionError(result.message);
   }
 
@@ -172,8 +187,7 @@ export function OrderDetailPage() {
           <BigButton
             variant="secondary"
             data-testid="order-cancel-button"
-            loading={cancelling}
-            onClick={handleCancel}
+            onClick={() => setShowCancelConfirm(true)}
           >
             요청 취소
           </BigButton>
@@ -181,10 +195,18 @@ export function OrderDetailPage() {
       )}
 
       {order.status === "CANCELLED" && (
-        <section data-testid="order-cancelled-panel">
+        <section data-testid="order-cancelled-panel" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <p style={{ margin: 0, fontSize: 15 }}>
             {order.cancelReason === "NO_RIDER" ? "수락한 라이더가 없어 자동 취소되었어요." : "요청이 취소되었어요."}
           </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <BigButton data-testid="order-rerequest-button" onClick={() => navigate("/request")}>
+              다시 요청하기
+            </BigButton>
+            <BigButton variant="secondary" data-testid="order-cancelled-home" onClick={() => navigate("/")}>
+              홈으로
+            </BigButton>
+          </div>
         </section>
       )}
 
@@ -365,6 +387,19 @@ export function OrderDetailPage() {
           라이더에게 전화
         </a>
       )}
+
+      {/* E5: 요청 취소는 되돌릴 수 없으므로 확인 다이얼로그를 거친다. */}
+      <ConfirmSheet
+        open={showCancelConfirm}
+        onClose={() => setShowCancelConfirm(false)}
+        title="요청을 취소할까요?"
+        description="취소하면 배정 대기 중인 요청이 사라져요. 필요하면 다시 요청할 수 있어요."
+        confirmLabel="요청 취소"
+        cancelLabel="닫기"
+        danger
+        loading={cancelling}
+        onConfirm={handleCancel}
+      />
     </main>
   );
 }

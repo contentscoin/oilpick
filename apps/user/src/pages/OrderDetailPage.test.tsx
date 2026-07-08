@@ -62,12 +62,18 @@ describe("OrderDetailPage", () => {
     expect(screen.getByTestId("order-cancel-button")).toBeInTheDocument();
   });
 
-  it("calls order-transition CANCEL when the cancel button is clicked", async () => {
+  it("confirms via dialog before calling order-transition CANCEL (E5)", async () => {
     mockUseOrder.mockReturnValue({ data: { ...BASE_ORDER, status: "REQUESTED" }, isLoading: false });
     mockInvokeEdgeFunction.mockResolvedValue({ ok: true, data: { orderId: "order-1", status: "CANCELLED" } });
     renderPage();
 
+    // 1단계: 취소 버튼은 곧바로 취소하지 않고 확인 시트를 연다.
     fireEvent.click(screen.getByTestId("order-cancel-button"));
+    expect(mockInvokeEdgeFunction).not.toHaveBeenCalled();
+    expect(screen.getByTestId("confirm-sheet")).toBeInTheDocument();
+
+    // 2단계: 확인 시트에서 확정해야 실제 CANCEL 전이가 호출된다.
+    fireEvent.click(screen.getByTestId("confirm-sheet-confirm"));
     await waitFor(() =>
       expect(mockInvokeEdgeFunction).toHaveBeenCalledWith(
         "order-transition",
