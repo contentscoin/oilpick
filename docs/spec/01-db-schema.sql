@@ -6,9 +6,14 @@ create extension if not exists postgis;
 -- ===== enums =====
 create type user_role as enum ('supplier','rider','admin');
 create type order_status as enum ('REQUESTED','ACCEPTED','ARRIVED','PICKED_UP','DELIVERED','COMPLETED','CANCELLED','DISPUTED');
-create type ledger_type as enum ('EARN','HOLD','RELEASE','WITHDRAW_REQUEST','WITHDRAW_CANCEL','ADJUST','PURCHASE');
-create type verify_status as enum ('PENDING','APPROVED','REJECTED');
-create type withdraw_status as enum ('REQUESTED','APPROVED','REJECTED','PAID');
+create type ledger_type as enum ('EARN','HOLD','RELEASE','WITHDRAW_REQUEST','WITHDRAW_CANCEL','ADJUST','PURCHASE'); -- 레거시(신규 발행 중지, 07 D1)
+-- [07 F2] SUSPENDED 추가(실 마이그레이션은 별도 파일의 alter type add value — 사용 트랜잭션과 분리. 액션·정책은 07 F11)
+create type verify_status as enum ('PENDING','APPROVED','REJECTED','SUSPENDED');
+create type withdraw_status as enum ('REQUESTED','APPROVED','REJECTED','PAID'); -- 레거시(출금 폐기, 07 D1/F13)
+-- [07 F2] 수거쿠폰 원장 항목 타입
+create type coupon_entry_type as enum ('CHARGE','CONSUME','REFUND','ADJUST');
+-- [07 F2] 쿠폰 구매(PG 결제) 상태 — EXPIRED 포함(orphan PENDING 24h TTL, 07 §1-4)
+create type coupon_purchase_status as enum ('PENDING','PAID','FAILED','EXPIRED','REFUNDED');
 
 -- ===== profiles =====
 create table profiles (
@@ -51,7 +56,7 @@ create index idx_rider_location on rider_profiles using gist(last_location);
 create table price_ticks (
   id bigint generated always as identity primary key,
   price_per_kg int not null check (price_per_kg > 0),   -- 원/kg
-  rider_fee int not null check (rider_fee > 0),          -- 기본 수거비 P
+  rider_fee int check (rider_fee > 0),                   -- [07 F2] 레거시 — not null 해제, 신규 미기록(CHECK는 NULL 통과). price-set 계약 개정 07 F3b-④
   effective_at timestamptz not null default now(),
   created_by uuid not null references profiles(id)
 );
@@ -82,17 +87,20 @@ create table pickup_orders (
   preferred_time text,                      -- '지금' 또는 'YYYY-MM-DD HH:mm'
   -- 스냅샷 (생성 시 고정)
   snapshot_price_per_kg int not null,
-  snapshot_rider_fee int not null,
+  snapshot_rider_fee int,                   -- [07 F2] 레거시 — not null 해제, 신규 미기록
+  coupon_cost int,                          -- [07 F2] 소진 쿠폰 장수 스냅샷 = ceil(requested_kg/KG_PER_CAN). 레거시 주문 null(CONSUME/REFUND skip)
   -- 확정 정보
   measured_kg numeric(8,1),                 -- 라이더 계량
-  final_kg numeric(8,1),                    -- 확정(중재 반영) — EARN 계산 기준
-  supplier_point int,                       -- 지급된 EARN
+  final_kg numeric(8,1),                    -- 확정(중재 반영) — 현금/EARN 계산 기준
+  supplier_point int,                       -- 레거시 — 지급된 EARN
+  cash_paid_amount int,                     -- [07 F2] 현장 지급 현금(원) = round(final_kg × snapshot_price_per_kg). COMPLETED 시 기록
   photo_urls text[] not null default '{}',
   cancel_reason text,
   dispute_reason text,
   broadcast_radius_km int not null default 3,
   created_at timestamptz not null default now(),
-  accepted_at timestamptz, picked_up_at timestamptz, delivered_at timestamptz
+  accepted_at timestamptz, picked_up_at timestamptz, delivered_at timestamptz,
+  completed_at timestamptz                  -- [07 F2] 완료 시각. 레거시 완료 시각 조회는 coalesce(completed_at, delivered_at, picked_up_at)
 );
 create index idx_orders_status on pickup_orders (status, created_at desc);
 create index idx_orders_supplier on pickup_orders (supplier_id, created_at desc);
@@ -110,6 +118,7 @@ create table order_events (
 create index idx_order_events_order on order_events (order_id, created_at);
 
 -- ===== 포인트 원장 (append-only) =====
+-- 레거시 — 신규 발행 중지(07 D1). 테이블·과거 데이터는 회계 기록으로 보존, 신규 EARN/HOLD/RELEASE/WITHDRAW insert 없음.
 create table point_ledger (
   id bigint generated always as identity primary key,
   user_id uuid not null references profiles(id),
@@ -153,6 +162,84 @@ select
                     else 0 end),0)::int as held
 from point_ledger group by user_id;
 
+-- ===== 수거쿠폰 [07 F2] =====
+-- 신모델 플랫폼 수익원. 절대 규칙 1 확장: coupon_ledger insert는 service_role RPC
+-- (fn_charge_coupon/fn_consume_coupon)에만 존재, 잔액은 v_coupon_balance 뷰로만 조회.
+
+-- 쿠폰 단가 tick (price_ticks 패턴 미러: 전체 read, admin insert, update/delete 정책 없음=정정 불가·신규 tick만)
+create table coupon_price_ticks (
+  id bigint generated always as identity primary key,
+  unit_price int not null check (unit_price > 0),        -- 쿠폰 1장당 가격 (원)
+  effective_at timestamptz not null default now(),
+  created_by uuid not null references profiles(id)
+);
+create index idx_coupon_price_ticks_effective on coupon_price_ticks (effective_at desc);
+
+-- 쿠폰 구매(PG 결제). 쓰기는 Edge Function(coupon-purchase-intent/confirm)만.
+create table coupon_purchases (
+  id uuid primary key default gen_random_uuid(),
+  rider_id uuid not null references profiles(id),
+  qty int not null check (qty > 0),
+  unit_price int not null check (unit_price > 0),        -- 구매 시점 단가 스냅샷
+  amount int not null check (amount > 0),                -- qty × unit_price (원)
+  pg_order_id text not null unique,                      -- 토스 주문번호
+  payment_key text unique,                               -- 토스 결제키(승인 후 기록) — confirm 멱등 축
+  status coupon_purchase_status not null default 'PENDING',
+  created_at timestamptz not null default now(),
+  paid_at timestamptz
+);
+create index idx_coupon_purchases_rider on coupon_purchases (rider_id, created_at desc);
+
+-- 쿠폰 원장 (append-only) — point_ledger의 3중 무결성 패턴을 그대로 미러링(07 §1-1)
+create table coupon_ledger (
+  id bigint generated always as identity primary key,
+  rider_id uuid not null references profiles(id),
+  entry_type coupon_entry_type not null,
+  qty int not null check (qty <> 0),                     -- +충전/환급, -소진. not null 필수(CHECK는 NULL 통과 → 생략 금지)
+  unit_price int check (entry_type <> 'CHARGE' or unit_price > 0),  -- CHARGE 시 단가 스냅샷 필수
+  order_id uuid references pickup_orders(id),            -- CONSUME/REFUND 필수
+  purchase_id uuid references coupon_purchases(id),      -- CHARGE 필수, PG환불 ADJUST 시 필수
+  memo text,
+  created_by uuid references profiles(id),
+  created_at timestamptz not null default now(),
+  -- 멱등 ②-1: CONSUME/REFUND 재시도 안전(order 단위). 주의: Postgres NULLS DISTINCT 때문에
+  -- order_id가 NULL인 행(CHARGE/ADJUST)은 이 제약의 적용 대상이 아니다(다중 충전 허용 — 의도된 동작).
+  unique (order_id, entry_type, rider_id)
+);
+-- 멱등 ②-2: CHARGE/PG환불 멱등(purchase 단위). purchase_id NULL 행 제외(부분 유니크). CHARGE 멱등은 이 제약 + coupon_purchases 상태 전이가 담당.
+create unique index idx_coupon_ledger_purchase on coupon_ledger (purchase_id, entry_type)
+  where purchase_id is not null;
+create index idx_coupon_ledger_rider on coupon_ledger (rider_id, created_at desc);
+
+-- append-only 강제(01:130 forbid_ledger_mutation 복제, search_path 고정). service_role도 UPDATE/DELETE 불가.
+create or replace function forbid_coupon_mutation() returns trigger as $$
+begin raise exception 'coupon_ledger is append-only'; end;
+$$ language plpgsql set search_path = public;
+create trigger trg_coupon_no_update before update or delete on coupon_ledger
+  for each row execute function forbid_coupon_mutation();
+
+-- 잔액 뷰: qty 부호를 그대로 누적합(CHARGE/REFUND +, CONSUME −, ADJUST ±).
+-- point_ledger와 동일하게 security_invoker=true로 호출자 RLS(p_coupon_ledger_read)를 평가한다.
+create view v_coupon_balance
+  with (security_invoker = true)
+as
+select rider_id, coalesce(sum(qty),0)::int as balance
+from coupon_ledger group by rider_id;
+
+-- 집계 뷰 2종(v_coupon_sales_daily·v_pickup_stats_daily)은 is_admin() 함수 정의 이후로 이동해 정의(아래 RLS 절 참조).
+
+-- ===== [07 F11] 라이더 정지·서류 필수화·인계처 (예약 — 전체 DDL은 F11에서) =====
+-- verify_status에 'SUSPENDED' 추가는 위 enum 참조(07 F2). rider_profiles 추가 예정:
+--   recycler_name text, recycler_contact text  -- 인계 재활용업체(승인 조건 필드, D5 전제)
+-- doc_permit_url 라벨을 "폐기물처리(수집·운반) 신고증명서"로 확정 + rider-verify 승인 시 서버 필수 검증.
+
+-- ===== [07 F12] CS 문의 티켓 (예약 — 전체 DDL은 F12에서) =====
+-- cs_tickets(id, author_id uuid FK profiles, role, category enum('ORDER','CASH_DISPUTE',
+--   'COUPON_PAYMENT','ACCOUNT','ETC'), order_id uuid nullable FK pickup_orders, title, body,
+--   status enum('OPEN','IN_PROGRESS','RESOLVED'), admin_reply, created_at, resolved_at)
+--   RLS: 본인 select+insert(author_id=auth.uid() 강제), admin 전체 select/update.
+--   원장류가 아니므로 클라이언트 insert 허용. CASH_DISPUTE=현금 지급 후 분쟁(상태머신 밖 수용처, 07 §1-3).
+
 -- ===== 출금 =====
 create table withdrawals (
   id uuid primary key default gen_random_uuid(),
@@ -189,11 +276,45 @@ alter table order_events enable row level security;
 alter table point_ledger enable row level security;
 alter table withdrawals enable row level security;
 alter table notifications enable row level security;
+-- [07 F2] 쿠폰 테이블 RLS
+alter table coupon_price_ticks enable row level security;
+alter table coupon_purchases enable row level security;
+alter table coupon_ledger enable row level security;
 
 -- security definer 함수는 search_path를 고정해 하이재킹을 막는다(Supabase security advisor 대응).
 create or replace function is_admin() returns boolean as
 $$ select exists(select 1 from profiles where id = auth.uid() and role='admin') $$
 language sql security definer stable set search_path = public;
+
+-- ===== 집계 뷰 (admin 전용 select) [07 F2] — is_admin() 정의 이후에 배치 =====
+-- security_invoker=true + where is_admin() 게이트: 비관리자는 빈 결과(하위 테이블 RLS도 함께 평가).
+-- 쿠폰 매출: CHARGE 합계 + REFUND(귀책 환급)·PG환불(purchase_id 있는 ADJUST)·수동조정 구분 병기.
+create view v_coupon_sales_daily
+  with (security_invoker = true)
+as
+select
+  date_trunc('day', created_at)::date as day,
+  coalesce(sum(qty) filter (where entry_type='CHARGE'),0)::int             as charged_qty,
+  coalesce(sum(unit_price*qty) filter (where entry_type='CHARGE'),0)::int  as sales_amount,
+  coalesce(sum(qty) filter (where entry_type='REFUND'),0)::int            as refund_qty,          -- 귀책 환급(order 단위)
+  coalesce(sum(-qty) filter (where entry_type='ADJUST' and purchase_id is not null),0)::int as pg_refund_qty,   -- PG 환불
+  coalesce(sum(qty) filter (where entry_type='ADJUST' and purchase_id is null),0)::int      as manual_adjust_qty
+from coupon_ledger
+where is_admin()
+group by 1;
+
+-- 수거 활동 추이: 일별 COMPLETED 건수/final_kg 합/cash_paid_amount 합(completed_at 기준). 쿠폰 매출과 상관 분석용.
+create view v_pickup_stats_daily
+  with (security_invoker = true)
+as
+select
+  completed_at::date            as day,
+  count(*)                      as completed_count,
+  coalesce(sum(final_kg),0)     as total_kg,
+  coalesce(sum(cash_paid_amount),0)::int as total_cash
+from pickup_orders
+where status='COMPLETED' and completed_at is not null and is_admin()
+group by 1;
 
 -- profiles: 본인 R/W(role 변경 불가는 컬럼 권한으로), admin 전체 R
 -- 성능 advisor(auth_rls_initplan): auth.uid()는 (select auth.uid())로 감싸 행마다 재평가되지 않고
@@ -233,6 +354,14 @@ create policy p_rider_profiles_read_by_supplier on rider_profiles for select usi
 create policy p_price_read on price_ticks for select using (true);
 create policy p_price_write on price_ticks for insert with check (is_admin());
 
+-- [07 F2] coupon_price_ticks: 전체 read, insert admin만 (price_ticks 미러)
+create policy p_coupon_price_read on coupon_price_ticks for select using (true);
+create policy p_coupon_price_write on coupon_price_ticks for insert with check (is_admin());
+-- [07 F2] coupon_purchases: rider 본인 + admin read. insert/update는 Edge Function(service_role)만 → 정책 없음=차단.
+create policy p_coupon_purchase_read on coupon_purchases for select using (rider_id = (select auth.uid()) or is_admin());
+-- [07 F2] coupon_ledger: rider 본인 + admin read. insert/update 정책 없음=차단(service_role RPC만). append-only는 트리거로도 강제.
+create policy p_coupon_ledger_read on coupon_ledger for select using (rider_id = (select auth.uid()) or is_admin());
+
 -- depots: read는 인증 사용자, write는 admin
 create policy p_depot_read on depots for select using ((select auth.uid()) is not null);
 create policy p_depot_write on depots for all using (is_admin());
@@ -260,6 +389,7 @@ create policy p_noti_update on notifications for update using (user_id = (select
 
 -- Storage 버킷: order-photos (관련자 read / rider write), rider-docs (본인 write, admin read)
 -- Realtime publication: pickup_orders, notifications, price_ticks, rider_profiles, point_ledger 활성화
+-- [07 F2] coupon_ledger도 추가(apps/rider 쿠폰 잔액 카드가 CHARGE/CONSUME/REFUND insert를 폴링 없이 반영 — 07 F5. RLS p_coupon_ledger_read 적용, 본인 행만 전달)
 -- (price_ticks는 03-frontend.md U3 "PriceCard(최신 tick, Realtime 구독)"에 필요 — T7에서 추가.
 --  rider_profiles는 apps/rider R1 "PENDING 대기 화면(Realtime으로 verify_status 변경 감지)"에
 --  필요 — T9에서 추가. point_ledger는 apps/user U11 지갑·apps/rider R7/R8 정산의

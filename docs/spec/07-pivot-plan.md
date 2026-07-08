@@ -124,6 +124,9 @@ REQUESTED→CANCELLED: supplier 자진 or 시스템 30분 무수락. 쿠폰 미�
   **환불 RPC도 CONSUME과 동일하게 rider 단위 FOR UPDATE 직렬화 후 잔액 재계산**(동시 수락과의 경합 방지,
   1-1 ③ 원칙). 원장 기록은 ADJUST(-qty, purchase_id 필수), coupon_purchases.status FOR UPDATE 상태 기반
   멱등. 통계에서 "purchase_id 있는 ADJUST"=PG 환불로 구분 집계.
+- **에러코드·응답(확정)**: 단가 tick 미설정 상태의 구매 신청 → `COUPON_PRICE_NOT_SET`(409).
+  환불 qty > 미사용 잔액 → `INSUFFICIENT_COUPON` 재사용(동일 의미 — 잔액 부족).
+  coupon-purchase-confirm 성공 응답은 `{ balance }`(충전 후 잔액).
 - **PG 시크릿 키는 Edge Function 전용**(절대 규칙 3의 확장) — 클라이언트 번들엔 클라이언트 키만.
 - 쿠폰 = **플랫폼 자기 용역(콜 배정) 전용**. 기름값 충당 금지, 제3자 사용처 금지, 환불은 미사용분 단순
   환불로 한정 — 이 3가지가 전금법 선불전자지급수단 비해당의 성립 조건(규제 분석 결과). 설계 변경 금지.
@@ -167,6 +170,11 @@ REQUESTED→CANCELLED: supplier 자진 or 시스템 30분 무수락. 쿠폰 미�
   coupon_purchases/coupon_cost/cash_paid_amount/completed_at/SUSPENDED/cs_tickets/집계 뷰 2종
   v_coupon_sales_daily·v_pickup_stats_daily/recycler_name·recycler_contact)×01, 함수·RPC(5+2)×02,
   에러코드(INSUFFICIENT_COUPON)×02, 알림 행(1-6 표)×00. 하나라도 없으면 미완료.
+- [x] 결과(2026-07-09): 6종 개정 — 00(용어/상태머신 교체+레거시 소절/알림 매트릭스/쿠폰 절 4종 신설),
+  01(`[07 F2]` 마커 DDL + F11/F12 예약 마커, is_admin 이후 뷰 배치), 02(신규 절 5 + order-create/accept/
+  transition/price-set 계약 개정 + deprecated 3), 03(07 참조 블록 3앱 + 05 override 각주), CLAUDE.md
+  (절대규칙 1·3 확장 + 문서 맵), 06(판정 표기 3건). DoD 체크리스트 전 항목 반영(에이전트 자체 검증 +
+  스팟 그렙 확인). 미결 3건(에러코드/뷰 강제 방식/confirm 응답)은 §1-4·F2-⑧에 확정 반영.
 
 ### F2. 【DB】 마이그레이션 1차 — 쿠폰 스키마 (기존 동작 무영향의 순수 추가)
 - 작업 (supabase/migrations/ 순번 파일 + 01-db-schema.sql 동기화):
@@ -185,7 +193,8 @@ REQUESTED→CANCELLED: supplier 자진 or 시스템 30분 무수락. 쿠폰 미�
   F6/F10 집계의 기준 컬럼).
   ⑥ `price_ticks.rider_fee`, `pickup_orders.snapshot_rider_fee` not null 해제(check는 not null일 때만).
   ⑦ `alter type verify_status add value 'SUSPENDED'` (별도 마이그레이션 파일 — enum add는 사용 트랜잭션과 분리).
-  ⑧ 집계 뷰 2종(admin 전용 select): `v_coupon_sales_daily`(CHARGE 합계, REFUND/ADJUST·PG환불 구분 병기),
+  ⑧ 집계 뷰 2종(admin 전용 — 강제 방식: `security_invoker=true` + `where is_admin()` 게이트, 비관리자는
+  빈 결과): `v_coupon_sales_daily`(CHARGE 합계, REFUND/ADJUST·PG환불 구분 병기),
   **`v_pickup_stats_daily`**(일별 COMPLETED 건수/final_kg 합/cash_paid_amount 합 — completed_at 기준.
   수거 활동 시계열, 쿠폰 매출과 상관 분석용).
 - DoD: `supabase db reset` 성공. 기존 pgTAP 3종 green(기존 플로우 무영향 증명). 01-db-schema.sql 동기화.

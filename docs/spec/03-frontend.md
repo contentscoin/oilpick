@@ -1,5 +1,7 @@
 # 03. 프론트엔드 명세
 
+> **[07 피벗]** 07-pivot-plan.md가 개정하는 화면·정보구조는 아래 각 앱 표 뒤의 "07 피벗 개정" 블록에 요약(상세는 해당 F# 참조). **05-design-upgrade.md의 비범위(정보구조·라우팅 변경 금지, 신규 화면 금지)는 07이 명시적으로 override한다**(07 머리말). 구모델 표기(예상 포인트/수거비/지갑·출금/집하장 QR)는 레거시.
+
 ## 모노레포 구조
 ```
 oilpick/
@@ -26,6 +28,7 @@ oilpick/
 - `format.ts`: `formatPoint(n)` → "12,345P", `formatKrw`, `formatKg` → "45.5kg", 상대시간
 - `supabase.ts`: 클라이언트 팩토리 (env로 url/anon key 주입)
 - `estimate.ts`: `estimateKg(cans)`, `estimatePoint(kg, pricePerKg)`
+  - **[07 F7]** `estimateCash(cans, pricePerKg)` 추가(예상 현금 수령액), `estimatePoint`은 deprecated 별칭(F13에서 제거). `priceResample.ts`의 `resampleDaily(ticks, days)`(종가+캐리포워드, 07 §1-5) 신설.
 
 ## 디자인 토큰 (packages/ui/src/tokens.ts + Tailwind preset)
 ```ts
@@ -48,7 +51,8 @@ spacing: 4px 그리드. 터치 타깃 최소 48px. radius: 카드 16px, 버튼 1
 `EmptyState`, `PhotoUploader`(카메라 촬영 전용, Capacitor Camera), `MapView`(카카오맵 래퍼),
 `StatusBadge`, `LedgerList`(원장 행: 타입 한글 라벨 + 부호 색상)
 
-차트: 시세 그래프는 `recharts` LineChart (일/주/월 탭은 클라이언트에서 price_ticks 리샘플링).
+- **[07 F7/F9]** `PriceChart`(순수 SVG 라인+영역, 스크럽, 기간 토글 7/30/90) 신설. `OrderTimeline` HAPPY_PATH를 `[REQUESTED,ACCEPTED,ARRIVED,COMPLETED]`로 교체(PICKED_UP/DELIVERED은 레거시 조건부). `CallCard`는 "수거비"→"쿠폰 N장 소진"+"예상 매입 지급액". `PointBalanceCard`/`LedgerList`는 쿠폰 잔액/원장으로 일반화 재사용. tokens.ts에 `surfaceDark`/차트 색/타입스케일/모션 토큰 확장.
+- 차트: ~~`recharts` LineChart~~ → **[07 F7] recharts 등 라이브러리 추가 금지 — 순수 SVG `PriceChart` + `resampleDaily`(종가+캐리포워드)로 대체.** 기간 토글(7/30/90일)은 클라이언트 리샘플.
 
 ## 라우팅 & 화면 스펙
 
@@ -66,6 +70,13 @@ spacing: 4px 그리드. 터치 타깃 최소 48px. radius: 카드 16px, 버튼 1
 | `/wallet/withdraw` | U12 | 계좌 등록/표시 + 금액 입력(최소 1만P 검증) |
 | `/my`, `/notifications` | U13, U14 | |
 
+> **07 피벗 개정 (상세는 07-pivot-plan.md 참조)**
+> - **U3 홈(`/`)** [F8]: 다크 일별 시세 히어로가 주인공(라벨 "오늘 매입가" + 현재가 40px + PriceChart 민트 라인 + 기간 토글). QtyStepper·예상포인트 섹션 제거(→요청 step1로 일원화). 진행중 주문 카드 / 현금 수령 요약(cash_paid_amount 합·completed_at 기준) / 최근 수거 이력 + 하단 fixed "수거 요청하기".
+> - **U4 시세 상세(`/price`)** [F7·F8]: recharts 폐기 → 홈 히어로와 동일 PriceChart+resampleDaily(종가+캐리포워드)+기간 토글 체계. 이력 테이블 유지.
+> - **U5 요청(`/request`)** [F9]: 3스텝 유지 + sticky 예상 **현금** 수령액 푸터 / 최근 주소 칩 / 통 크기 프리셋 / 희망시간 퀵칩 / 제출 성공 ConfirmSheet. "예상 포인트"→"예상 현금 수령액" 전수 전환.
+> - **U7 주문상세(`/orders/:id`)** [F9]: CONFIRM 버튼 카피 **"무게 OO.Okg 확인 · 현금 ₩N 받았습니다"**(2자 확인=현금 수령 증빙). COMPLETED 히어로 포인트→현금 수령액. OrderTimeline PICKED_UP 스텝 미표시(레거시 조건부).
+> - **지갑/출금(`/wallet`, `/wallet/withdraw`)** [F8/F13]: PointBalanceCard·출금 UI 제거 → **"수령 이력"**(주문별 현금 수령 리스트)으로 대체 예정. 탭바 "포인트"→"수령액" 개명.
+
 Realtime: `pickup_orders` 자기 행 UPDATE 구독으로 상태 자동 갱신 (폴링 금지).
 
 ### apps/rider (하단 탭: 콜/운행/정산/마이)
@@ -79,6 +90,12 @@ Realtime: `pickup_orders` 자기 행 UPDATE 구독으로 상태 자동 갱신 (�
 | `/badge` | R9 인증 카드 | 풀스크린: 사진/이름/차량번호 + QR(JWT는 Phase 2, 지금은 rider_id QR) |
 | `/history`, `/my`, `/notifications` | R10–R12 | |
 
+> **07 피벗 개정 (상세는 07-pivot-plan.md 참조)**
+> - **R2 콜 홈 / R3 콜 상세** [F5]: 상단 쿠폰 잔액 카드(v_coupon_balance + Realtime)+[충전하기]. CallCard/상세 "수거비"→"쿠폰 N장 소진"(coupon_cost)+"예상 매입 지급액"(requested_kg×시세). 잔액 부족 수락 시 INSUFFICIENT_COUPON→[충전하러 가기] CTA. 쿠폰 내역 화면(LedgerList 재사용).
+> - **쿠폰 충전 화면(신설)** [F4]: 토스 결제위젯(클라이언트 키) + 수량 프리셋(10/30/50장)+직접 입력 + 성공/실패/중단 리다이렉트 + PENDING orphan 재시도.
+> - **R4 운행(`/active`)** [F6]: ArrivedPanel "예상 지급 포인트"→**"점주에게 지급할 현금 ₩N"**, 제출 카피 "계량 제출 → 사장님 확인 요청". QR 스캔 단계는 레거시(PICKED_UP) 조건부 렌더로 강등 — 신규 주문은 CONFIRM으로 즉시 완료. **DISPUTED 안내 패널 신설**(useActiveRun RUN_STATUSES에 DISPUTED 포함).
+> - **R7 정산(`/earnings`)** [F6]: **"수거 실적"으로 재정의**(이번 달 수거 kg/건수/현금 지급 총액, completed_at 기준 + 쿠폰 소진/충전 요약). 출금 신청 UI 라우트 제거.
+
 ### apps/admin (사이드바 내비, shadcn/ui + TanStack Table)
 | 경로 | 뷰 | 구현 요점 |
 |---|---|---|
@@ -90,6 +107,14 @@ Realtime: `pickup_orders` 자기 행 UPDATE 구독으로 상태 자동 갱신 (�
 | `/depots` | 집하장 | CRUD + QR 인쇄 뷰(qr_secret을 QR 이미지로) |
 | `/notify` | 공지 | 전체/역할별 푸시 발송 폼 |
 - admin 로그인: 이메일/비밀번호 (admin 계정은 시드로 생성). role≠admin이면 접근 차단.
+
+> **07 피벗 개정 (상세는 07-pivot-plan.md 참조)**
+> - **`/price`** [F10]: 쿠폰 단가 섹션(현재 단가+coupon-price-set 폼+이력) 추가, rider_fee 입력 필드 제거.
+> - **`/settlement` → "매출·정산" 재편** [F10]: 쿠폰 매출 대시(v_coupon_sales_daily) + 수거 활동 추이(v_pickup_stats_daily) + 쿠폰 원장 감사 + 결제 목록(coupon_purchases, EXPIRED 대사) + 환불 처리(coupon-refund). 출금 큐 제거.
+> - **`/users` 라이더탭** [F10/F11]: 쿠폰 잔액 컬럼 + [수동 조정](coupon-adjust, 사유 필수) + [정지]/[해제](SUSPENDED) + 인계처(recycler) 필드.
+> - **`/orders` 드로어** [F10]: coupon_cost·환급 여부·cash_paid_amount 표시, admin 취소 시 **귀책(fault) 선택 UI**(SUPPLIER/RIDER/SYSTEM), **FORCE_COMPLETE 버튼**(계량된 ARRIVED 한정, 사유 입력). ARRIVED 24h 초과 하이라이트.
+> - **`/cs` (신설)** [F12]: 문의 티켓 상태 큐 + 답변 폼 + 주문 링크(CASH_DISPUTE/COUPON_PAYMENT).
+> - **대시보드(`/`)** [F10]: KPI 교체(오늘 주문/수거 kg/**쿠폰 판매액**/**소진 쿠폰**/활성 라이더/**현금 거래액**, completed_at 기준).
 
 ## Capacitor 설정
 - 플러그인: @capacitor/push-notifications, geolocation, camera, app, splash-screen,
