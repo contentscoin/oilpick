@@ -198,6 +198,10 @@ REQUESTED→CANCELLED: supplier 자진 or 시스템 30분 무수락. 쿠폰 미�
   **`v_pickup_stats_daily`**(일별 COMPLETED 건수/final_kg 합/cash_paid_amount 합 — completed_at 기준.
   수거 활동 시계열, 쿠폰 매출과 상관 분석용).
 - DoD: `supabase db reset` 성공. 기존 pgTAP 3종 green(기존 플로우 무영향 증명). 01-db-schema.sql 동기화.
+- [x] 결과(2026-07-09): 마이그레이션 2개(20260709000001 SUSPENDED enum 분리 / 20260709000002 쿠폰 스키마
+  전체 — enum 2종·테이블 3·뷰 3·트리거·RLS·GRANT). db reset 18개 적용 성공, 기존 pgTAP 25/25 무변경
+  green(순수 추가 증명), append-only 트리거·RLS 차단·잔액/집계 뷰 psql 스팟 검증. coupon_ledger Realtime
+  publication은 선례(T7/T10 — 소비 태스크에서 추가)대로 F5로 이월.
 
 ### F3a. 【DB】 상태머신·RPC 개정 + pgTAP 전면 개정 — 피벗의 심장 (DB 계층)
 - 작업:
