@@ -232,6 +232,18 @@ export const supplierSignupInputSchema = z.object({
 });
 export type SupplierSignupInput = z.infer<typeof supplierSignupInputSchema>;
 
+// 06-enhancement-plan.md E4 — 가입 후 매장정보 수정(/my/edit). 사업자등록번호(bizNumber)는
+// 정책상 변경 불가라 제외한다. 가입과 동일하게 클라이언트가 anon key로 본인 profiles/
+// supplier_profiles를 update(RLS p_profiles_update/p_sup_self)하며, role/phone은 수정 대상이 아니다.
+export const supplierProfileUpdateSchema = z.object({
+  displayName: z.string().min(1),
+  storeName: z.string().min(1),
+  address: z.string().min(1),
+  lat: latSchema,
+  lng: lngSchema,
+});
+export type SupplierProfileUpdateInput = z.infer<typeof supplierProfileUpdateSchema>;
+
 // ===== notify-broadcast (admin) =====
 // 03-frontend.md apps/admin "/notify": "전체/역할별 푸시 발송 폼". 02-api.md에는 없던
 // 신규 엔드포인트 — T11 작업 지시사항이 명시한 "notifications 테이블 insert는 되고 실제
