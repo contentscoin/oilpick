@@ -1,4 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import type { CouponLedgerEntryType, LedgerEntry } from "@oilpick/ui";
 import { supabase } from "../lib/supabaseClient";
 import { queryKeys } from "../lib/queryClient";
 
@@ -29,6 +31,81 @@ export function useCouponPrice() {
         .maybeSingle();
       if (error) throw error;
       return data?.unit_price ?? undefined;
+    },
+  });
+}
+
+/**
+ * R 콜 홈 쿠폰 잔액 카드(07 F5-①). v_coupon_balance 조회 + coupon_ledger INSERT Realtime 구독.
+ * usePointBalance(useEarnings.ts) 패턴 미러 — CHARGE/CONSUME/REFUND/ADJUST insert 시 잔액·내역
+ * 쿼리를 무효화해 폴링 없이 반영한다(publication은 20260709000006). 잔액 뷰는 원장 없으면 행이
+ * 없어 balance 0으로 폴백(v_coupon_balance = group by rider_id).
+ */
+export function useCouponBalance(riderId: string | undefined) {
+  const queryClient = useQueryClient();
+
+  const query = useQuery({
+    queryKey: queryKeys.couponBalance(riderId ?? ""),
+    enabled: Boolean(riderId),
+    queryFn: async (): Promise<number> => {
+      if (!riderId) return 0;
+      const { data, error } = await supabase
+        .from("v_coupon_balance")
+        .select("balance")
+        .eq("rider_id", riderId)
+        .maybeSingle();
+      if (error) throw error;
+      return data?.balance ?? 0;
+    },
+  });
+
+  useEffect(() => {
+    if (!riderId) return;
+    const channel = supabase
+      .channel(`coupon_ledger_self_${riderId}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "coupon_ledger", filter: `rider_id=eq.${riderId}` },
+        () => {
+          queryClient.invalidateQueries({ queryKey: queryKeys.couponBalance(riderId) });
+          queryClient.invalidateQueries({ queryKey: queryKeys.couponLedger(riderId) });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [riderId, queryClient]);
+
+  return query;
+}
+
+/**
+ * R 쿠폰 내역 화면(07 F5-③) 데이터. coupon_ledger 본인 행(RLS p_coupon_ledger_read)을
+ * LedgerEntry[]로 매핑 — LedgerList variant="coupon"이 CHARGE/CONSUME/REFUND/ADJUST 라벨 +
+ * 장 단위로 렌더한다. qty(부호 있는 장수)를 amount 필드로 넘긴다.
+ */
+export function useCouponLedger(riderId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.couponLedger(riderId ?? ""),
+    enabled: Boolean(riderId),
+    queryFn: async (): Promise<LedgerEntry[]> => {
+      if (!riderId) return [];
+      const { data, error } = await supabase
+        .from("coupon_ledger")
+        .select("id, entry_type, qty, memo, created_at")
+        .eq("rider_id", riderId)
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      return (data ?? []).map((row) => ({
+        id: row.id,
+        entryType: row.entry_type as CouponLedgerEntryType,
+        amount: row.qty,
+        createdAt: row.created_at,
+        memo: row.memo ?? undefined,
+      }));
     },
   });
 }

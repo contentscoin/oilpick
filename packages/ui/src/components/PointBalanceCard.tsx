@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import type { ButtonHTMLAttributes, KeyboardEvent, ReactNode } from "react";
 import { formatPoint } from "@oilpick/core";
 import { colors, elevation, gradient, radius } from "../tokens";
 
@@ -11,16 +11,28 @@ import { colors, elevation, gradient, radius } from "../tokens";
  * public props(available/held/className)는 그대로 유지하고, 다음을 선택적으로 추가:
  * - heldLabel: rider 정산은 "배송완료 시 확정"으로 문구 대체(기본은 supplier "지급 확정 대기").
  * - action: 카드 하단 CTA 슬롯(예: [출금 신청]). 지정 시에만 렌더.
+ * - [07 F5] label/formatValue: 쿠폰 잔액 히어로로 일반화 재사용(03-frontend.md "PointBalanceCard는
+ *   쿠폰 잔액으로 일반화 재사용"). label="보유 수거쿠폰", formatValue={(n)=>`${n}장`}로 쓰면 된다.
+ *   기본값(보유 포인트/formatPoint)이라 기존 사용처는 무영향.
+ * - [07 F5] onClick: 카드 전체 탭(예: 쿠폰 잔액 카드 → 쿠폰 내역). 지정 시 role=button + 키보드
+ *   지원. 내부 action 버튼은 중첩 버튼(invalid DOM)을 피하려 div+role로 두고, action의 onClick에서
+ *   stopPropagation을 호출해 카드 탭과 분리한다(호출부 책임).
  */
 export interface PointBalanceCardProps {
-  /** 즉시 출금 가능한 잔액(P). v_point_balance.available. */
+  /** 즉시 사용 가능한 잔액(포인트=P, 쿠폰=장). v_point_balance.available / v_coupon_balance.balance. */
   available: number;
-  /** 지급 확정 대기 중인 보류 포인트(P). v_point_balance.held. */
+  /** 지급 확정 대기 중인 보류 포인트(P). v_point_balance.held. 쿠폰은 미지정(0). */
   held?: number;
   /** held pill의 접두 문구. 기본 "지급 확정 대기"(supplier). rider는 "배송완료 시 확정" 등. */
   heldLabel?: string;
-  /** 카드 하단 CTA 슬롯(예: 출금 신청 버튼). */
+  /** 상단 라벨. 기본 "보유 포인트". 07 F5 쿠폰은 "보유 수거쿠폰". */
+  label?: string;
+  /** 잔액 포맷터. 기본 formatPoint(P). 07 F5 쿠폰은 `(n)=>`${n}장``. */
+  formatValue?: (value: number) => string;
+  /** 카드 하단 CTA 슬롯(예: 출금 신청/충전하기 버튼). */
   action?: ReactNode;
+  /** 카드 전체 탭 핸들러(예: 쿠폰 내역으로 이동). 지정 시 카드가 버튼 역할을 한다. */
+  onClick?: () => void;
   className?: string;
 }
 
@@ -28,23 +40,41 @@ export function PointBalanceCard({
   available,
   held = 0,
   heldLabel = "지급 확정 대기",
+  label = "보유 포인트",
+  formatValue = formatPoint,
   action,
+  onClick,
   className,
 }: PointBalanceCardProps) {
   return (
     <div
       className={className}
       data-testid="point-balance-card"
+      {...(onClick
+        ? {
+            role: "button",
+            tabIndex: 0,
+            onClick,
+            onKeyDown: (e: KeyboardEvent) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onClick();
+              }
+            },
+          }
+        : {})}
       style={{
         borderRadius: radius.hero,
         padding: 20,
         background: gradient.point,
         boxShadow: elevation.raised,
         color: "#fff",
+        cursor: onClick ? "pointer" : "default",
+        textAlign: "left",
       }}
     >
       <p style={{ margin: 0, fontSize: 14, fontWeight: 500, color: "rgba(255,255,255,0.8)" }}>
-        보유 포인트
+        {label}
       </p>
       <p
         className="oilpick-tabular-nums"
@@ -57,7 +87,7 @@ export function PointBalanceCard({
           color: "#fff",
         }}
       >
-        {formatPoint(available)}
+        {formatValue(available)}
       </p>
       {held > 0 && (
         <span

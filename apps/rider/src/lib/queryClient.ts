@@ -30,5 +30,6 @@ export const queryKeys = {
   notifications: (userId: string) => ["notifications", userId] as const,
   couponPrice: () => ["couponPrice", "latest"] as const,
   couponBalance: (riderId: string) => ["couponBalance", riderId] as const,
+  couponLedger: (riderId: string) => ["couponLedger", riderId] as const,
   pendingPurchases: (riderId: string) => ["couponPurchases", "pending", riderId] as const,
 };

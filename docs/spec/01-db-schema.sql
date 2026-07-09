@@ -419,8 +419,8 @@ create policy p_noti_read on notifications for select using (user_id = (select a
 create policy p_noti_update on notifications for update using (user_id = (select auth.uid())); -- read_at 갱신
 
 -- Storage 버킷: order-photos (관련자 read / rider write), rider-docs (본인 write, admin read)
--- Realtime publication: pickup_orders, notifications, price_ticks, rider_profiles, point_ledger 활성화
--- [07 F2] coupon_ledger도 추가(apps/rider 쿠폰 잔액 카드가 CHARGE/CONSUME/REFUND insert를 폴링 없이 반영 — 07 F5. RLS p_coupon_ledger_read 적용, 본인 행만 전달)
+-- Realtime publication: pickup_orders, notifications, price_ticks, rider_profiles, point_ledger, coupon_ledger 활성화
+-- [07 F5] coupon_ledger 추가(20260709000006 — apps/rider 쿠폰 잔액 카드/내역이 CHARGE/CONSUME/REFUND/ADJUST insert를 폴링 없이 반영. RLS p_coupon_ledger_read 적용, 본인 행만 전달)
 -- (price_ticks는 03-frontend.md U3 "PriceCard(최신 tick, Realtime 구독)"에 필요 — T7에서 추가.
 --  rider_profiles는 apps/rider R1 "PENDING 대기 화면(Realtime으로 verify_status 변경 감지)"에
 --  필요 — T9에서 추가. point_ledger는 apps/user U11 지갑·apps/rider R7/R8 정산의

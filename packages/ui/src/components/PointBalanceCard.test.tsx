@@ -1,5 +1,5 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import { PointBalanceCard, PointHeroAction } from "./PointBalanceCard";
 
 describe("PointBalanceCard", () => {
@@ -24,5 +24,28 @@ describe("PointBalanceCard", () => {
       <PointBalanceCard available={12345} action={<PointHeroAction>출금 신청</PointHeroAction>} />,
     );
     expect(screen.getByTestId("point-hero-action")).toHaveTextContent("출금 신청");
+  });
+
+  it("[07 F5] generalizes to coupon balance via label/formatValue", () => {
+    render(
+      <PointBalanceCard
+        available={12}
+        label="보유 수거쿠폰"
+        formatValue={(n) => `${n}장`}
+      />,
+    );
+    expect(screen.getByText("보유 수거쿠폰")).toBeInTheDocument();
+    expect(screen.getByText("12장")).toBeInTheDocument();
+    // held 미지정이므로 보조 pill 없음.
+    expect(screen.queryByTestId("point-balance-held")).not.toBeInTheDocument();
+  });
+
+  it("[07 F5] whole-card tap fires onClick (role=button)", () => {
+    const onClick = vi.fn();
+    render(<PointBalanceCard available={5} formatValue={(n) => `${n}장`} onClick={onClick} />);
+    const card = screen.getByTestId("point-balance-card");
+    expect(card).toHaveAttribute("role", "button");
+    fireEvent.click(card);
+    expect(onClick).toHaveBeenCalledOnce();
   });
 });

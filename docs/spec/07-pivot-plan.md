@@ -318,6 +318,19 @@ REQUESTED→CANCELLED: supplier 자진 or 시스템 30분 무수락. 쿠폰 미�
   (packages/ui CallCard.tsx:87-94, CallDetailPage.tsx:130-133). ④ 수락 실패 INSUFFICIENT_COUPON 시 토스트 +
   [충전하러 가기] CTA(CallDetailPage.tsx:26-40 기존 에러 패턴 확장). ⑤ 수락 전 잔액 사전 체크 UI(fail-fast).
 - DoD: 잔액 0 → 수락 버튼에 충전 유도. 충전 → 수락 → 잔액 감소 실시간 반영. 훅/렌더 vitest.
+- [x] 결과(2026-07-09): 마이그레이션 20260709000006(coupon_ledger Realtime publication — point_ledger
+  선례 복제) + 01 Realtime 주석 동기화. 훅: useCouponBalance(v_coupon_balance 조회 + coupon_ledger
+  INSERT 구독→잔액·내역 무효화, usePointBalance 미러)·useCouponLedger(coupon_ledger→LedgerEntry, qty→amount).
+  【ui】 일반화: LedgerList `variant="coupon"`(CHARGE 충전/CONSUME 콜 배정/REFUND 환급/ADJUST 조정 + 장 단위,
+  기본 point 무영향)·PointBalanceCard `label`/`formatValue`/`onClick`(쿠폰 잔액 히어로 + 카드 탭)·CallCard
+  `pickupFee`→`estimatedCash`+`couponCost`(쿠폰 N장 소진 칩, 레거시 null 생략). 【R】 CallHomePage 상단
+  쿠폰 잔액 카드([충전하기]→/coupons/purchase, 카드 탭→/coupons) + CallCard 매입액/쿠폰 표기. 신규
+  `/coupons` 쿠폰 내역 화면(EmptyState). CallDetailPage: 수거비 히어로→"예상 매입 지급액"(requested_kg×시세)+
+  소진 쿠폰, 수락 게이트(잔액<coupon_cost 사전 fail-fast CTA + 409 INSUFFICIENT_COUPON 토스트+CTA, edgeFunction
+  실패에 code 노출). db reset 22개 + pgTAP 5파일 86/86 green(publication 무영향), lint·turbo test
+  --concurrency=1(rider 33·ui 신규 포함)·build FULL green. CallCard 회귀: DevUiPage 사용처 갱신, CallCard.test
+  재작성(레거시 null 생략 포함). 보류: 실 브라우저 E2E(잔액 감소 실시간 반영은 useCouponBalance 훅 단위
+  테스트로 대체 — Realtime 서비스 컨테이너 stopped).
 
 ### F6. 【R】 운행 플로우 개편 — 현금 매입
 - 작업: ① ArrivedPanel(ActiveRunPage.tsx:228-392): "예상 지급 포인트" → **"점주에게 지급할 현금 ₩N"**

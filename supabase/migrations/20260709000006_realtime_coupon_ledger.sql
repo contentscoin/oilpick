@@ -1,0 +1,14 @@
+-- 07 F5: apps/rider 콜 홈의 쿠폰 잔액 카드(v_coupon_balance)와 쿠폰 내역 화면(LedgerList)이
+-- 충전(CHARGE)·콜 배정 소진(CONSUME)·귀책 환급(REFUND)·관리자 조정(ADJUST)을 폴링 없이
+-- 반영하려면 coupon_ledger의 INSERT를 Realtime으로 구독해야 한다(03-frontend.md 공통 규칙:
+-- "Realtime 이벤트 수신 시 해당 queryKey invalidate"). F2에서 선례(T7 price_ticks·T9
+-- rider_profiles·T10 point_ledger — 20260704000009/000011/000013)대로 "소비 태스크에서
+-- publication 추가"로 이월했고, 소비 태스크인 F5에서 활성화한다.
+--
+-- useCouponBalance(useCoupons.ts)가 이미 `coupon_ledger` INSERT를 구독하는 Realtime 채널을
+-- 열지만, 이 테이블이 supabase_realtime publication에 없으면 아무 이벤트도 오지 않는다
+-- (20260704000013_realtime_point_ledger.sql에서 동일 공백을 실측·수정한 선례). 20260709000002_
+-- coupon_schema.sql에서 정의한 RLS(p_coupon_ledger_read: rider 본인 또는 admin)가 그대로
+-- 적용되어 Realtime도 본인 행 변경만 전달한다(Supabase Realtime의 postgres_changes는 RLS 준수).
+-- 새로운 설계 판단이 아니라 스펙이 이미 요구하는 Realtime invalidate 패턴을 동작시키는 보완이다.
+alter publication supabase_realtime add table coupon_ledger;

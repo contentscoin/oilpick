@@ -1,9 +1,20 @@
 import { useNavigate } from "react-router-dom";
-import { CallCard, EmptyState, colors, elevation, gray, radius, surface } from "@oilpick/ui";
-import { formatPoint } from "@oilpick/core";
+import {
+  CallCard,
+  EmptyState,
+  PointBalanceCard,
+  PointHeroAction,
+  colors,
+  elevation,
+  gray,
+  radius,
+  surface,
+} from "@oilpick/ui";
+import { estimateCash, formatPoint } from "@oilpick/core";
 import { useSession } from "../hooks/useSession";
 import { useRiderProfile } from "../hooks/useRiderProfile";
 import { useOpenCalls } from "../hooks/useOpenCalls";
+import { useCouponBalance } from "../hooks/useCoupons";
 import { useTodayStats } from "../hooks/useTodayStats";
 import { useGeolocation } from "../hooks/useGeolocation";
 import { distanceKm } from "../lib/geo";
@@ -20,6 +31,7 @@ export function CallHomePage() {
 
   const { data: rider } = useRiderProfile(userId);
   const { data: stats } = useTodayStats(userId);
+  const { data: couponBalance } = useCouponBalance(userId);
   const position = useGeolocation(true);
   const { data: calls, isLoading } = useOpenCalls(Boolean(rider) && rider?.verifyStatus === "APPROVED");
 
@@ -79,6 +91,25 @@ export function CallHomePage() {
         </button>
       </div>
 
+      {/* 07 F5-①: 쿠폰 잔액 히어로(v_coupon_balance + Realtime). [충전하기]→결제 화면, 카드 탭→쿠폰 내역. */}
+      <PointBalanceCard
+        available={couponBalance ?? 0}
+        label="보유 수거쿠폰"
+        formatValue={(n) => `${n}장`}
+        onClick={() => navigate("/coupons")}
+        action={
+          <PointHeroAction
+            data-testid="coupon-charge-button"
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate("/coupons/purchase");
+            }}
+          >
+            충전하기
+          </PointHeroAction>
+        }
+      />
+
       {/* 05-design-upgrade.md "라이더 콜홈 스탯": 오늘 실적을 2개 스탯 카드로 나란히. */}
       <section data-testid="today-stats" style={{ display: "flex", gap: 12 }}>
         <div
@@ -135,7 +166,8 @@ export function CallHomePage() {
               data-testid={`call-card-${call.id}`}
               distanceKm={position ? distanceKm(position, { lat: call.pickupLat, lng: call.pickupLng }) : 0}
               estimatedKg={call.requestedKg}
-              pickupFee={call.snapshotRiderFee}
+              estimatedCash={estimateCash(call.requestedKg, call.snapshotPricePerKg)}
+              couponCost={call.couponCost}
               address={call.pickupAddress}
               onClick={() => navigate(`/calls/${call.id}`)}
             />

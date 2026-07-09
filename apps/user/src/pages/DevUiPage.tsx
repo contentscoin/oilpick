@@ -92,7 +92,8 @@ export function DevUiPage() {
         <CallCard
           distanceKm={3.2}
           estimatedKg={45}
-          pickupFee={5000}
+          estimatedCash={72000}
+          couponCost={3}
           address="서울시 강남구 테헤란로 123"
           onClick={() => {}}
         />
