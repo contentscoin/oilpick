@@ -228,6 +228,24 @@ from coupon_ledger group by rider_id;
 
 -- 집계 뷰 2종(v_coupon_sales_daily·v_pickup_stats_daily)은 is_admin() 함수 정의 이후로 이동해 정의(아래 RLS 절 참조).
 
+-- ===== 쿠폰 원장 RPC [07 F3a] — 실 정의는 supabase/migrations/20260709000003_rpc_coupon.sql =====
+-- (상태머신·원장 RPC 본문은 이 스키마 파일이 아니라 migrations에 산다 — 기존 fn_transition_order/
+--  fn_post_ledger와 동일 관례. 여기엔 계약 시그니처만 기록해 단일 진실을 유지한다.)
+-- 둘 다 SECURITY DEFINER + search_path=public + revoke all/grant service_role(절대 규칙 1: 쿠폰 원장
+-- insert는 service_role RPC에만). 잔액 음수 방지는 rider 단위 FOR UPDATE 직렬화 후 재계산.
+--   fn_charge_coupon(p_rider_id uuid, p_qty int, p_unit_price int default null,
+--                    p_purchase_id uuid default null, p_memo text default null,
+--                    p_created_by uuid default null) returns coupon_ledger
+--     - purchase_id not null → CHARGE(+qty, unit_price 스냅샷 필수, unique(purchase_id,entry_type) 멱등)
+--     - purchase_id null     → ADJUST(±qty, admin 수동). 음수 시 잔액 부족이면 raise 'INSUFFICIENT_COUPON'
+--   fn_consume_coupon(p_rider_id uuid, p_order_id uuid, p_qty int) returns coupon_ledger
+--     - CONSUME(-qty, order_id). 잔액 < qty → raise 'INSUFFICIENT_COUPON'.
+--       unique(order_id,'CONSUME',rider_id) 멱등(ACCEPT 재시도 안전).
+-- fn_transition_order 시그니처 개정(20260709000004_rpc_transition_pivot.sql): 6번째 인자
+--   p_fault text default null 추가(admin CANCEL 귀책, 'SUPPLIER'|'RIDER'|'SYSTEM'). ACCEPT는
+--   coupon_cost not null이면 fn_consume_coupon 호출, CONFIRM_MEASURE/FORCE_COMPLETE는 COMPLETED 직행
+--   (cash_paid_amount+completed_at), RESOLVE_DISPUTE는 ARRIVED 복귀(final_kg만 확정). 신 액션 FORCE_COMPLETE.
+
 -- ===== [07 F11] 라이더 정지·서류 필수화·인계처 (예약 — 전체 DDL은 F11에서) =====
 -- verify_status에 'SUSPENDED' 추가는 위 enum 참조(07 F2). rider_profiles 추가 예정:
 --   recycler_name text, recycler_contact text  -- 인계 재활용업체(승인 조건 필드, D5 전제)

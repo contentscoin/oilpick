@@ -239,6 +239,15 @@ REQUESTED→CANCELLED: supplier 자진 or 시스템 30분 무수락. 쿠폰 미�
   내부에 FOR UPDATE+잔액 재계산 경로 존재·부족 예외"를 assert하고, ⓑ `scripts/`에 2-커넥션 psql 동시 수락
   스크립트를 두고 실측 결과를 태스크 완료 기록에 남긴다.
 - DoD: pgTAP 전체 green(신모델 케이스 + 레거시 회귀 포함). 2-커넥션 동시성 실측 기록.
+- [x] 결과(2026-07-09): 마이그레이션 2개(20260709000003 fn_charge_coupon/fn_consume_coupon — revoke all+
+  service_role GRANT, rider FOR UPDATE 직렬화, CHARGE 부분유니크 멱등 / 20260709000004 fn_transition_order
+  DROP+재생성 6-인자(p_fault 추가): ACCEPT 쿠폰 CONSUME, CONFIRM_MEASURE·FORCE_COMPLETE COMPLETED 직행,
+  RESOLVE_DISPUTE ARRIVED 복귀, admin CANCEL 귀책 환급, DELIVER 레거시 보존). db reset 20개 적용 성공.
+  pgTAP 전면 재작성 4파일 62/62 green(01 쿠폰 원장 불변식 15, 02 상태머신·귀책·부족 롤백 32, 03 쿠폰
+  RPC EXECUTE·append-only 9, 04 레거시 DELIVER 회귀 6). 동시성 실측(scripts/concurrency-coupon-consume.sh):
+  fn_consume_coupon 경합 → 1 성공+1 INSUFFICIENT_COUPON(잔액 0, CONSUME 1행), ACCEPT 경합 → 1 성공+
+  1 23505(라이더 단일활성 유니크가 쿠폰 소진 전 2중 차단). lint/test/build FULL TURBO green(TS 무변경).
+  01-db-schema.sql에 쿠폰 RPC 시그니처·fn_transition_order 개정 계약 주석 동기화.
 
 ### F3b. 【API】【core】 Edge Function·코어 개정
 - 작업:
@@ -266,7 +275,9 @@ REQUESTED→CANCELLED: supplier 자진 or 시스템 30분 무수락. 쿠폰 미�
   성공 시 "쿠폰 N장 충전 완료" 알림 insert. ③ **orphan/미완료 대사**: 결제 화면 재진입 시 PENDING 건
   [결제 확인 재시도] 버튼(멱등 재호출), PENDING 24h TTL→EXPIRED(admin 대사 목록 노출). ④ 환불:
   admin 전용 `coupon-refund` — 1-4 환불 산정 규칙(구매 건 단위, unit_price 스냅샷, 미사용 잔액 검증,
-  상태 기반 멱등, ADJUST(-qty, purchase_id)). ⑤ 라이더앱 결제 화면: 토스 결제위젯(클라이언트 키), 수량
+  상태 기반 멱등, ADJUST(-qty, purchase_id)). **전용 RPC `fn_refund_purchase` 신설 필수** —
+  fn_charge_coupon은 purchase_id 유무로 CHARGE/ADJUST를 라우팅하므로 "purchase_id 있는 ADJUST"를 기록할 수
+  없다(F3a 보고). fn 내부에서 coupon_purchases FOR UPDATE + rider 직렬화 + 원장 insert를 원자 처리. ⑤ 라이더앱 결제 화면: 토스 결제위젯(클라이언트 키), 수량
   선택(10/30/50장 프리셋+직접 입력), 성공/실패/중단 리다이렉트 처리. ⑥ 시크릿 키는 supabase secrets —
   클라이언트 번들 유입 금지 검증(grep).
 - 주의: 가맹 심사 완료 전 로컬은 토스 테스트 키로 개발 가능. 심사는 즉시 착수(외부 의존 항목).

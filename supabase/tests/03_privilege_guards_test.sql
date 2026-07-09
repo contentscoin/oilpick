@@ -4,7 +4,7 @@
 create extension if not exists pgtap with schema extensions;
 
 begin;
-select plan(5);
+select plan(9);
 
 -- ── 픽스처(postgres = 트리거 예외) ────────────────────────────────────────
 insert into auth.users (id, instance_id, aud, role, email, created_at, updated_at) values
@@ -57,6 +57,21 @@ update profiles set fcm_token='tok-abc' where id='11111111-1111-1111-1111-111111
 reset role;
 select is((select fcm_token from profiles where id='11111111-1111-1111-1111-111111111111'),
           'tok-abc', '정상 컬럼(fcm_token) 업데이트는 유지');
+
+-- ── [07 F3a] 쿠폰 RPC EXECUTE 권한: service_role만 허용, 비 service_role 거부 ──────────
+-- (revoke all from public + grant service_role. 절대 규칙 1 — 쿠폰 원장 쓰기는 service_role RPC만.)
+select ok(not has_function_privilege('authenticated','public.fn_charge_coupon(uuid, int, int, uuid, text, uuid)','EXECUTE'),
+          'authenticated는 fn_charge_coupon EXECUTE 불가');
+select ok(not has_function_privilege('authenticated','public.fn_consume_coupon(uuid, uuid, int)','EXECUTE'),
+          'authenticated는 fn_consume_coupon EXECUTE 불가');
+select ok(has_function_privilege('service_role','public.fn_charge_coupon(uuid, int, int, uuid, text, uuid)','EXECUTE'),
+          'service_role(Edge Function)은 fn_charge_coupon EXECUTE 가능');
+
+-- ── [07 F3a] coupon_ledger append-only: UPDATE 차단 ──────────────────────────────────
+insert into coupon_ledger (rider_id, entry_type, qty) values ('22222222-2222-2222-2222-222222222222','ADJUST',5);
+select throws_ok(
+  $$ update coupon_ledger set qty = 0 where rider_id='22222222-2222-2222-2222-222222222222' $$,
+  'coupon_ledger is append-only', 'coupon_ledger UPDATE는 append-only 트리거로 차단');
 
 select * from finish();
 rollback;
