@@ -97,6 +97,15 @@ describe("ActiveRunPage — DISPUTED 안내(07 F6-③)", () => {
     expect(panel).toHaveTextContent("40.0kg");
     expect(panel).toHaveTextContent("2장");
   });
+
+  it("현금 지급 분쟁 CS 진입점: CASH_DISPUTE + orderId 프리셋으로 이동(07 F12 ③)", () => {
+    renderRun(makeRun({ id: "o-42", status: "DISPUTED", measuredKg: 40 }));
+    const entry = screen.getByTestId("disputed-cs-entry");
+    expect(entry).toHaveTextContent("현금 지급 문제로 문의하기");
+    // /support?category=CASH_DISPUTE&orderId=o-42 로 navigate (라우트가 없으면 화면 전환만 확인).
+    fireEvent.click(entry);
+    expect(screen.queryByTestId("run-disputed-panel")).not.toBeInTheDocument();
+  });
 });
 
 describe("ActiveRunPage — COMPLETED 요약(07 F6-④)", () => {

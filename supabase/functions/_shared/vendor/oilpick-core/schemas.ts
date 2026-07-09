@@ -1,5 +1,5 @@
 // @ts-nocheck — 자동 생성 vendor 산출물(빌드 시 타입 정보 소실). 원본은 packages/core/src/schemas.ts.
-// ../../../../packages/core/src/schemas.ts
+// packages/core/src/schemas.ts
 import { z } from "zod";
 function okResponseSchema(dataSchema) {
   return z.object({
@@ -216,6 +216,23 @@ var notifyBroadcastInputSchema = z.object({
 var notifyBroadcastOutputSchema = z.object({
   recipientCount: z.number().int().nonnegative()
 });
+var csCategorySchema = z.enum(["ORDER", "CASH_DISPUTE", "COUPON_PAYMENT", "ACCOUNT", "ETC"]);
+var csStatusSchema = z.enum(["OPEN", "IN_PROGRESS", "RESOLVED"]);
+var csTicketInputSchema = z.object({
+  category: csCategorySchema,
+  title: z.string().min(1).max(100),
+  body: z.string().min(1).max(2e3),
+  orderId: uuidSchema.optional()
+});
+var csReplyInputSchema = z.object({
+  ticketId: uuidSchema,
+  reply: z.string().min(1).max(2e3),
+  status: z.enum(["IN_PROGRESS", "RESOLVED"])
+});
+var csReplyOutputSchema = z.object({
+  ticketId: uuidSchema,
+  status: csStatusSchema
+});
 export {
   arrivePayloadSchema,
   cancelPayloadSchema,
@@ -230,6 +247,11 @@ export {
   couponPurchaseIntentOutputSchema,
   couponRefundInputSchema,
   couponRefundOutputSchema,
+  csCategorySchema,
+  csReplyInputSchema,
+  csReplyOutputSchema,
+  csStatusSchema,
+  csTicketInputSchema,
   deliverPayloadSchema,
   disputePayloadSchema,
   errorResponseSchema,

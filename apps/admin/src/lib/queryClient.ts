@@ -39,4 +39,5 @@ export const queryKeys = {
   couponLedgerAudit: (limit: number) => ["admin", "sales", "couponLedger", limit] as const,
   couponPurchases: (statusFilter: string) => ["admin", "sales", "couponPurchases", statusFilter] as const,
   depots: () => ["admin", "depots"] as const,
+  csTickets: (statusFilter: string) => ["admin", "cs", statusFilter] as const,
 };

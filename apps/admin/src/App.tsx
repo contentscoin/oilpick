@@ -29,6 +29,7 @@ const DepotsPage = lazy(() =>
 const NotifyPage = lazy(() =>
   import("./pages/NotifyPage").then((m) => ({ default: m.NotifyPage })),
 );
+const CsPage = lazy(() => import("./pages/CsPage").then((m) => ({ default: m.CsPage })));
 
 /**
  * 03-frontend.md apps/admin 라우팅. "admin 로그인: 이메일/비밀번호. role≠admin이면 접근 차단"
@@ -85,6 +86,14 @@ export function App() {
             element={
               <Protected>
                 <SettlementPage />
+              </Protected>
+            }
+          />
+          <Route
+            path="/cs"
+            element={
+              <Protected>
+                <CsPage />
               </Protected>
             }
           />

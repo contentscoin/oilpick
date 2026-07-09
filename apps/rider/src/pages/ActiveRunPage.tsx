@@ -87,7 +87,9 @@ export function ActiveRunPage() {
           snapshotPricePerKg={run.snapshotPricePerKg}
         />
       )}
-      {run.status === "DISPUTED" && <DisputedPanel measuredKg={run.measuredKg} photoUrls={run.photoUrls} />}
+      {run.status === "DISPUTED" && (
+        <DisputedPanel orderId={run.id} measuredKg={run.measuredKg} photoUrls={run.photoUrls} />
+      )}
       {run.status === "COMPLETED" && (
         <CompletedPanel cashPaidAmount={run.cashPaidAmount} finalKg={run.finalKg} />
       )}
@@ -454,7 +456,16 @@ function ArrivedPanel({
  * 제출한 계량/사진 요약을 함께 보여 라이더가 맥락을 잃지 않게 한다. 중재가 끝나면(RESOLVE_DISPUTE
  * → ARRIVED 복귀) ArrivedPanel의 "중재 확정" 패널로 자연 전환된다.
  */
-function DisputedPanel({ measuredKg, photoUrls }: { measuredKg: number | null; photoUrls: string[] }) {
+function DisputedPanel({
+  orderId,
+  measuredKg,
+  photoUrls,
+}: {
+  orderId: string;
+  measuredKg: number | null;
+  photoUrls: string[];
+}) {
+  const navigate = useNavigate();
   return (
     <Card testId="run-disputed-panel" style={{ gap: 12 }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -485,6 +496,25 @@ function DisputedPanel({ measuredKg, photoUrls }: { measuredKg: number | null; p
           </span>
         </div>
       </div>
+      {/* 07 F12 ③: 현금 지급 후 분쟁("사장님이 확인 안 해줘요" 등)은 상태머신 밖 CS(CASH_DISPUTE)로.
+          이 주문을 프리셋해 고객센터 문의를 바로 연다(07 §1-3). */}
+      <button
+        type="button"
+        data-testid="disputed-cs-entry"
+        onClick={() => navigate(`/support?category=CASH_DISPUTE&orderId=${orderId}`)}
+        style={{
+          minHeight: 44,
+          borderRadius: radius.button,
+          border: `1.5px solid ${colors.primary.DEFAULT}`,
+          background: "none",
+          color: colors.primary.DEFAULT,
+          fontSize: 14,
+          fontWeight: 700,
+          cursor: "pointer",
+        }}
+      >
+        현금 지급 문제로 문의하기
+      </button>
     </Card>
   );
 }

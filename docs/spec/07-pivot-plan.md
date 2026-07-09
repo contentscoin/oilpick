@@ -34,11 +34,11 @@
 | D6 | admin 취소·강제완결 범위 | ACCEPTED뿐 아니라 **ARRIVED/DISPUTED에서도 admin CANCEL(+fault) 허용**. 계량 제출 후 점주가 확인을 거부하는 교착은 **admin FORCE_COMPLETE**(제출/중재 kg 기반, 사유 필수)로 해소 (기획 확정 — F3a CANCEL 분기 설계에 선행 필요해 즉시 결정) |
 | — | 데모 라이더 선지급 | 게이트 활성 전 데모 라이더 2개에 ADJUST **20장** 선지급(memo 기록, 추후 조정 가능) (확정) |
 
-> ⚠️ **D5 (CEO 재확인 필요)**: 지시문의 "수거한 기름은 라이더가 처리함"을 **"허가 재활용업체 인계(매각)"로
-> 재정의**했다. 문자 그대로의 자체 처리(정제·처분)는 폐기물관리법상 무허가 폐기물처리업(5년 이하 징역/5천만원
+> ✅ **D5 (CEO 승인 — 2026-07-09)**: 지시문의 "수거한 기름은 라이더가 처리함"을 **"허가 재활용업체 인계(매각)"로
+> 재정의**했고 CEO가 승인했다. F11(신고증 필수화+인계처 등록) 진행 확정, 법률 서면 질의는 병행 발주. 문자 그대로의 자체 처리(정제·처분)는 폐기물관리법상 무허가 폐기물처리업(5년 이하 징역/5천만원
 > 이하 벌금)이라 개인 라이더에게 불가능. 라이더의 수거·운반 자체는 폐기물관리법 **제46조 폐기물처리 신고**
 > (허가 아님, 처리기간 ~14일)로 합법화 가능 — 단 신고 완료 라이더에게만 콜을 열어야 한다(F11).
-> 이 재정의에 이견 있으면 법률 검토 완료 전까지 F11 착수 금지.
+> (원 경고문: 이견 시 법률 검토 완료 전까지 F11 착수 금지 — 승인으로 해소.)
 
 ### 프로덕션 전제 (마이그레이션 단순화 근거)
 현재 프로덕션(dbvgxuevhmyoprafarnh + Vercel 3앱)은 **데모 계정만 존재, 실사용자 0명** (실 SMS 미연동,
@@ -483,6 +483,7 @@ REQUESTED→CANCELLED: supplier 자진 or 시스템 30분 무수락. 쿠폰 미�
   CASH_DISPUTE 바로 접수 진입점. ④ 쿠폰 환불 요청은 category=COUPON_PAYMENT로 접수 → F10-③ 환불 처리와
   연결. ⑤ **ARRIVED 24h 초과 체류 주문을 OrdersPage에서 하이라이트**(교착 조기 감지 — 1-3).
 - DoD: 문의 접수→admin 답변→알림 수신→상태 RESOLVED E2E. RLS(타인 티켓 불가시) 테스트. 24h 하이라이트 렌더 테스트.
+- [x] 결과(2026-07-09): ① 20260709000007_cs_tickets.sql(cs_category/cs_status enum + cs_tickets + fn_current_role helper + RLS p_cs_read/p_cs_insert(author·role 위조 차단)/p_cs_admin_update + 컬럼 GRANT로 답변·상태만) + 01 마커 실 DDL 교체. ② admin /cs(CsPage+useCsAdmin, AdminShell "CS" 내비, 답변=cs-reply Edge Function이 admin_reply+status+resolved_at+sendPush 원자 처리, CASH_DISPUTE 처치 안내+주문 드로어 딥링크 /orders?order=, COUPON_PAYMENT→/settlement) + OrdersPage 24h 체류 하이라이트(order_events ARRIVED 진입시각 기준, isArrivedStale). ③ user·rider /support(문의 폼+내역, MyPage placeholder 교체, csTicketInputSchema) + rider DISPUTED 패널 CASH_DISPUTE 프리셋 진입점. ④ COUPON_PAYMENT→SettlementPage 환불 연결. 검증: pgTAP 95개(신규 cs_tickets RLS 9) green, lint+test(모든 앱)+build green. 알림 경로: admin 클라이언트 notifications 직접 insert 불가(RLS insert 정책 없음 확인) → cs-reply Edge Function이 기존 sendPush 재사용.
 
 ### F13. 【정리】 레거시 일몰
 - 작업: ① withdraw-request/withdraw-process/point-adjust Edge Function **코드 삭제 + 프로덕션 undeploy**

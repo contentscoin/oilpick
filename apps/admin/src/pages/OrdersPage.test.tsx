@@ -1,7 +1,17 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { OrdersPage } from "./OrdersPage";
 import type { AdminOrderRow } from "../hooks/useOrdersAdmin";
+
+// OrdersPage가 useSearchParams(CS→주문 드로어 딥링크, 07 F12)를 쓰므로 Router 컨텍스트로 감싼다.
+function renderPage() {
+  return render(
+    <MemoryRouter>
+      <OrdersPage />
+    </MemoryRouter>,
+  );
+}
 
 /**
  * OrdersPage 회귀 안전망 (T13).
@@ -41,6 +51,7 @@ function order(overrides: Partial<AdminOrderRow> = {}): AdminOrderRow {
     finalKg: null,
     pickupAddress: "서울 강서구",
     createdAt: "2026-07-01T00:00:00.000Z",
+    arrivedAt: null,
     ...overrides,
   };
 }
@@ -54,7 +65,7 @@ afterEach(() => {
 describe("OrdersPage", () => {
   it("상태 필터 버튼을 클릭하면 해당 필터값으로 주문을 조회한다", () => {
     mockUseAdminOrders.mockReturnValue({ data: [], isLoading: false });
-    render(<OrdersPage />);
+    renderPage();
     // 초기 렌더는 ALL로 조회.
     expect(mockUseAdminOrders).toHaveBeenLastCalledWith("ALL");
 
@@ -70,7 +81,7 @@ describe("OrdersPage", () => {
       ],
       isLoading: false,
     });
-    render(<OrdersPage />);
+    renderPage();
     expect(screen.getByText("25.0kg (확정)")).toBeInTheDocument();
     expect(screen.getByText("12.0kg (예상)")).toBeInTheDocument();
     // 상태 한글 라벨(StatusPill) — 필터 버튼에도 같은 라벨이 있어 테이블 안으로 스코프한다.
@@ -84,7 +95,7 @@ describe("OrdersPage", () => {
       data: [order({ id: "dsp", status: "DISPUTED", measuredKg: 20, requestedKg: 30, finalKg: null })],
       isLoading: false,
     });
-    render(<OrdersPage />);
+    renderPage();
     expect(screen.getByText("계량 20.0kg / 예상 30.0kg")).toBeInTheDocument();
     const table = within(screen.getByTestId("orders-table"));
     expect(table.getByText("확인 중")).toBeInTheDocument();
@@ -92,13 +103,29 @@ describe("OrdersPage", () => {
 
   it("주문이 없으면 안내 문구를 표시한다", () => {
     mockUseAdminOrders.mockReturnValue({ data: [], isLoading: false });
-    render(<OrdersPage />);
+    renderPage();
     expect(screen.getByText("해당 상태의 주문이 없어요.")).toBeInTheDocument();
   });
 
   it("CSV 내보내기 버튼을 노출한다 (07 F10-⑥)", () => {
     mockUseAdminOrders.mockReturnValue({ data: [order()], isLoading: false });
-    render(<OrdersPage />);
+    renderPage();
     expect(screen.getByTestId("orders-csv-button")).toBeInTheDocument();
+  });
+
+  it("ARRIVED 24h 초과 체류 주문에만 하이라이트 배지를 표시한다 (07 F12-⑤)", () => {
+    mockUseAdminOrders.mockReturnValue({
+      data: [
+        // 진입한 지 오래된(2020년) ARRIVED → 24h+ 체류 배지
+        order({ id: "stale", status: "ARRIVED", arrivedAt: "2020-01-01T00:00:00.000Z" }),
+        // 방금 진입한 ARRIVED → 배지 없음
+        order({ id: "fresh", status: "ARRIVED", arrivedAt: new Date().toISOString() }),
+      ],
+      isLoading: false,
+    });
+    renderPage();
+    expect(screen.getByTestId("arrived-stale-badge-stale")).toBeInTheDocument();
+    expect(screen.queryByTestId("arrived-stale-badge-fresh")).not.toBeInTheDocument();
+    expect(screen.getByTestId("order-row-stale-stale")).toBeInTheDocument();
   });
 });

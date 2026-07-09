@@ -41,6 +41,12 @@ export interface AdminOrderRow {
   finalKg: number | null;
   pickupAddress: string;
   createdAt: string;
+  /**
+   * 07 F12-⑤: ARRIVED 진입 시각(order_events to_status='ARRIVED'의 최신 시각). pickup_orders에는
+   * arrived_at 컬럼이 없어(init.sql) 이벤트에서 조회한다. ARRIVED가 아니거나 이벤트가 없으면 null.
+   * 24h 초과 체류 하이라이트(교착 조기 감지, 07 §1-3)의 기준 타임스탬프.
+   */
+  arrivedAt: string | null;
 }
 
 /** 03-frontend.md apps/admin "/orders": "테이블(상태 필터)". statusFilter가 "ALL"이면 전체. */
@@ -60,7 +66,25 @@ export function useAdminOrders(statusFilter: string) {
       }
       const [{ data, error }, { supplierNames, riderNames }] = await Promise.all([q, fetchNameMaps()]);
       if (error) throw error;
-      return (data ?? []).map((row) => ({
+      const rows = data ?? [];
+
+      // 07 F12-⑤: ARRIVED 주문의 진입 시각을 order_events에서 조회(pickup_orders엔 arrived_at 없음).
+      // ARRIVED 행이 있을 때만 추가 조회한다. 같은 주문에 ARRIVE 이벤트가 여러 개면 최신을 취한다.
+      const arrivedIds = rows.filter((r) => r.status === "ARRIVED").map((r) => r.id);
+      const arrivedAtMap = new Map<string, string>();
+      if (arrivedIds.length > 0) {
+        const { data: evs } = await supabase
+          .from("order_events")
+          .select("order_id, created_at")
+          .eq("to_status", "ARRIVED")
+          .in("order_id", arrivedIds)
+          .order("created_at", { ascending: false });
+        for (const ev of evs ?? []) {
+          if (!arrivedAtMap.has(ev.order_id)) arrivedAtMap.set(ev.order_id, ev.created_at);
+        }
+      }
+
+      return rows.map((row) => ({
         id: row.id,
         status: row.status,
         supplierId: row.supplier_id,
@@ -72,6 +96,7 @@ export function useAdminOrders(statusFilter: string) {
         finalKg: row.final_kg !== null ? Number(row.final_kg) : null,
         pickupAddress: row.pickup_address,
         createdAt: row.created_at,
+        arrivedAt: arrivedAtMap.get(row.id) ?? null,
       }));
     },
   });
@@ -125,7 +150,8 @@ export function useAdminOrderEvents(orderId: string | undefined) {
   });
 }
 
-export interface AdminOrderDetail extends AdminOrderRow {
+// arrivedAt은 목록 하이라이트(07 F12-⑤) 전용이라 상세에는 포함하지 않는다(드로어는 24h 하이라이트 미사용).
+export interface AdminOrderDetail extends Omit<AdminOrderRow, "arrivedAt"> {
   measuredKg: number | null;
   photoUrls: string[];
   disputeReason: string | null;

@@ -37,6 +37,9 @@ const MyPage = lazy(() => import("./pages/MyPage").then((m) => ({ default: m.MyP
 const ProfileEditPage = lazy(() =>
   import("./pages/ProfileEditPage").then((m) => ({ default: m.ProfileEditPage })),
 );
+const SupportPage = lazy(() =>
+  import("./pages/SupportPage").then((m) => ({ default: m.SupportPage })),
+);
 const DevUiPage = lazy(() => import("./pages/DevUiPage").then((m) => ({ default: m.DevUiPage })));
 
 /**
@@ -134,6 +137,14 @@ export function App() {
             element={
               <AuthGuard>
                 <ProfileEditPage />
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/support"
+            element={
+              <AuthGuard>
+                <SupportPage />
               </AuthGuard>
             }
           />

@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { ORDER_STATUS_LABEL, formatKg, type OrderStatus } from "@oilpick/core";
 import { useAdminOrderDetail, useAdminOrderEvents, useAdminOrders } from "../hooks/useOrdersAdmin";
 import { OrderDetailDrawer } from "../components/OrderDetailDrawer";
+import { isArrivedStale } from "../lib/arrivedStale";
 import { downloadCsv, toCsv } from "../lib/csv";
 
 const STATUS_FILTERS: Array<{ value: string; label: string }> = [
@@ -25,6 +27,17 @@ export function OrdersPage() {
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const { data: orders, isLoading } = useAdminOrders(statusFilter);
+
+  // 07 F12 ②: CS 페이지의 "연결 주문 드로어 열기"가 /orders?order=<id>로 진입하면 해당 드로어를 연다.
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const orderParam = searchParams.get("order");
+    if (orderParam) {
+      setSelectedOrderId(orderParam);
+      searchParams.delete("order");
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   function handleCsv() {
     const csv = toCsv(
@@ -100,10 +113,29 @@ export function OrdersPage() {
                 </td>
               </tr>
             ) : orders && orders.length > 0 ? (
-              orders.map((o) => (
-                <tr key={o.id} className="border-b border-gray-50 transition-colors hover:bg-gray-50">
+              orders.map((o) => {
+                const stale = isArrivedStale(o.status, o.arrivedAt);
+                return (
+                <tr
+                  key={o.id}
+                  className={`border-b border-gray-50 transition-colors ${
+                    stale ? "bg-status-danger/5 hover:bg-status-danger/10" : "hover:bg-gray-50"
+                  }`}
+                  data-testid={stale ? `order-row-stale-${o.id}` : undefined}
+                >
                   <td className="px-4 py-3">
-                    <StatusPill status={o.status} />
+                    <div className="flex items-center gap-2">
+                      <StatusPill status={o.status} />
+                      {stale && (
+                        <span
+                          className="rounded-pill bg-status-danger/10 px-2 py-0.5 text-xs font-semibold text-status-danger"
+                          data-testid={`arrived-stale-badge-${o.id}`}
+                          title="현장 도착 후 24시간 초과 체류 — 교착 가능성"
+                        >
+                          24h+ 체류
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-gray-800">{o.supplierName}</td>
                   <td className="px-4 py-3 text-gray-800">{o.riderName ?? "-"}</td>
@@ -131,7 +163,8 @@ export function OrdersPage() {
                     </button>
                   </td>
                 </tr>
-              ))
+                );
+              })
             ) : (
               <tr>
                 <td colSpan={7} className="px-4 py-8 text-center text-gray-400">

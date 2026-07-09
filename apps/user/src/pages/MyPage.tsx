@@ -98,12 +98,14 @@ export function MyPage() {
         >
           이용약관 · 개인정보처리방침 (준비 중)
         </div>
-        <div
-          data-testid="support-placeholder"
-          style={{ display: "flex", alignItems: "center", minHeight: 48, padding: "0 4px", fontSize: 15, color: colors.status.wait }}
+        <Link
+          to="/support"
+          data-testid="support-link"
+          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", minHeight: 48, padding: "0 4px", fontSize: 15, color: "inherit", textDecoration: "none" }}
         >
-          고객센터 (준비 중)
-        </div>
+          <span>고객센터</span>
+          <span style={{ color: colors.status.wait }}>&gt;</span>
+        </Link>
       </section>
 
       <button

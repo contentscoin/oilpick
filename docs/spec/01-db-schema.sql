@@ -264,12 +264,30 @@ from coupon_ledger group by rider_id;
 --   recycler_name text, recycler_contact text  -- 인계 재활용업체(승인 조건 필드, D5 전제)
 -- doc_permit_url 라벨을 "폐기물처리(수집·운반) 신고증명서"로 확정 + rider-verify 승인 시 서버 필수 검증.
 
--- ===== [07 F12] CS 문의 티켓 (예약 — 전체 DDL은 F12에서) =====
--- cs_tickets(id, author_id uuid FK profiles, role, category enum('ORDER','CASH_DISPUTE',
---   'COUPON_PAYMENT','ACCOUNT','ETC'), order_id uuid nullable FK pickup_orders, title, body,
---   status enum('OPEN','IN_PROGRESS','RESOLVED'), admin_reply, created_at, resolved_at)
---   RLS: 본인 select+insert(author_id=auth.uid() 강제), admin 전체 select/update.
---   원장류가 아니므로 클라이언트 insert 허용. CASH_DISPUTE=현금 지급 후 분쟁(상태머신 밖 수용처, 07 §1-3).
+-- ===== [07 F12] CS 문의 티켓 (실 DDL: supabase/migrations/20260709000007_cs_tickets.sql) =====
+-- 원장류가 아니므로 클라이언트 insert 허용(무결성 리스크 없음, 07 F12 ①). CASH_DISPUTE=현금 지급 후
+-- 분쟁(상태머신 밖 수용처, 07 §1-3). COUPON_PAYMENT=쿠폰 결제/환불 문의(→ admin SettlementPage 환불 연결).
+create type cs_category as enum ('ORDER','CASH_DISPUTE','COUPON_PAYMENT','ACCOUNT','ETC');
+create type cs_status as enum ('OPEN','IN_PROGRESS','RESOLVED');
+create table cs_tickets (
+  id uuid primary key default gen_random_uuid(),
+  author_id uuid not null references profiles(id),
+  role user_role not null,                                -- 작성자 역할 스냅샷(본인 profiles.role과 일치 강제)
+  category cs_category not null,
+  order_id uuid references pickup_orders(id),             -- 연결 주문(선택)
+  title text not null,
+  body text not null,
+  status cs_status not null default 'OPEN',
+  admin_reply text,
+  created_at timestamptz not null default now(),
+  resolved_at timestamptz
+);
+create index idx_cs_tickets_status on cs_tickets (status, created_at desc);
+create index idx_cs_tickets_author on cs_tickets (author_id, created_at desc);
+-- 작성자 역할 조회 helper(insert with check의 role 위조 차단). is_admin() 패턴 미러.
+create or replace function fn_current_role() returns user_role as
+$$ select role from profiles where id = auth.uid() $$
+language sql security definer stable set search_path = public;
 
 -- ===== 출금 =====
 create table withdrawals (
@@ -311,6 +329,8 @@ alter table notifications enable row level security;
 alter table coupon_price_ticks enable row level security;
 alter table coupon_purchases enable row level security;
 alter table coupon_ledger enable row level security;
+-- [07 F12] CS 티켓 RLS
+alter table cs_tickets enable row level security;
 
 -- security definer 함수는 search_path를 고정해 하이재킹을 막는다(Supabase security advisor 대응).
 create or replace function is_admin() returns boolean as
@@ -417,6 +437,12 @@ create policy p_ledger_read on point_ledger for select using (user_id = (select 
 create policy p_withdraw_read on withdrawals for select using (user_id = (select auth.uid()) or is_admin());
 create policy p_noti_read on notifications for select using (user_id = (select auth.uid()));
 create policy p_noti_update on notifications for update using (user_id = (select auth.uid())); -- read_at 갱신
+
+-- [07 F12] cs_tickets: 본인 select+insert(author_id·role 위조 차단), admin 전체 select + (답변·상태만)
+-- update. 원장류 아님 → 클라이언트 insert 허용. update 컬럼 제한은 GRANT(admin_reply,status,resolved_at)로.
+create policy p_cs_read on cs_tickets for select using (author_id = (select auth.uid()) or is_admin());
+create policy p_cs_insert on cs_tickets for insert with check (author_id = (select auth.uid()) and role = fn_current_role());
+create policy p_cs_admin_update on cs_tickets for update using (is_admin()) with check (is_admin());
 
 -- Storage 버킷: order-photos (관련자 read / rider write), rider-docs (본인 write, admin read)
 -- Realtime publication: pickup_orders, notifications, price_ticks, rider_profiles, point_ledger, coupon_ledger 활성화

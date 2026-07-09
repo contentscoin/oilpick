@@ -366,3 +366,43 @@ export const notifyBroadcastOutputSchema = z.object({
   recipientCount: z.number().int().nonnegative(),
 });
 export type NotifyBroadcastOutput = z.infer<typeof notifyBroadcastOutputSchema>;
+
+// ===== CS 문의 티켓 (admin/user/rider) — 07 F12 =====
+// cs_tickets(01-db-schema.sql [07 F12], 20260709000007_cs_tickets.sql)와 1:1.
+// CASH_DISPUTE = 현금 지급 후 분쟁 전용(07 §1-3), COUPON_PAYMENT = 쿠폰 결제/환불 문의.
+
+export const csCategorySchema = z.enum(["ORDER", "CASH_DISPUTE", "COUPON_PAYMENT", "ACCOUNT", "ETC"]);
+export type CsCategory = z.infer<typeof csCategorySchema>;
+
+export const csStatusSchema = z.enum(["OPEN", "IN_PROGRESS", "RESOLVED"]);
+export type CsStatus = z.infer<typeof csStatusSchema>;
+
+/**
+ * 문의 접수 폼 입력(user/rider). author_id·role은 클라이언트가 세션/프로필에서 채워
+ * cs_tickets에 직접 insert하고(RLS가 위조 차단), 이 스키마는 폼 필드만 검증한다.
+ * orderId는 선택(주문 연결). CLAUDE.md 규칙 4 "모든 API 입출력은 zod 스키마로 검증".
+ */
+export const csTicketInputSchema = z.object({
+  category: csCategorySchema,
+  title: z.string().min(1).max(100),
+  body: z.string().min(1).max(2000),
+  orderId: uuidSchema.optional(),
+});
+export type CsTicketInput = z.infer<typeof csTicketInputSchema>;
+
+/**
+ * admin 답변(cs-reply Edge Function 입력). admin_reply + 상태 전이(IN_PROGRESS/RESOLVED)를
+ * 원자 처리하고 작성자에게 알림을 보낸다. RESOLVED 시 resolved_at 기록(서버).
+ */
+export const csReplyInputSchema = z.object({
+  ticketId: uuidSchema,
+  reply: z.string().min(1).max(2000),
+  status: z.enum(["IN_PROGRESS", "RESOLVED"]),
+});
+export type CsReplyInput = z.infer<typeof csReplyInputSchema>;
+
+export const csReplyOutputSchema = z.object({
+  ticketId: uuidSchema,
+  status: csStatusSchema,
+});
+export type CsReplyOutput = z.infer<typeof csReplyOutputSchema>;

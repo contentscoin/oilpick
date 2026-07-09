@@ -2,6 +2,7 @@
 // 이 파일의 값은 임의 변경 금지 — 스펙 변경 시 스펙 문서를 먼저 갱신할 것.
 
 import type { OrderStatus } from "./orderMachine";
+import type { CsCategory, CsStatus } from "./schemas";
 
 /** 통 1개당 예상 kg (18L 통 기준). 00-domain.md "계량/수량 규칙". */
 export const KG_PER_CAN = 15;
@@ -38,3 +39,25 @@ export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
   CANCELLED: "취소됨",
   DISPUTED: "확인 중",
 };
+
+/**
+ * CS 문의 카테고리 한글 라벨(07 F12). CASH_DISPUTE = 현금 지급 후 분쟁(상태머신 밖 수용처, 07 §1-3),
+ * COUPON_PAYMENT = 쿠폰 결제/환불 문의(→ admin SettlementPage 환불 연결).
+ */
+export const CS_CATEGORY_LABEL: Record<CsCategory, string> = {
+  ORDER: "주문/수거",
+  CASH_DISPUTE: "현금 지급 분쟁",
+  COUPON_PAYMENT: "쿠폰 결제/환불",
+  ACCOUNT: "계정",
+  ETC: "기타",
+};
+
+/** CS 문의 상태 한글 라벨(07 F12). */
+export const CS_STATUS_LABEL: Record<CsStatus, string> = {
+  OPEN: "접수",
+  IN_PROGRESS: "처리 중",
+  RESOLVED: "완료",
+};
+
+/** ARRIVED 24h 초과 체류 = 교착 조기 감지 임계(07 §1-3·F12-⑤, admin OrdersPage 하이라이트). */
+export const ARRIVED_STALE_MS = 24 * 60 * 60 * 1000;

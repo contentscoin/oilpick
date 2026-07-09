@@ -43,6 +43,9 @@ const NotificationsPage = lazy(() =>
   import("./pages/NotificationsPage").then((m) => ({ default: m.NotificationsPage })),
 );
 const MyPage = lazy(() => import("./pages/MyPage").then((m) => ({ default: m.MyPage })));
+const SupportPage = lazy(() =>
+  import("./pages/SupportPage").then((m) => ({ default: m.SupportPage })),
+);
 
 /**
  * apps/rider 라우팅. docs/spec/03-frontend.md "apps/rider" 표(R1~R12).
@@ -139,6 +142,14 @@ export function App() {
                 <RiderShell>
                   <MyPage />
                 </RiderShell>
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/support"
+            element={
+              <AuthGuard>
+                <SupportPage />
               </AuthGuard>
             }
           />
