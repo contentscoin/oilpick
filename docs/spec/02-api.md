@@ -12,9 +12,13 @@
 - **PG 시크릿(토스 TOSS_SECRET_KEY / 코엠 KOEM_MID·KOEM_API_KEY)은 Edge Function 전용**(supabase secrets) — 클라이언트 번들엔 공개 값만(절대 규칙 3 확장, 07 §1-4).
 - PG 호출은 `_shared/pg.ts` **어댑터 계약 경유**(07 F14): 활성 PG는 `PG_PROVIDER` env(기본
   `toss`)로 선택. `koem`(코엠페이먼츠 SIMPLEPAY)은 **결제창 리다이렉트형**이라 승인 확정이
-  §12가 아닌 §12-1(rUrl 서버 콜백)에서 일어나고, §12 confirm은 토스 전용이다(코엠 모드 호출 시
-  402 PAYMENT_FAILED). 취소(§13)는 두 PG 모두 어댑터 경유 server-to-server.
+  §12가 아닌 §12-1(rUrl 서버 콜백)에서 일어나고, §12 confirm은 토스·데모 전용이다(코엠 모드
+  호출 시 402 PAYMENT_FAILED). 취소(§13)는 모든 PG가 어댑터 경유.
   원장·상태머신·에러코드는 PG 중립(무변경).
+- `demo`(F14 데모 운영 — 코엠 실연결 보류 결정, CEO 2026-07-09): PG 외부 호출만 즉시 성공으로
+  대체하는 가짜 어댑터. §11이 `demo: true`를 반환하면 클라이언트가 결제창 없이 §12 confirm
+  (paymentKey=`demo_${purchaseId}` 관례)을 직행 호출한다. 원장·멱등·상태머신은 실경로 그대로.
+  **실 과금이 없으므로 시연·개발 전용 — 실 라이더 운영 배포 금지**(DEPLOY.md 경고).
 
 읽기 전용 조회(시세, 주문 목록, 원장, 알림)는 Edge Function을 만들지 않는다 —
 클라이언트가 RLS 하에서 supabase-js로 직접 select한다.
@@ -116,10 +120,11 @@ ACCEPTED 이후 모든 전이 단일 엔드포인트.
 - 처리: 최신 `coupon_price_ticks` 단가 스냅샷 → `coupon_purchases`(status='PENDING', unit_price 스냅샷,
   amount=qty×unit_price, pg_order_id 생성) insert. **pg_order_id는 `op`+18hex 20자 고정**(F14 개정 —
   코엠 응답 orderno 규격 Max 20, 토스 orderId 규칙과도 호환).
-- 출력: `{ purchaseId, pgOrderId, amount, unitPrice, koem? }` — `PG_PROVIDER=koem`이면 결제창 진입
-  정보 `koem: { payUrl, params }`를 동봉(F14). params는 문서 3.2.1 규격 전체(checkHash 포함)로
+- 출력: `{ purchaseId, pgOrderId, amount, unitPrice, koem?, demo? }` — `PG_PROVIDER=koem`이면 결제창
+  진입 정보 `koem: { payUrl, params }`를 동봉(F14). params는 문서 3.2.1 규격 전체(checkHash 포함)로
   **서버가 생성**(API_KEY 필요)하며 클라이언트는 수정 없이 hidden form POST만 한다. rUrl은
   §12-1(기본 `${SUPABASE_URL}/functions/v1/coupon-purchase-return`, env `KOEM_RETURN_URL`로 재정의).
+  `PG_PROVIDER=demo`면 `demo: true`를 동봉 — 클라이언트는 결제창 없이 §12 confirm 직행(데모 운영).
 - 검증 실패 400. 단가 tick 미설정 시 409 `COUPON_PRICE_NOT_SET` (07 §1-4 확정).
 
 ## 12. `coupon-purchase-confirm` (rider) — 07 F4 (토스 전용)
@@ -132,6 +137,8 @@ ACCEPTED 이후 모든 전이 단일 엔드포인트.
 - amount 위변조 시 거부(전이 없음). **PG 시크릿 키는 Edge Function 전용**.
 - **코엠 모드에서는 미사용**(F14) — 어댑터 confirmPayment가 NOT_SUPPORTED로 거절되어 402
   `PAYMENT_FAILED`. 코엠 확정은 §12-1이 담당하고, 클라이언트는 PENDING 목록 재조회로 반영을 확인한다.
+- **데모 모드**(F14 데모 운영): 어댑터가 요청 값을 그대로 성공으로 반환해 실 PG 없이 확정된다.
+  paymentKey는 `demo_${purchaseId}` 관례 — 재시도 시 같은 키라 멱등 경로(PAID 조기 반환)를 탄다.
 - 출력: `{ balance }` (충전 후 쿠폰 잔액)
 
 ## 12-1. `coupon-purchase-return` (공개 — 코엠 PG 서버 콜백) — 07 F14

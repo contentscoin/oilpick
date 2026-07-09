@@ -37,7 +37,7 @@ function renderPage(
     loadWidget?: ReturnType<typeof vi.fn>;
     clientKey?: string;
     entry?: string;
-    pgProvider?: "toss" | "koem";
+    pgProvider?: "toss" | "koem" | "demo";
     submitPayForm?: ReturnType<typeof vi.fn>;
   } = {},
 ) {
@@ -229,6 +229,75 @@ describe("CouponPurchasePage — 코엠 결제창 (07 F14)", () => {
     await waitFor(() => expect(refetch).toHaveBeenCalled());
     expect(loadWidget).not.toHaveBeenCalled();
     expect(mockInvoke).not.toHaveBeenCalled();
+  });
+});
+
+describe("CouponPurchasePage — 데모 결제 (F14 데모 운영)", () => {
+  it("데모 배너 + [데모 결제하기] 라벨, clientKey 없이 폼 렌더", () => {
+    renderPage({ pgProvider: "demo", clientKey: "" });
+    expect(screen.getByTestId("demo-mode-notice")).toHaveTextContent("실제 결제 없이");
+    expect(screen.getByTestId("purchase-pay-button")).toHaveTextContent("데모 결제하기");
+    expect(screen.queryByTestId("purchase-manual-notice")).not.toBeInTheDocument();
+  });
+
+  it("[데모 결제하기] → intent(demo:true) → confirm(demo_ 키) 직행 → 성공 화면", async () => {
+    const loadWidget = vi.fn();
+    mockInvoke.mockImplementation((name: string) =>
+      name === "coupon-purchase-intent"
+        ? Promise.resolve({
+            ok: true,
+            data: { purchaseId: "p1", pgOrderId: "op1", amount: 60000, unitPrice: 2000, demo: true },
+          })
+        : Promise.resolve({ ok: true, data: { balance: 30 } }),
+    );
+
+    renderPage({ pgProvider: "demo", clientKey: "", loadWidget });
+    fireEvent.click(screen.getByTestId("qty-preset-30"));
+    fireEvent.click(screen.getByTestId("purchase-pay-button"));
+
+    await waitFor(() =>
+      expect(mockInvoke).toHaveBeenCalledWith("coupon-purchase-confirm", {
+        purchaseId: "p1",
+        paymentKey: "demo_p1",
+        pgOrderId: "op1",
+        amount: 60000,
+      }),
+    );
+    expect(await screen.findByTestId("purchase-success-balance")).toHaveTextContent("30장");
+    expect(loadWidget).not.toHaveBeenCalled();
+  });
+
+  it("서버가 demo 신호 없이 응답하면(서버 PG_PROVIDER 불일치) 준비 중 안내로 폴백", async () => {
+    mockInvoke.mockResolvedValue({
+      ok: true,
+      data: { purchaseId: "p1", pgOrderId: "op1", amount: 60000, unitPrice: 2000 },
+    });
+    renderPage({ pgProvider: "demo", clientKey: "" });
+    fireEvent.click(screen.getByTestId("purchase-pay-button"));
+    expect(await screen.findByTestId("purchase-error")).toHaveTextContent("결제 연동 준비 중");
+    expect(mockInvoke).not.toHaveBeenCalledWith("coupon-purchase-confirm", expect.anything());
+  });
+
+  it("PENDING 재시도가 confirm(demo_ 키)으로 직행한다(멱등)", async () => {
+    mockUsePending.mockReturnValue({
+      data: [
+        { id: "p9", qty: 30, unitPrice: 2000, amount: 60000, pgOrderId: "op9", createdAt: "2026-07-09" },
+      ],
+    });
+    mockInvoke.mockResolvedValue({ ok: true, data: { balance: 30 } });
+
+    renderPage({ pgProvider: "demo", clientKey: "" });
+    fireEvent.click(screen.getByTestId("pending-retry-button"));
+
+    await waitFor(() =>
+      expect(mockInvoke).toHaveBeenCalledWith("coupon-purchase-confirm", {
+        purchaseId: "p9",
+        paymentKey: "demo_p9",
+        pgOrderId: "op9",
+        amount: 60000,
+      }),
+    );
+    expect(await screen.findByTestId("purchase-success-balance")).toHaveTextContent("30장");
   });
 });
 

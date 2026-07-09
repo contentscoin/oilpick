@@ -13,12 +13,14 @@ import { PG_PROVIDER, TOSS_CLIENT_KEY } from "../lib/env";
 import { loadTossWidget, type TossWidgetHandle, type TossWidgetLoader } from "../lib/tossWidget";
 
 /**
- * R: 쿠폰 결제 화면 `/coupons/purchase` (07 F4-⑤, F14 코엠 분기). 수량 프리셋(10/30/50)+직접 입력
- * → 예상 금액(단가×수량) → [결제하기] → intent →
+ * R: 쿠폰 결제 화면 `/coupons/purchase` (07 F4-⑤, F14 코엠·데모 분기). 수량 프리셋(10/30/50)+직접
+ * 입력 → 예상 금액(단가×수량) → [결제하기] → intent →
  *  - 토스: 결제위젯 렌더 → requestPayment → successUrl 콜백에서 confirm.
  *  - 코엠: intent가 반환한 결제창 파라미터(koem)를 hidden form으로 그대로 POST(현재 창 이동).
  *    승인 확정은 서버 콜백(coupon-purchase-return)이 처리하므로 이 화면의 confirm 경로는
  *    사용하지 않는다 — 재진입 시 PENDING 목록에서 "결제 상태 새로고침"으로 반영을 확인한다.
+ *  - 데모(F14 데모 운영 — 코엠 실연결 전): intent의 demo 신호를 받으면 결제창 없이 곧장
+ *    confirm(paymentKey=`demo_${purchaseId}`) → 성공 화면. 실 과금 없음(배너로 명시).
  * orphan 대사: PENDING 잔건 목록(07 §1-4 ⓐ). SDK·폼 제출은 주입 가능(테스트 모킹).
  * 콜홈 진입점(잔액 카드)은 F5 소관 — 이 태스크는 라우트 직접 진입만으로 동작한다.
  */
@@ -57,7 +59,7 @@ export interface CouponPurchasePageProps {
   /** 토스 클라이언트 키. 기본값은 env(미발급 시 undefined → 안내 폴백). */
   clientKey?: string;
   /** 활성 PG(테스트 주입). 기본값은 env VITE_PG_PROVIDER(미설정 시 toss). */
-  pgProvider?: "toss" | "koem";
+  pgProvider?: "toss" | "koem" | "demo";
   /** 코엠 결제창 form 제출(테스트 주입 — jsdom은 form.submit 미구현). */
   submitPayForm?: (payUrl: string, params: Record<string, string>) => void;
 }
@@ -117,6 +119,26 @@ export function CouponPurchasePage({
     }
   }, [cbPaymentKey, cbPurchaseId, cbOrderId, cbAmount]);
 
+  // ── 데모 확정(F14 데모 운영): 결제창 없이 confirm 직행. paymentKey는 `demo_${purchaseId}`
+  // 관례라 재시도해도 같은 키 → 멱등 3중(PAID 조기 반환)으로 이중 충전 없음. ──────────────
+  async function runDemoConfirm(purchaseId: string, pgOrderId: string, amount: number) {
+    setPhase("confirming");
+    setError(null);
+    const res = await invokeEdgeFunction<CouponPurchaseConfirmOutput>("coupon-purchase-confirm", {
+      purchaseId,
+      paymentKey: `demo_${purchaseId}`,
+      pgOrderId,
+      amount,
+    });
+    if (res.ok) {
+      setBalance(res.data.balance);
+      setPhase("success");
+    } else {
+      setError(res.message);
+      setPhase("fail");
+    }
+  }
+
   useEffect(() => {
     if (isConfirmCallback) void runConfirm();
     // successUrl 진입 시 1회 자동 확정. runConfirm은 콜백 파라미터에만 의존.
@@ -169,13 +191,18 @@ export function CouponPurchasePage({
       setError(res.message);
       return;
     }
+    // 데모(F14 데모 운영): 결제창 없이 곧장 확정 — 성공 화면으로 이어진다.
+    if (res.data.demo) {
+      await runDemoConfirm(res.data.purchaseId, res.data.pgOrderId, res.data.amount);
+      return;
+    }
     // 코엠(F14): 서버가 만든 결제창 파라미터를 그대로 제출 — 승인·확정은 서버 콜백이 담당.
     if (res.data.koem) {
       submitPayForm(res.data.koem.payUrl, res.data.koem.params);
       return;
     }
-    if (pgProvider === "koem") {
-      // 클라이언트는 koem인데 서버가 결제창 파라미터를 안 줌 — 서버 PG_PROVIDER/시크릿 미설정.
+    if (pgProvider === "koem" || pgProvider === "demo") {
+      // 클라이언트 분기와 서버 응답 불일치 — 서버 PG_PROVIDER/시크릿 미설정.
       setError("결제 연동 준비 중이에요. 쿠폰 충전은 고객센터로 요청해 주세요.");
       return;
     }
@@ -188,6 +215,11 @@ export function CouponPurchasePage({
   }
 
   function handleRetryPending(p: PendingPurchase) {
+    if (pgProvider === "demo") {
+      // 데모는 confirm 직행 재시도 — 같은 demo 키라 멱등.
+      void runDemoConfirm(p.id, p.pgOrderId, p.amount);
+      return;
+    }
     if (pgProvider === "koem") {
       // 코엠은 서버 콜백이 확정하므로 재시도 대신 반영 여부만 재조회(07 F14).
       void refetchPending();
@@ -354,6 +386,24 @@ export function CouponPurchasePage({
     <Screen>
       <Header title="쿠폰 충전" onBack={() => navigate(-1)} />
 
+      {/* 데모 결제 안내(F14 데모 운영) — 실 과금이 없음을 화면에 명시한다. */}
+      {pgProvider === "demo" && (
+        <p
+          data-testid="demo-mode-notice"
+          style={{
+            margin: 0,
+            padding: "10px 14px",
+            borderRadius: radius.card,
+            backgroundColor: colors.accent.light,
+            border: `1px solid ${surface.border}`,
+            fontSize: 13,
+            color: gray[600],
+          }}
+        >
+          데모 결제 모드예요 — 실제 결제 없이 쿠폰이 충전돼요.
+        </p>
+      )}
+
       {/* 수량 프리셋 */}
       <section style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: gray[600] }}>충전 수량</p>
@@ -437,7 +487,7 @@ export function CouponPurchasePage({
       )}
 
       <BigButton data-testid="purchase-pay-button" disabled={payDisabled} onClick={handlePay}>
-        결제하기
+        {pgProvider === "demo" ? "데모 결제하기" : "결제하기"}
       </BigButton>
 
       {/* PENDING 대사(07 §1-4 ⓐ) */}

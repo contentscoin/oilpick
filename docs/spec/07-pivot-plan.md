@@ -564,6 +564,14 @@ REQUESTED→CANCELLED: supplier 자진 or 시스템 30분 무수락. 쿠폰 미�
   **잔여(외부 의존)**: 코엠 MID/API_KEY 발급 → E2E, 공인 IP 방화벽 협의, 거래조회 API/응답 해시/
   노티 규격 문의(§4 Notification 수신 함수는 문의 결과에 따라 후속 — 승인 noti 미대사 건 자동
   취소 정책 포함).
+- **데모 운영 결정(CEO 2026-07-09)**: 코엠 실연결(키 발급·계약 마무리)은 보류 — 그때까지 결제는
+  `PG_PROVIDER=demo` **데모 모드**로 운영한다. demoAdapter(pg.ts)가 PG 외부 호출만 즉시 성공으로
+  대체하고 원장·상태머신·멱등 3중은 실경로(fn_confirm_purchase/fn_refund_purchase) 그대로 —
+  intent가 `demo: true`를 반환하면 rider가 결제창 없이 confirm(paymentKey=`demo_${purchaseId}`)
+  직행, 화면에 "데모 결제 모드" 배너와 "데모 결제하기" 라벨로 명시. 환불도 데모 취소로 동작해
+  admin 플로우 시연 가능. ⚠️ 실 과금 없음 — 실 라이더 온보딩 전 koem 전환 필수(DEPLOY.md 경고,
+  배포 체크리스트에서 PG_PROVIDER·VITE_PG_PROVIDER 짝 확인). 구현: pg.ts demoAdapter + 테스트 2,
+  intent demo 플래그(스키마·vendor 동기), rider 데모 분기 + 테스트 4. deno 25/25·rider 17/17.
 
 ---
 

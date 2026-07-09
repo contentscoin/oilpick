@@ -1,6 +1,6 @@
 // coupon-purchase-intent (rider). docs/spec/02-api.md "11. coupon-purchase-intent" (07 F4·F14):
 // - 입력: { qty }(1~200) → 최신 coupon_price_ticks 단가 스냅샷 → coupon_purchases(PENDING) insert.
-// - 출력: { purchaseId, pgOrderId, amount, unitPrice, koem? }. 단가 미설정 시 409 COUPON_PRICE_NOT_SET.
+// - 출력: { purchaseId, pgOrderId, amount, unitPrice, koem?, demo? }. 단가 미설정 시 409 COUPON_PRICE_NOT_SET.
 //
 // PG 결제 진입 전 단계. 여기서 amount·unit_price를 서버가 확정·스냅샷해 두고, 확정 경로(토스
 // confirm / 코엠 return 콜백)가 PG 응답 amount와 대조한다(클라이언트가 보낸 금액을 신뢰하지
@@ -71,8 +71,9 @@ Deno.serve((req) =>
 
     // 코엠 모드(F14): 결제창 진입 form 파라미터를 서버에서 생성해 동봉. rUrl은 결제 확정을
     // 담당하는 coupon-purchase-return(verify_jwt=false) — 기본값은 이 프로젝트의 함수 URL.
+    const provider = getPgAdapter().provider;
     let koem: KoemPayParams | undefined;
-    if (getPgAdapter().provider === "koem") {
+    if (provider === "koem") {
       const returnUrl = Deno.env.get("KOEM_RETURN_URL") ??
         `${Deno.env.get("SUPABASE_URL")}/functions/v1/coupon-purchase-return`;
       koem = await buildKoemPayParams(
@@ -87,6 +88,8 @@ Deno.serve((req) =>
       amount,
       unitPrice,
       ...(koem ? { koem } : {}),
+      // 데모 모드(F14 데모 운영): 클라이언트가 결제창 없이 곧장 confirm을 호출하라는 신호.
+      ...(provider === "demo" ? { demo: true as const } : {}),
     });
   })
 );

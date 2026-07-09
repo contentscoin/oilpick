@@ -173,7 +173,10 @@ var couponPurchaseIntentOutputSchema = z.object({
   koem: z.object({
     payUrl: z.string().min(1),
     params: z.record(z.string())
-  }).optional()
+  }).optional(),
+  /** 데모 결제(PG_PROVIDER=demo, 07 F14 데모 운영 — 코엠 실연결 전). 클라이언트는 결제창 없이
+      곧장 confirm(paymentKey=`demo_${purchaseId}`)을 호출한다. 실 PG 모드에서는 없음. */
+  demo: z.literal(true).optional()
 });
 var couponPurchaseConfirmInputSchema = z.object({
   purchaseId: uuidSchema,

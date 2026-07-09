@@ -29,9 +29,13 @@ supabase secrets set FCM_SERVICE_ACCOUNT="$(cat fcm-service-account.json)"
 #    클라이언트 키(VITE_TOSS_CLIENT_KEY, rider 앱 env)와 다르다 — 시크릿 키는 서버(Edge)에만 둔다.
 #    미설정 시 confirm/refund가 PAYMENT_FAILED로 실패한다. 테스트 키(test_sk_...)로 개발/검증 가능.
 supabase secrets set TOSS_SECRET_KEY="test_sk_xxxxxxxxxxxxxxxxxxxx"
-#  - PG_PROVIDER(선택): 활성 PG 어댑터 선택(07 F14). 미설정=toss. "koem" = 코엠페이먼츠 SIMPLEPAY.
+#  - PG_PROVIDER(선택): 활성 PG 어댑터 선택(07 F14). 미설정=toss. "koem" = 코엠페이먼츠 SIMPLEPAY,
+#    "demo" = 데모 결제(PG 호출 없이 즉시 충전 — 코엠 실연결 보류 결정에 따른 현 단계 기본값).
 #    rider 앱 env VITE_PG_PROVIDER와 반드시 같은 값으로 배포할 것.
-supabase secrets set PG_PROVIDER="koem"
+#    ⚠️ demo는 실 과금이 없다 — 라이더가 무상으로 쿠폰을 충전할 수 있으므로 시연·내부 테스트
+#    전용이다. 실 라이더 온보딩(과금 시작) 전에 반드시 koem으로 전환하고 코엠 시크릿을 설정할 것.
+supabase secrets set PG_PROVIDER="demo"
+# 코엠 실연동 전환 시(키 발급 후): PG_PROVIDER="koem" + 아래 KOEM_* 시크릿.
 #  - 코엠(SIMPLEPAY) 시크릿(07 F14, PG_PROVIDER=koem일 때 필수). 코엠 계약 시 이메일로 수령.
 #    KOEM_API_KEY는 checkHash(HMAC-SHA256) 생성용 64자리 키 — 클라이언트에 절대 노출 금지.
 supabase secrets set KOEM_MID="M2026xxxxxxxxxxx"

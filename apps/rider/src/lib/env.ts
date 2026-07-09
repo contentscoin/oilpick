@@ -10,8 +10,13 @@ export const KAKAO_KEY: string | undefined = import.meta.env.VITE_KAKAO_KEY || u
 // 클라이언트 번들엔 이 클라이언트 키만 유입한다(절대 규칙 3의 확장, 07 §1-4). 가맹 심사 전에는
 // 미발급이라 undefined — 결제 화면이 "키 미발급" 안내로 폴백한다(04-tasks.md 질문 목록 관례).
 export const TOSS_CLIENT_KEY: string | undefined = import.meta.env.VITE_TOSS_CLIENT_KEY || undefined;
-// 활성 PG(07 F14). "koem"이면 결제 화면이 코엠 결제창 form POST 플로우로 동작한다(토스 위젯
-// 미사용, 클라이언트 키 불필요 — checkHash는 서버가 생성). 서버 PG_PROVIDER(supabase secrets)와
-// 반드시 짝으로 설정한다 — 불일치 시 intent 응답(koem 필드)과 화면 분기가 어긋난다.
-export const PG_PROVIDER: "toss" | "koem" =
-  import.meta.env.VITE_PG_PROVIDER === "koem" ? "koem" : "toss";
+// 활성 PG(07 F14). "koem"이면 결제 화면이 코엠 결제창 form POST 플로우로 동작하고(토스 위젯
+// 미사용, 클라이언트 키 불필요 — checkHash는 서버가 생성), "demo"면 결제창 없이 곧장 확정되는
+// 데모 결제(코엠 실연결 전 시연·개발용 — 실 과금 없음)로 동작한다. 서버 PG_PROVIDER
+// (supabase secrets)와 반드시 짝으로 설정한다 — 불일치 시 intent 응답과 화면 분기가 어긋난다.
+export const PG_PROVIDER: "toss" | "koem" | "demo" =
+  import.meta.env.VITE_PG_PROVIDER === "koem"
+    ? "koem"
+    : import.meta.env.VITE_PG_PROVIDER === "demo"
+      ? "demo"
+      : "toss";

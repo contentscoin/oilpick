@@ -44,8 +44,8 @@ export class PgApiError extends Error {
 }
 
 export interface PgAdapter {
-  /** PG 식별자(로그·설정용). */
-  provider: "toss" | "koem";
+  /** PG 식별자(로그·설정용). demo는 시연·개발 전용 가짜 PG(07 F14 데모 운영 결정). */
+  provider: "toss" | "koem" | "demo";
   /**
    * 결제 승인. 성공 시 PgPayment 반환, 실패 시 PgApiError throw.
    * amount 일치 검증은 호출부(Edge)가 반환값 totalAmount == 기대 amount로 수행한다.
@@ -64,6 +64,32 @@ export interface PgAdapter {
   isAlreadyProcessed(err: unknown): boolean;
 }
 
+/**
+ * 데모 어댑터(07 F14 데모 운영, CEO 2026-07-09): 코엠 실연결(키 발급·IP 협의) 전까지 결제
+ * 시연용. PG 외부 호출만 즉시 성공으로 대체하고 원장·상태머신·멱등은 실경로 그대로 탄다
+ * (fn_confirm_purchase / fn_refund_purchase). **실 과금이 없으므로 프로덕션(실 라이더) 금지** —
+ * DEPLOY.md 경고 참고. confirm의 amount 대조는 요청 값을 그대로 반환해 통과시킨다(호출부가
+ * 서버 스냅샷 amount로 호출하므로 스냅샷 진실 원칙은 유지).
+ */
+export const demoAdapter: PgAdapter = {
+  provider: "demo",
+  confirmPayment: (params) =>
+    Promise.resolve({
+      paymentKey: params.paymentKey,
+      orderId: params.orderId,
+      status: "DONE",
+      totalAmount: params.amount,
+    }),
+  cancelPayment: (paymentKey, params) =>
+    Promise.resolve({
+      paymentKey,
+      orderId: "",
+      status: "CANCELED",
+      totalAmount: params.cancelAmount ?? 0,
+    }),
+  isAlreadyProcessed: () => false,
+};
+
 /** 활성 PG 어댑터 선택. provider 미지정 시 Deno.env `PG_PROVIDER`(기본 toss). */
 export function getPgAdapter(provider?: string): PgAdapter {
   const selected = provider ?? Deno.env.get("PG_PROVIDER") ?? "toss";
@@ -72,6 +98,8 @@ export function getPgAdapter(provider?: string): PgAdapter {
       return tossAdapter;
     case "koem":
       return koemAdapter;
+    case "demo":
+      return demoAdapter;
     default:
       throw new Error(`지원하지 않는 PG_PROVIDER예요: ${selected}`);
   }
