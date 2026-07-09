@@ -9,7 +9,16 @@
 - DB 접근은 service_role 클라이언트. 상태 전이+원장 기록은 **단일 Postgres 함수(RPC) 호출로 트랜잭션 보장** —
   Edge Function에서 다건 쿼리로 쪼개지 말 것. 핵심 RPC: `fn_transition_order`, `fn_post_ledger`,
   **`fn_charge_coupon`(CHARGE/ADJUST), `fn_consume_coupon`(CONSUME, rider 단위 FOR UPDATE 직렬화 후 잔액 재계산 → 부족 시 `INSUFFICIENT_COUPON` 예외)** (07 F3a).
-- **PG(토스페이먼츠) 시크릿 키는 Edge Function 전용**(supabase secrets) — 클라이언트 번들엔 클라이언트 키만(절대 규칙 3 확장, 07 §1-4).
+- **PG 시크릿(토스 TOSS_SECRET_KEY / 코엠 KOEM_MID·KOEM_API_KEY)은 Edge Function 전용**(supabase secrets) — 클라이언트 번들엔 공개 값만(절대 규칙 3 확장, 07 §1-4).
+- PG 호출은 `_shared/pg.ts` **어댑터 계약 경유**(07 F14): 활성 PG는 `PG_PROVIDER` env(기본
+  `toss`)로 선택. `koem`(코엠페이먼츠 SIMPLEPAY)은 **결제창 리다이렉트형**이라 승인 확정이
+  §12가 아닌 §12-1(rUrl 서버 콜백)에서 일어나고, §12 confirm은 토스·데모 전용이다(코엠 모드
+  호출 시 402 PAYMENT_FAILED). 취소(§13)는 모든 PG가 어댑터 경유.
+  원장·상태머신·에러코드는 PG 중립(무변경).
+- `demo`(F14 데모 운영 — 코엠 실연결 보류 결정, CEO 2026-07-09): PG 외부 호출만 즉시 성공으로
+  대체하는 가짜 어댑터. §11이 `demo: true`를 반환하면 클라이언트가 결제창 없이 §12 confirm
+  (paymentKey=`demo_${purchaseId}` 관례)을 직행 호출한다. 원장·멱등·상태머신은 실경로 그대로.
+  **실 과금이 없으므로 시연·개발 전용 — 실 라이더 운영 배포 금지**(DEPLOY.md 경고).
 
 읽기 전용 조회(시세, 주문 목록, 원장, 알림)는 Edge Function을 만들지 않는다 —
 클라이언트가 RLS 하에서 supabase-js로 직접 select한다.
@@ -105,15 +114,20 @@ ACCEPTED 이후 모든 전이 단일 엔드포인트.
 > 쿠폰 수동 조정은 §14 `coupon-adjust` 참조.
 - (구) 입력: `{ userId, amount, memo }` (memo 필수) → ADJUST insert.
 
-## 11. `coupon-purchase-intent` (rider) — 07 F4
-쿠폰 구매 신청(PG 결제 위젯 진입 전 단계).
+## 11. `coupon-purchase-intent` (rider) — 07 F4·F14
+쿠폰 구매 신청(PG 결제 진입 전 단계).
 - 입력: `{ qty: number }` (1~200 정수)
 - 처리: 최신 `coupon_price_ticks` 단가 스냅샷 → `coupon_purchases`(status='PENDING', unit_price 스냅샷,
-  amount=qty×unit_price, pg_order_id 생성) insert.
-- 출력: `{ purchaseId, pgOrderId, amount, unitPrice }`
+  amount=qty×unit_price, pg_order_id 생성) insert. **pg_order_id는 `op`+18hex 20자 고정**(F14 개정 —
+  코엠 응답 orderno 규격 Max 20, 토스 orderId 규칙과도 호환).
+- 출력: `{ purchaseId, pgOrderId, amount, unitPrice, koem?, demo? }` — `PG_PROVIDER=koem`이면 결제창
+  진입 정보 `koem: { payUrl, params }`를 동봉(F14). params는 문서 3.2.1 규격 전체(checkHash 포함)로
+  **서버가 생성**(API_KEY 필요)하며 클라이언트는 수정 없이 hidden form POST만 한다. rUrl은
+  §12-1(기본 `${SUPABASE_URL}/functions/v1/coupon-purchase-return`, env `KOEM_RETURN_URL`로 재정의).
+  `PG_PROVIDER=demo`면 `demo: true`를 동봉 — 클라이언트는 결제창 없이 §12 confirm 직행(데모 운영).
 - 검증 실패 400. 단가 tick 미설정 시 409 `COUPON_PRICE_NOT_SET` (07 §1-4 확정).
 
-## 12. `coupon-purchase-confirm` (rider) — 07 F4
+## 12. `coupon-purchase-confirm` (rider) — 07 F4 (토스 전용)
 토스 결제 승인 확정 + 쿠폰 충전(멱등 3중, 07 §1-4).
 - 입력: `{ purchaseId, paymentKey, pgOrderId, amount }` (토스 successUrl 파라미터)
 - 처리: `coupon_purchases` 행 **FOR UPDATE 잠금 → status=PENDING 재확인 → 시크릿 키로 토스 승인 API 호출 +
@@ -121,7 +135,27 @@ ACCEPTED 이후 모든 전이 단일 엔드포인트.
   성공 시 "쿠폰 N장 충전 완료" 알림 insert.
 - 멱등: 상태 전이 + `payment_key` unique + `coupon_ledger` unique(purchase_id, entry_type). **재호출 안전**(orphan 재시도).
 - amount 위변조 시 거부(전이 없음). **PG 시크릿 키는 Edge Function 전용**.
+- **코엠 모드에서는 미사용**(F14) — 어댑터 confirmPayment가 NOT_SUPPORTED로 거절되어 402
+  `PAYMENT_FAILED`. 코엠 확정은 §12-1이 담당하고, 클라이언트는 PENDING 목록 재조회로 반영을 확인한다.
+- **데모 모드**(F14 데모 운영): 어댑터가 요청 값을 그대로 성공으로 반환해 실 PG 없이 확정된다.
+  paymentKey는 `demo_${purchaseId}` 관례 — 재시도 시 같은 키라 멱등 경로(PAID 조기 반환)를 탄다.
 - 출력: `{ balance }` (충전 후 쿠폰 잔액)
+
+## 12-1. `coupon-purchase-return` (공개 — 코엠 PG 서버 콜백) — 07 F14
+코엠 결제창 완료 후 PG가 rUrl로 결과를 form POST하는 수신점. **코엠의 유일한 승인 확정 경로**
+(코엠은 서버 승인 API가 없는 결제창 리다이렉트형 — SIMPLEPAY 가이드 v1.14 §3.1.1).
+- 인증: 없음(`verify_jwt=false`, supabase/config.toml) — PG 서버가 호출. 검증은 아래 대조로 수행.
+- 입력: 결제응답 규격(가이드 §3.2.2) form-urlencoded — `result_code, tid, orderno, approvamt(표기
+  편차 approamt 수용), reserved01(=purchaseId 이중화)` 사용.
+- 처리: ① orderno(=pg_order_id)로 구매건 조회 → ② 이미 PAID면 멱등 성공 → ③ 실패 코드
+  (EC9000 사용자취소 등)는 FAILED 전이 → ④ **approvamt == 서버 스냅샷 amount 검증**(불일치 시
+  코엠 취소 시도 + FAILED) → ⑤ `fn_confirm_purchase`(PENDING→PAID + CHARGE, payment_key=tid) →
+  ⑥ "쿠폰 N장 충전 완료" 알림. RPC 실패(EXPIRED 등)는 취소 시도 + FAILED.
+- 출력: HTML(결제창 웹뷰 표시용) — 항상 200. `KOEM_RETURN_APP_URL`(앱 스킴) 설정 시 앱 복귀 시도.
+- **보안 한계(확정 기록)**: 결제응답에 무결성 해시가 없다(가이드 §3.2.2 — checkHash는 요청 전용).
+  방어: 서버 스냅샷 금액 대조 + 멱등 3중 + tid 저장(환불 시 PG 실검증으로 위조 tid 발각) +
+  admin 일일 대사(F10 매출 통계 ↔ 코엠 관리자페이지). 잔여 외부 액션: 코엠에 거래조회 API·
+  응답 해시·Notification(가이드 §4) 발신 IP 목록 문의 — 확보 시 검증 강화(07 F14 잔여).
 
 ## 13. `coupon-refund` (admin) — 07 F4
 쿠폰 구매 건 환불(구매 건 단위, 건당 1회 한정, 07 §1-4).
@@ -130,6 +164,10 @@ ACCEPTED 이후 모든 전이 단일 엔드포인트.
   **rider 단위 FOR UPDATE 직렬화 후 잔액 재계산**(동시 수락 경합 방지) → 원장 `ADJUST(-qty, purchase_id 필수)` +
   `coupon_purchases.status=REFUNDED`(FOR UPDATE 상태 기반 멱등). rider "환급" 알림.
 - 미사용 잔액 부족 시 409 `INSUFFICIENT_COUPON` 재사용 — 동일 의미(잔액 부족, 07 §1-4 확정).
+- 코엠(F14): 취소는 `/api/cc/approv/cancel`(server-to-server JSON, checkHash=HMAC(tid+mid+cancel_amt)).
+  **부분취소는 계약·카드에 따라 거부될 수 있다**(가이드 결과코드 EC1088 "부분 취소 불가") — 실패 시
+  원장 무변경 402로 반환되므로 admin은 전액 환불로 재시도한다. 취소 API는 가맹점 공인 IP 방화벽
+  등록이 선행 조건(DEPLOY.md 운영 노트).
 
 ## 14. `coupon-adjust` (admin) — 07 F3b-⑤
 쿠폰 수동 조정(CS 보조 / 데모 라이더 선지급 20장. point-adjust 패턴 복제).

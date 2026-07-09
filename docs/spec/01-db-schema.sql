@@ -249,6 +249,10 @@ from coupon_ledger group by rider_id;
 -- fn_transition_order ACCEPT 규제 게이트(20260709000009_rpc_transition_verify_gate.sql, 07 F11-①):
 --   ACCEPT 분기에 rider verify_status='APPROVED' 필수 가드 추가(아니면 'RIDER_NOT_ELIGIBLE') — SUSPENDED/
 --   미승인 라이더 신규 콜 수락 차단(최심층 방어). 게이트는 ACCEPT에만; 진행 전이는 무게이트(진행중 완결 허용).
+-- fn_transition_order 레거시 RELEASE 제거(20260709000010_rpc_transition_drop_legacy_release.sql, 07 D1 보강):
+--   DELIVER(레거시 완결) 분기의 fn_post_ledger RELEASE 호출 제거 — 배송 완료는 라이더 지급 이벤트가
+--   아니다(라이더는 쿠폰 구매 측). 이로써 point_ledger 신규 insert 경로 0(위 "신규 발행 중지" 주석이
+--   문자 그대로 성립). 완결 전이·QR 검증은 유지, 잔존 HOLD는 held 잔존(과거 회계 기록).
 
 -- ===== 쿠폰 구매 확정·환불 RPC [07 F4] — 실 정의는 supabase/migrations/20260709000005_rpc_purchase.sql =====
 -- PG 결제(토스페이먼츠) 경로. 둘 다 SECURITY DEFINER + search_path=public + revoke all/grant service_role.

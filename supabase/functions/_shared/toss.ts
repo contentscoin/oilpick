@@ -1,4 +1,5 @@
-// 토스페이먼츠 결제 API 계층 (07 F4). 02-api.md `coupon-purchase-confirm`/`coupon-refund`.
+// 토스페이먼츠 PG 어댑터 (07 F4, F14-①에서 pg.ts 계약으로 일반화). 02-api.md
+// `coupon-purchase-confirm`/`coupon-refund`가 getPgAdapter() 경유로 사용한다.
 //
 // 승인(confirm)·취소(cancel) 두 엔드포인트만 감싼다. 네트워크 없이 검증 가능하도록 fetch를
 // 주입 가능한 구조로 둔다(기본값 globalThis.fetch). 시크릿 키는 Deno.env(supabase secrets)
@@ -7,40 +8,14 @@
 // 토스 인증: Basic base64(`${secretKey}:`) — 시크릿 키 뒤 콜론, 비밀번호는 빈 문자열.
 // (토스 공식: "시크릿 키 뒤에 콜론을 추가하고 base64로 인코딩".)
 
+import { type FetchLike, PgApiError, type PgAdapter, type PgDeps, type PgPayment } from "./pg.ts";
+
 const TOSS_BASE = "https://api.tosspayments.com/v1/payments";
 
-/** 주입 가능한 fetch 시그니처(Deno/브라우저 fetch 호환 최소 형태). */
-export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
+/** 토스가 "이미 처리된 결제"로 응답하는 코드(재시도·동시 confirm의 승자가 이미 승인). */
+const TOSS_ALREADY_PROCESSED = "ALREADY_PROCESSED_PAYMENT";
 
-export interface TossDeps {
-  /** 시크릿 키. 미지정 시 Deno.env `TOSS_SECRET_KEY`. */
-  secretKey?: string;
-  /** 주입 fetch. 미지정 시 globalThis.fetch(테스트에서 가짜 주입). */
-  fetchImpl?: FetchLike;
-}
-
-/** 토스 승인/취소 응답 중 확정에 필요한 필드(그 외 필드는 무시). */
-export interface TossPayment {
-  paymentKey: string;
-  orderId: string;
-  status: string;
-  totalAmount: number;
-  [key: string]: unknown;
-}
-
-/** 토스 API 실패(비 2xx 응답 또는 네트워크 오류). code/message는 토스 에러 바디에서 온다. */
-export class TossApiError extends Error {
-  constructor(
-    public code: string,
-    message: string,
-    public httpStatus: number,
-  ) {
-    super(message);
-    this.name = "TossApiError";
-  }
-}
-
-function resolveSecretKey(deps?: TossDeps): string {
+function resolveSecretKey(deps?: PgDeps): string {
   const key = deps?.secretKey ?? Deno.env.get("TOSS_SECRET_KEY");
   if (!key) {
     throw new Error("TOSS_SECRET_KEY 시크릿이 설정되지 않았어요(supabase secrets).");
@@ -53,7 +28,7 @@ function basicAuthHeader(secretKey: string): string {
   return `Basic ${btoa(`${secretKey}:`)}`;
 }
 
-async function parseError(res: Response): Promise<TossApiError> {
+async function parseError(res: Response): Promise<PgApiError> {
   let code = "UNKNOWN";
   let message = `토스 API 오류(${res.status})`;
   try {
@@ -63,18 +38,18 @@ async function parseError(res: Response): Promise<TossApiError> {
   } catch {
     // 바디 파싱 실패 시 기본 메시지 유지.
   }
-  return new TossApiError(code, message, res.status);
+  return new PgApiError(code, message, res.status);
 }
 
 /**
  * 결제 승인(confirm). 결제위젯이 승인 대기 상태로 만든 결제를 최종 승인한다.
- * 성공 시 TossPayment(status='DONE', totalAmount 등) 반환. 실패 시 TossApiError throw.
+ * 성공 시 PgPayment(status='DONE', totalAmount 등) 반환. 실패 시 PgApiError throw.
  * amount 일치 검증은 호출부(Edge)가 반환값 totalAmount == 기대 amount로 수행한다.
  */
 export async function confirmTossPayment(
   params: { paymentKey: string; orderId: string; amount: number },
-  deps?: TossDeps,
-): Promise<TossPayment> {
+  deps?: PgDeps,
+): Promise<PgPayment> {
   const secretKey = resolveSecretKey(deps);
   const fetchImpl = deps?.fetchImpl ?? (globalThis.fetch as FetchLike);
 
@@ -94,18 +69,18 @@ export async function confirmTossPayment(
   if (!res.ok) {
     throw await parseError(res);
   }
-  return (await res.json()) as TossPayment;
+  return (await res.json()) as PgPayment;
 }
 
 /**
  * 결제 취소(cancel). 승인된 결제를 (부분) 취소한다 — PG 환불.
- * cancelAmount 지정 시 부분 취소, 생략 시 전액 취소. 성공 시 TossPayment 반환.
+ * cancelAmount 지정 시 부분 취소, 생략 시 전액 취소. 성공 시 PgPayment 반환.
  */
 export async function cancelTossPayment(
   paymentKey: string,
   params: { cancelReason: string; cancelAmount?: number },
-  deps?: TossDeps,
-): Promise<TossPayment> {
+  deps?: PgDeps,
+): Promise<PgPayment> {
   const secretKey = resolveSecretKey(deps);
   const fetchImpl = deps?.fetchImpl ?? (globalThis.fetch as FetchLike);
 
@@ -124,5 +99,13 @@ export async function cancelTossPayment(
   if (!res.ok) {
     throw await parseError(res);
   }
-  return (await res.json()) as TossPayment;
+  return (await res.json()) as PgPayment;
 }
+
+/** pg.ts 계약 구현체 — getPgAdapter("toss")가 반환한다. */
+export const tossAdapter: PgAdapter = {
+  provider: "toss",
+  confirmPayment: confirmTossPayment,
+  cancelPayment: cancelTossPayment,
+  isAlreadyProcessed: (err) => err instanceof PgApiError && err.code === TOSS_ALREADY_PROCESSED,
+};

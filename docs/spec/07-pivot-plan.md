@@ -27,7 +27,7 @@
 ### 결정 기록
 | # | 결정 사항 | 확정 내용 |
 |---|---|---|
-| D1 | 기존 포인트 적립·출금 | **완전 폐기** — 현금 직거래로 전환. 지갑/출금 UI 제거, "수령 이력"으로 대체 (CEO) |
+| D1 | 기존 포인트 적립·출금 | **완전 폐기** — 현금 직거래로 전환. 지갑/출금 UI 제거, "수령 이력"으로 대체 (CEO) **→ 2026-07-09 보강(CEO): 레거시 잔존 주문 완결(DELIVER)에서도 라이더 RELEASE 지급 금지 — 배송 완료는 어떤 경우에도 라이더 지급 이벤트가 아니다(라이더는 쿠폰 2,000원/장 구매 측, 1장=1통). F13이 보존했던 마지막 발행 경로를 20260709000010에서 제거(완결 전이만 유지), pgTAP 04 재작성** |
 | D2 | 쿠폰 소진 단위 | **용량(kg) 비례** — `KG_PER_CAN`(15kg) 단위당 1장, 즉 `ceil(requested_kg/15)`. **통 개수가 아니라 kg 기준**(F9-③ 통 크기 가변 도입과 무관 — kg 환산 후 산정). 주문 생성 시점 스냅샷 (CEO) |
 | D3 | 쿠폰 결제 | **처음부터 PG 연동** (토스페이먼츠 권장). admin 수동 조정(ADJUST)은 CS용 보조 (CEO) **→ 2026-07-09 보완: PG 계약은 코엠페이먼츠(coam.co.kr)로 확정(CEO). 단 코엠은 수기/현장결제 플랫폼으로 공개 개발자 API·결제위젯 부재(웹 조사 확인) — 제휴 API 확인 후 인앱 연동(F14), 그전까지 수동 충전 운영(라이더 입금 → admin coupon-adjust). F4의 토스 어댑터·결제 화면은 키 미설정 게이트로 휴면** |
 | D4 | 취소 시 쿠폰 | **귀책 기준 환급** — admin 취소 시 fault 선택 필수: `SUPPLIER`(점주 귀책·노쇼)/`SYSTEM`(플랫폼 귀책 — 시세 오등록·매칭 오류 등)=자동 환급, `RIDER`(라이더 귀책)=소진 유지 (CEO) |
@@ -525,16 +525,53 @@ REQUESTED→CANCELLED: supplier 자진 or 시스템 30분 무수락. 쿠폰 미�
   pgTAP 104/104(시드 공존 — 02_state_machine 픽스처 `insert rider_profiles ... on conflict do nothing` 멱등
   1줄 보정, assert 32개 무변경). "포인트 적립/출금 도달 가능 UI" 0건(잔존은 주석·레거시 렌더 분기·보존 라벨).
 
-### F14. 【API】【R】 코엠페이먼츠 인앱 결제 어댑터 — 외부 의존: 제휴 API 문서·키 (착수 보류)
-- 배경: D3 보완 — 코엠페이먼츠는 공개 개발자 API가 없어(수기/현장결제 플랫폼) 인앱 자동 결제 연동
-  불가. 코엠 제휴 문의로 B2B API 존재 여부·문서·키를 확보하면 착수. 그전까지 수동 충전 운영
-  (CouponPurchasePage 키 미설정 게이트 → 고객센터 COUPON_PAYMENT → admin coupon-adjust).
-- 작업(문서 확보 후 확정): ① _shared/toss.ts의 fetch-주입 구조를 PG 어댑터 인터페이스로 일반화
-  (confirm/cancel 계약 유지), 코엠 어댑터 구현. ② coupon-purchase-confirm/refund의 승인·취소 호출
-  교체(멱등 3중·상태머신은 PG 중립이라 무변경). ③ rider 결제 화면의 위젯 계층 교체(코엠 결제창 방식에
-  따라 — 리다이렉트형이면 위젯 제거·간소화). ④ 시크릿 키 세팅(supabase secrets, 클라이언트 키 env).
-- DoD: 테스트 환경 결제 E2E(F4 [x]의 5단계 절차 준용). 코엠이 API를 제공하지 않는 것으로 확정되면
-  이 태스크를 폐기하고 "API형 PG 병행" 여부를 CEO 재결정.
+### F14. 【API】【R】 코엠페이먼츠 인앱 결제 어댑터 — 문서 확보로 확정 설계 (2026-07-09 구현)
+- 배경: D3 보완 — 코엠 제휴로 "PG 결제연동 가이드(SIMPLEPAY) v1.14" + 공식 JSP 샘플 확보(2026-07-09,
+  세션 업로드). 확보 전까지는 수동 충전 운영(키 미설정 게이트 → 고객센터 → admin coupon-adjust)이었다.
+- **확정 설계(문서 근거)**: 코엠 SIMPLEPAY는 토스형 confirm API가 없는 **결제창 리다이렉트형**.
+  ⓐ 결제: 가맹점이 결제창(모바일 `{PG_DOMAIN}/mobilepage/common/mainFrame.pay`)에 form POST
+  (checkHash=HMAC-SHA256-Base64(orderno+orderdt+ordertm+buyReqamt, API_KEY) — 서버 생성 필수) →
+  사용자 결제 → PG가 rUrl로 결과 form POST(**서버 콜백이 유일한 확정 경로**). ⓑ 취소:
+  server-to-server JSON `{APPROV_DOMAIN}/api/cc/approv/cancel`(checkHash=HMAC(tid+mid+cancel_amt),
+  tax_yn=Y, JSON 키는 문서 표기 checkhash가 아닌 동작 샘플 표기 checkHash 채택). ⓒ orderno는 응답
+  규격 Max 20 → pg_order_id를 `op`+18hex 20자로 개정(토스 호환). ⓓ 결제응답에 무결성 해시 부재 —
+  방어: 서버 스냅샷 금액 대조·멱등 3중·tid 저장(환불 시 PG 실검증)·admin 일일 대사, 잔여 외부
+  액션으로 코엠에 거래조회 API/응답 해시/노티 발신 IP 문의. ⓔ 부분취소는 EC1088로 거부될 수 있음
+  (실패 시 원장 무변경 402 — admin 전액 환불 재시도). ⓕ 취소 API는 가맹점 공인 IP 방화벽 등록
+  선행(Supabase Edge는 고정 egress IP가 아님 — DEPLOY.md 운영 노트, 코엠 협의 필요).
+- 작업: ① _shared/toss.ts의 fetch-주입 구조를 PG 어댑터 인터페이스로 일반화(confirm/cancel 계약
+  유지), 코엠 어댑터 구현. ② 승인·취소 경로 교체 — 코엠 승인은 신설 `coupon-purchase-return`
+  (rUrl 콜백, verify_jwt=false)이 fn_confirm_purchase로 확정, confirm(§12)은 토스 전용화. 취소는
+  어댑터 경유(멱등 3중·상태머신 PG 중립 무변경). ③ rider 결제 화면 — 코엠 모드는 위젯 대신
+  intent가 동봉한 결제창 파라미터를 hidden form POST(현재 창), PENDING 항목은 "결제 상태 새로고침".
+  ④ 시크릿 세팅(KOEM_MID/KOEM_API_KEY 등 — DEPLOY.md, rider env VITE_PG_PROVIDER).
+- DoD: 테스트 환경 결제 E2E(F4 [x]의 5단계 절차 준용) — **코엠 개발기 MID/API_KEY 발급 대기**.
+  E2E 절차: 개발기 도메인 재정의(KOEM_*_DOMAIN) → 결제창 진입 → 테스트 결제 → return 콜백 확정
+  → 잔액 반영 → coupon-refund 취소까지. ※ 개발기 취소 서버(IP 도메인)는 TLS 검증 문제로 상용
+  인증서 도메인에서 확인(DEPLOY.md).
+- 진행 2026-07-09 (1차, ① 전반부): `_shared/pg.ts` 어댑터 계약(confirm/cancel/isAlreadyProcessed
+  + `PgApiError`) 신설, toss.ts를 `tossAdapter`로 이식, coupon-purchase-confirm/refund 어댑터 경유
+  재배선. assert는 deno.land/jsr 차단 샌드박스 대응으로 `_shared/vendor/std-assert` 수동 벤더
+  (원본 equal 계약: 0/-0·NaN·Date/RegExp/URL/Map/Set, Deno.inspect 메시지 — 적대적 리뷰 확정 1건 반영).
+- 진행 2026-07-09 (2차, ①후반~④ 구현 완료): `_shared/koem.ts`(koemAdapter — confirmPayment는
+  NOT_SUPPORTED 명시 실패, cancelKoemPayment/buildKoemPayParams/parseKoemReturn/koemCheckHash),
+  checkHash는 가이드 §3.1.2.1 공식 예시 벡터로 테스트 고정. `getPgAdapter("koem")` 연결.
+  intent 확장(koem 결제창 파라미터 동봉 + pg_order_id 20자 개정) + core 스키마 koem 필드 +
+  vendor 재빌드. `coupon-purchase-return` 신설(config.toml verify_jwt=false) — 멱등·금액 대조·
+  실패 시 취소+FAILED·충전 알림·앱 복귀 HTML. rider CouponPurchasePage 코엠 분기(form POST 주입
+  가능, 수동 충전 게이트는 토스 전용화, koem 테스트 4 신규). 02-api.md(§공통·§11·§12·§12-1 신설·
+  §13)·DEPLOY.md(KOEM_* 시크릿·운영 선행 조건)·rider .env.example 동기화.
+  **잔여(외부 의존)**: 코엠 MID/API_KEY 발급 → E2E, 공인 IP 방화벽 협의, 거래조회 API/응답 해시/
+  노티 규격 문의(§4 Notification 수신 함수는 문의 결과에 따라 후속 — 승인 noti 미대사 건 자동
+  취소 정책 포함).
+- **데모 운영 결정(CEO 2026-07-09)**: 코엠 실연결(키 발급·계약 마무리)은 보류 — 그때까지 결제는
+  `PG_PROVIDER=demo` **데모 모드**로 운영한다. demoAdapter(pg.ts)가 PG 외부 호출만 즉시 성공으로
+  대체하고 원장·상태머신·멱등 3중은 실경로(fn_confirm_purchase/fn_refund_purchase) 그대로 —
+  intent가 `demo: true`를 반환하면 rider가 결제창 없이 confirm(paymentKey=`demo_${purchaseId}`)
+  직행, 화면에 "데모 결제 모드" 배너와 "데모 결제하기" 라벨로 명시. 환불도 데모 취소로 동작해
+  admin 플로우 시연 가능. ⚠️ 실 과금 없음 — 실 라이더 온보딩 전 koem 전환 필수(DEPLOY.md 경고,
+  배포 체크리스트에서 PG_PROVIDER·VITE_PG_PROVIDER 짝 확인). 구현: pg.ts demoAdapter + 테스트 2,
+  intent demo 플래그(스키마·vendor 동기), rider 데모 분기 + 테스트 4. deno 25/25·rider 17/17.
 
 ---
 
