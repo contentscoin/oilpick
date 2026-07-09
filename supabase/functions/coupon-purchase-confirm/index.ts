@@ -1,22 +1,20 @@
 // coupon-purchase-confirm (rider). docs/spec/02-api.md "12. coupon-purchase-confirm" (07 F4):
-// 토스 승인 확정 + 쿠폰 충전(멱등 3중, 07 §1-4).
+// PG 승인 확정 + 쿠폰 충전(멱등 3중, 07 §1-4).
 //
 // 절차(단일 RPC 트랜잭션 원칙 — 원장+상태 전이는 fn_confirm_purchase가 원자 처리):
 //   ① 본인 소유·pg_order_id 일치 확인 → ② 이미 PAID면 멱등 성공(잔액만 반환) →
-//   ③ PENDING 재확인 + amount 위변조 거부 → ④ 토스 승인 API 호출(RPC 밖) + 응답 amount 재검증 →
+//   ③ PENDING 재확인 + amount 위변조 거부 → ④ PG 승인 API 호출(RPC 밖) + 응답 amount 재검증 →
 //   ⑤ fn_confirm_purchase(PENDING→PAID + CHARGE) → ⑥ 잔액 재조회 + "쿠폰 N장 충전 완료" 알림.
-// 실패 시: 승인 실패 → FAILED 전이. 승인 후 확정 실패 → 토스 취소 시도 + FAILED. amount 불일치 → 거부.
-// PG 시크릿 키는 Edge Function 전용(절대 규칙 3의 확장) — _shared/toss.ts가 Deno.env에서만 읽는다.
+// 실패 시: 승인 실패 → FAILED 전이. 승인 후 확정 실패 → PG 취소 시도 + FAILED. amount 불일치 → 거부.
+// PG 호출은 _shared/pg.ts 어댑터 경유(F14-①, 활성 PG는 PG_PROVIDER — 기본 토스). PG 시크릿
+// 키는 Edge Function 전용(절대 규칙 3의 확장) — 어댑터가 Deno.env에서만 읽는다.
 
 import { couponPurchaseConfirmInputSchema } from "@oilpick/core/index.ts";
 import { AuthError, requireAuth, requireRole } from "../_shared/auth.ts";
 import { errorResponse, okResponse, withErrorHandling } from "../_shared/response.ts";
 import { sendPush } from "../_shared/push.ts";
-import { confirmTossPayment, cancelTossPayment, TossApiError } from "../_shared/toss.ts";
+import { getPgAdapter, type PgAdapter } from "../_shared/pg.ts";
 import type { SupabaseClient } from "@supabase/supabase-js";
-
-/** 토스가 "이미 처리된 결제"로 응답하는 코드(재시도·동시 confirm의 승자가 이미 승인). */
-const TOSS_ALREADY_PROCESSED = "ALREADY_PROCESSED_PAYMENT";
 
 async function readBalance(admin: SupabaseClient, riderId: string): Promise<number> {
   const { data, error } = await admin
@@ -38,12 +36,12 @@ async function markFailed(admin: SupabaseClient, purchaseId: string): Promise<vo
   if (error) console.error("coupon_purchases FAILED 전이 실패", error);
 }
 
-/** 승인 후 확정 실패 시 토스 취소 best-effort(막지 않음 — 실패해도 로그만). */
-async function tryCancel(paymentKey: string, reason: string): Promise<void> {
+/** 승인 후 확정 실패 시 PG 취소 best-effort(막지 않음 — 실패해도 로그만). */
+async function tryCancel(pg: PgAdapter, paymentKey: string, reason: string): Promise<void> {
   try {
-    await cancelTossPayment(paymentKey, { cancelReason: reason });
+    await pg.cancelPayment(paymentKey, { cancelReason: reason });
   } catch (err) {
-    console.error("토스 취소 시도 실패(수동 대사 필요)", err);
+    console.error("PG 취소 시도 실패(수동 대사 필요)", err);
   }
 }
 
@@ -97,32 +95,29 @@ Deno.serve((req) =>
       return errorResponse("VALIDATION_ERROR", 400, "결제 금액이 일치하지 않아요.");
     }
 
-    // ④ 토스 승인 API(RPC 밖). paymentKey/orderId/amount는 서버 스냅샷 기준으로 호출.
-    let approved = true;
+    // ④ PG 승인 API(RPC 밖). paymentKey/orderId/amount는 서버 스냅샷 기준으로 호출.
+    const pg = getPgAdapter();
     try {
-      const payment = await confirmTossPayment({
+      const payment = await pg.confirmPayment({
         paymentKey,
         orderId: purchase.pg_order_id,
         amount: purchase.amount,
       });
       // 승인 금액 재검증. 불일치 시 취소 시도 + FAILED.
       if (payment.totalAmount !== purchase.amount) {
-        await tryCancel(paymentKey, "승인 금액 불일치");
+        await tryCancel(pg, paymentKey, "승인 금액 불일치");
         await markFailed(admin, purchaseId);
         return errorResponse("VALIDATION_ERROR", 400, "결제 금액이 일치하지 않아요.");
       }
     } catch (err) {
-      // 이미 승인된 결제(재시도/동시 confirm 승자) → 취소하지 않고 멱등 확정으로 진행.
-      if (err instanceof TossApiError && err.code === TOSS_ALREADY_PROCESSED) {
-        approved = true;
-      } else {
+      // 이미 승인된 결제(재시도/동시 confirm 승자)는 취소하지 않고 멱등 확정으로 진행.
+      if (!pg.isAlreadyProcessed(err)) {
         // 승인 실패(거절/네트워크 등) → FAILED 전이.
         await markFailed(admin, purchaseId);
         const message = err instanceof Error ? err.message : undefined;
         return errorResponse("PAYMENT_FAILED", 402, message);
       }
     }
-    void approved;
 
     // ⑤ 확정 RPC(원자): PENDING→PAID + payment_key + CHARGE. 재호출/동시성 멱등.
     const { data: ledger, error: rpcErr } = await admin.rpc("fn_confirm_purchase", {
@@ -131,7 +126,7 @@ Deno.serve((req) =>
     });
     if (rpcErr) {
       // 승인은 됐으나 충전 확정 실패(예: TTL EXPIRED로 상태 이탈) → 취소 시도 + FAILED.
-      await tryCancel(paymentKey, "충전 처리 실패");
+      await tryCancel(pg, paymentKey, "충전 처리 실패");
       await markFailed(admin, purchaseId);
       const message = rpcErr.message ?? "";
       if (message.includes("INVALID_TRANSITION")) return errorResponse("INVALID_TRANSITION", 409);

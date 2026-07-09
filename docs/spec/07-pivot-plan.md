@@ -535,6 +535,16 @@ REQUESTED→CANCELLED: supplier 자진 or 시스템 30분 무수락. 쿠폰 미�
   따라 — 리다이렉트형이면 위젯 제거·간소화). ④ 시크릿 키 세팅(supabase secrets, 클라이언트 키 env).
 - DoD: 테스트 환경 결제 E2E(F4 [x]의 5단계 절차 준용). 코엠이 API를 제공하지 않는 것으로 확정되면
   이 태스크를 폐기하고 "API형 PG 병행" 여부를 CEO 재결정.
+- 진행 2026-07-09: **① 전반부 완료** — `_shared/pg.ts` 어댑터 계약(confirm/cancel/isAlreadyProcessed
+  + `PgApiError`) 신설, `getPgAdapter()`(env `PG_PROVIDER`, 기본 toss — koem은 구현 전 명시 실패),
+  toss.ts를 `tossAdapter`로 이식(에러를 PgApiError로 일반화, ALREADY_PROCESSED 판정을 어댑터로 이동),
+  coupon-purchase-confirm/refund를 어댑터 경유로 재배선(멱등 3중·에러 계약·상태머신 무변경).
+  02-api.md §공통·DEPLOY.md에 PG_PROVIDER 반영. assert는 deno.land/jsr 차단 샌드박스 대응으로
+  `_shared/vendor/std-assert` 수동 벤더로 이전(원본 equal 계약 유지: 0/-0·NaN·Date/RegExp/URL/Map/Set,
+  실패 메시지는 Deno.inspect — 순환 참조 안전. 적대적 리뷰 확정 1건 반영). deno 테스트 15/15
+  (pg.test.ts 5 + std-assert.test.ts 5 신규), deno check/lint, lint 7/7·vitest·build 5/5 green.
+  **잔여(제휴 문서 필요)**: 코엠 어댑터 구현(①후반)·②③④.
+  코엠 개발문서는 구글 드라이브 공유본 확보(2026-07-09) — 세션 네트워크 정책 차단으로 리포 반입 대기.
 
 ---
 

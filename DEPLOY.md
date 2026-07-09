@@ -29,6 +29,8 @@ supabase secrets set FCM_SERVICE_ACCOUNT="$(cat fcm-service-account.json)"
 #    클라이언트 키(VITE_TOSS_CLIENT_KEY, rider 앱 env)와 다르다 — 시크릿 키는 서버(Edge)에만 둔다.
 #    미설정 시 confirm/refund가 PAYMENT_FAILED로 실패한다. 테스트 키(test_sk_...)로 개발/검증 가능.
 supabase secrets set TOSS_SECRET_KEY="test_sk_xxxxxxxxxxxxxxxxxxxx"
+#  - PG_PROVIDER(선택): 활성 PG 어댑터 선택(07 F14-①). 미설정=toss.
+#    "koem"(코엠페이먼츠)은 어댑터 구현 전까지 설정 금지 — confirm/refund가 즉시 실패한다.
 ```
 
 ### 1-1. 프로덕션 초기 데이터(수동 — seed.sql은 로컬 전용)

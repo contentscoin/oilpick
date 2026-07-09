@@ -1,12 +1,9 @@
-// toss.ts 네트워크 없는 검증(07 F4). 주입 fetch로 요청 형태(URL/메서드/Basic 인증/바디)와
-// 성공·실패 매핑을 확인한다. `deno test supabase/functions/_shared/toss.test.ts`로 실행.
-import { assertEquals, assertRejects } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import {
-  confirmTossPayment,
-  cancelTossPayment,
-  TossApiError,
-  type FetchLike,
-} from "./toss.ts";
+// toss.ts 네트워크 없는 검증(07 F4·F14-①). 주입 fetch로 요청 형태(URL/메서드/Basic 인증/바디)와
+// 성공·실패 매핑, tossAdapter의 멱등 판정을 확인한다.
+// `deno test supabase/functions/_shared/toss.test.ts`로 실행.
+import { assert, assertEquals, assertRejects } from "./vendor/std-assert/mod.ts";
+import { cancelTossPayment, confirmTossPayment, tossAdapter } from "./toss.ts";
+import { type FetchLike, PgApiError } from "./pg.ts";
 
 function fakeFetch(
   capture: { url?: string; init?: RequestInit },
@@ -50,7 +47,7 @@ Deno.test("confirmTossPayment: confirm 엔드포인트 + Basic 인증 + 바디",
   });
 });
 
-Deno.test("confirmTossPayment: 비2xx → TossApiError(code/message 매핑)", async () => {
+Deno.test("confirmTossPayment: 비2xx → PgApiError(code/message 매핑)", async () => {
   const cap: { url?: string; init?: RequestInit } = {};
   const fetchImpl = fakeFetch(cap, {
     ok: false,
@@ -64,7 +61,7 @@ Deno.test("confirmTossPayment: 비2xx → TossApiError(code/message 매핑)", as
         { paymentKey: "tk_1", orderId: "oc_1", amount: 5000 },
         { secretKey: "test_sk_abc", fetchImpl },
       ),
-    TossApiError,
+    PgApiError,
   );
   assertEquals(err.code, "ALREADY_PROCESSED_PAYMENT");
   assertEquals(err.httpStatus, 400);
@@ -104,4 +101,17 @@ Deno.test("cancelTossPayment: cancelAmount 생략 시 전액 취소(바디에 �
   });
 
   assertEquals(JSON.parse(cap.init?.body as string), { cancelReason: "전액 환불" });
+});
+
+Deno.test("tossAdapter.isAlreadyProcessed: ALREADY_PROCESSED_PAYMENT 코드만 true", () => {
+  assert(
+    tossAdapter.isAlreadyProcessed(
+      new PgApiError("ALREADY_PROCESSED_PAYMENT", "이미 처리된 결제 입니다.", 400),
+    ),
+  );
+  assertEquals(
+    tossAdapter.isAlreadyProcessed(new PgApiError("REJECT_CARD_PAYMENT", "한도 초과", 403)),
+    false,
+  );
+  assertEquals(tossAdapter.isAlreadyProcessed(new Error("network down")), false);
 });

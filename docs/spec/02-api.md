@@ -10,6 +10,9 @@
   Edge Function에서 다건 쿼리로 쪼개지 말 것. 핵심 RPC: `fn_transition_order`, `fn_post_ledger`,
   **`fn_charge_coupon`(CHARGE/ADJUST), `fn_consume_coupon`(CONSUME, rider 단위 FOR UPDATE 직렬화 후 잔액 재계산 → 부족 시 `INSUFFICIENT_COUPON` 예외)** (07 F3a).
 - **PG(토스페이먼츠) 시크릿 키는 Edge Function 전용**(supabase secrets) — 클라이언트 번들엔 클라이언트 키만(절대 규칙 3 확장, 07 §1-4).
+- PG 호출(§12 승인/§13 취소)은 `_shared/pg.ts` **어댑터 계약 경유**(07 F14-①): 활성 PG는
+  `PG_PROVIDER` env(기본 `toss`)로 선택. `koem`(코엠페이먼츠)은 제휴 API 문서 확보 후 어댑터
+  구현 전까지 선택 시 명시적으로 실패한다. 원장·상태머신·에러코드는 PG 중립(무변경).
 
 읽기 전용 조회(시세, 주문 목록, 원장, 알림)는 Edge Function을 만들지 않는다 —
 클라이언트가 RLS 하에서 supabase-js로 직접 select한다.

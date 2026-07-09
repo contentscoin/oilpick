@@ -1,16 +1,16 @@
 // coupon-refund (admin). docs/spec/02-api.md "13. coupon-refund" (07 F4):
 // 쿠폰 구매 건 환불(구매 건 단위, 건당 1회, 07 §1-4).
 //
-// 순서(확정): 미사용 잔액 fail-fast(order-accept 패턴) → 토스 취소 API(cancelAmount=qty×unit_price) →
+// 순서(확정): 미사용 잔액 fail-fast(order-accept 패턴) → PG 취소 API(cancelAmount=qty×unit_price) →
 // 성공 시 fn_refund_purchase(ADJUST(-qty, purchase_id) + status=REFUNDED) 원자 확정 → rider "환급" 알림.
-// 토스 취소 실패 시 원장 무변경(PAYMENT_FAILED). 취소 성공 후 RPC 실패는 대사 대상(로그 + 에러 반환).
-// PG 시크릿 키는 Edge Function 전용(_shared/toss.ts가 Deno.env에서만 읽음).
+// PG 취소 실패 시 원장 무변경(PAYMENT_FAILED). 취소 성공 후 RPC 실패는 대사 대상(로그 + 에러 반환).
+// PG 호출은 _shared/pg.ts 어댑터 경유(F14-①, 기본 토스). 시크릿 키는 Edge Function 전용.
 
 import { couponRefundInputSchema } from "@oilpick/core/index.ts";
 import { AuthError, requireAuth, requireRole } from "../_shared/auth.ts";
 import { errorResponse, okResponse, withErrorHandling } from "../_shared/response.ts";
 import { sendPush } from "../_shared/push.ts";
-import { cancelTossPayment, TossApiError } from "../_shared/toss.ts";
+import { getPgAdapter } from "../_shared/pg.ts";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 async function readBalance(admin: SupabaseClient, riderId: string): Promise<number> {
@@ -67,7 +67,7 @@ Deno.serve((req) =>
       return errorResponse("VALIDATION_ERROR", 400, "환불 수량이 구매 수량을 초과했어요.");
     }
 
-    // fail-fast: 미사용 잔액 < 환불 qty면 토스 취소 전에 거부(취소 후 RPC 실패 최소화, 07 §1-4).
+    // fail-fast: 미사용 잔액 < 환불 qty면 PG 취소 전에 거부(취소 후 RPC 실패 최소화, 07 §1-4).
     const balanceBefore = await readBalance(admin, purchase.rider_id);
     if (balanceBefore < refundQty) {
       return errorResponse("INSUFFICIENT_COUPON", 409);
@@ -75,15 +75,16 @@ Deno.serve((req) =>
 
     const cancelAmount = refundQty * (purchase.unit_price as number);
 
-    // 토스 취소(PG 환불). 실패 시 원장 무변경(PAYMENT_FAILED).
+    // PG 취소(환불). 실패 시 원장 무변경(PAYMENT_FAILED).
+    const pg = getPgAdapter();
     try {
-      await cancelTossPayment(purchase.payment_key as string, {
+      await pg.cancelPayment(purchase.payment_key as string, {
         cancelReason: reason,
         cancelAmount,
       });
     } catch (err) {
-      const message = err instanceof TossApiError || err instanceof Error ? err.message : undefined;
-      console.error("토스 취소 실패(원장 무변경)", err);
+      const message = err instanceof Error ? err.message : undefined;
+      console.error("PG 취소 실패(원장 무변경)", err);
       return errorResponse("PAYMENT_FAILED", 402, message);
     }
 
@@ -95,9 +96,9 @@ Deno.serve((req) =>
       p_memo: reason,
     });
     if (rpcErr) {
-      // 토스는 이미 취소됨 → 원장 미반영. 자동 복구 불가하므로 대사 대상으로 로그.
+      // PG는 이미 취소됨 → 원장 미반영. 자동 복구 불가하므로 대사 대상으로 로그.
       console.error(
-        "coupon-refund: 토스 취소 성공 후 fn_refund_purchase 실패 — 수동 대사 필요",
+        "coupon-refund: PG 취소 성공 후 fn_refund_purchase 실패 — 수동 대사 필요",
         { purchaseId, refundQty, rpcErr },
       );
       const message = rpcErr.message ?? "";
