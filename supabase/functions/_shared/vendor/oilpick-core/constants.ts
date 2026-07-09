@@ -1,5 +1,5 @@
 // @ts-nocheck — 자동 생성 vendor 산출물(빌드 시 타입 정보 소실). 원본은 packages/core/src/constants.ts.
-// packages/core/src/constants.ts
+// ../../../../packages/core/src/constants.ts
 var KG_PER_CAN = 15;
 var CAN_SIZE_L_DEFAULT = 18;
 var MIN_WITHDRAW = 1e4;

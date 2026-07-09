@@ -120,6 +120,9 @@ function mapTransitionError(rpcErr: { message?: string }): Response {
   const message = rpcErr.message ?? "";
   if (message.includes("ALREADY_ACCEPTED")) return errorResponse("ALREADY_ACCEPTED", 409);
   if (message.includes("INSUFFICIENT_COUPON")) return errorResponse("INSUFFICIENT_COUPON", 409);
+  // [07 F11] fn_transition_order ACCEPT 게이트(SUSPENDED/미승인) — Edge 사전 가드가 통상 먼저 잡지만
+  // RPC까지 온 경우(방어선)도 403으로 매핑.
+  if (message.includes("RIDER_NOT_ELIGIBLE")) return errorResponse("RIDER_NOT_ELIGIBLE", 403);
   if (message.includes("NOT_FOUND")) return errorResponse("NOT_FOUND", 404);
   if (message.includes("INVALID_TRANSITION")) return errorResponse("INVALID_TRANSITION", 409);
   console.error("order-accept: 예기치 못한 RPC 에러", rpcErr);

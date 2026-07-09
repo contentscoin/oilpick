@@ -68,8 +68,20 @@ ACCEPTED 이후 모든 전이 단일 엔드포인트.
   `order:{orderId}:location`으로 좌표 push (supplier 지도용).
 
 ## 6. `rider-verify` (admin)
-- 입력: `{ riderId, decision: 'APPROVED'|'REJECTED', rejectReason? }`
-- 처리: verify_status 갱신 + rider 푸시.
+- 입력: `{ riderId, decision: 'APPROVED'|'REJECTED'|'SUSPENDED'|'REINSTATED', rejectReason? }`
+- 처리: verify_status 갱신 + rider 푸시(§1-6 인증 승인/반려·정지/해제).
+- **07 F11 — 정지·서류·인계처**:
+  - `APPROVED`(최초 승인): 서버 필수 검증 — `doc_permit_url`(폐기물처리(수집·운반) 신고증명서)과
+    `recycler_name`/`recycler_contact`(인계처)가 없으면 400 `VALIDATION_ERROR`(message로 사유 명시).
+    통과 시 verify_status='APPROVED', reject_reason 초기화.
+  - `REJECTED`: rejectReason 필수 → reject_reason 저장.
+  - `SUSPENDED`(정지): rejectReason 필수(정지 사유, reject_reason 재사용) → verify_status='SUSPENDED' +
+    **is_online 강제 false**. APPROVED 라이더에만 의미. open_calls RLS·order-accept 가드·
+    fn_transition_order ACCEPT 게이트가 APPROVED를 요구하므로 정지 즉시 콜 조회/수락 자동 차단
+    (진행중 주문은 ACCEPT 외 전이라 완결까지 허용).
+  - `REINSTATED`(해제): verify_status='APPROVED' 복귀, reject_reason 초기화(서류 재검증 없음).
+  - guard_rider_verify 트리거는 service_role 예외 경로 → 이 Edge Function만 verify_status/is_online 갱신
+    가능. authenticated의 셀프 정지·해제 변조는 트리거로 차단.
 
 ## 7. `withdraw-request` (supplier/rider)
 > ⚠️ **deprecated — 07 D1 포인트 폐기, F13에서 제거 예정.**

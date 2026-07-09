@@ -118,7 +118,8 @@
 - 확정 현금 = 라이더 계량 kg × 스냅샷 시세, 원 단위 반올림 (`cash_paid_amount`).
 
 ## 라이더 인증
-- 가입 시 서류 3종 업로드(사업자등록증, 차량 사진, 폐기물 수집·운반 허가증 — 허가증은 선택).
+- 가입 시 서류 3종 업로드(사업자등록증, 차량 사진, **폐기물처리(수집·운반) 신고증명서 — 필수**, 07 F11)
+  + 인계처(허가 재활용업체) 업체명·연락처 필수. 신고증명서·인계처 없이는 admin 승인이 서버에서 거부된다.
 - rider_profiles.verify_status: `PENDING → APPROVED | REJECTED` (admin 검수). **`SUSPENDED`(정지) 추가**(07 F2 스키마, 액션·정책은 07 F11).
 - APPROVED 전에는 콜 목록 조회/수락 불가 (RLS + API 가드). SUSPENDED도 동일 차단(APPROVED 체크로 자동).
 - 인증 QR: rider_id + 발급시각 서명 토큰(JWT, 5분 만료)을 R9 화면에 표시. supplier 앱에서 스캔 검증(Phase 1은 화면 제시만, 스캔 검증은 Phase 2).

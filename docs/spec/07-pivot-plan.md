@@ -470,6 +470,18 @@ REQUESTED→CANCELLED: supplier 자진 or 시스템 30분 무수락. 쿠폰 미�
 - 주의: **법률 검토(변호사/환경부 질의) 결과에 따라 요건 수위 조정 가능** — 착수 전 D5 확정 필수.
 - DoD: 신고증명서 없는 승인 시도 → 거부. SUSPENDED 라이더 콜 조회/수락 불가(RLS+가드 테스트) + 통지 발송.
   마이그레이션+01 동기화.
+- [x] 결과(2026-07-09): 마이그레이션 2개(20260709000008 recycler_name/contact / 20260709000009
+  fn_transition_order ACCEPT에 verify_status='APPROVED' 게이트 — RIDER_NOT_ELIGIBLE, 진행 전이는 무게이트
+  =정지 시 진행중 주문 완결 허용). rider-verify에 SUSPENDED/REINSTATED 액션(사유는 reject_reason 재사용,
+  정지 시 is_online 강제 false, §1-6 정지/해제 sendPush) + approve 시 doc_permit_url·recycler 서버 필수
+  검증(400 VALIDATION_ERROR). order-accept mapTransitionError에 RIDER_NOT_ELIGIBLE→403 추가. UI: admin
+  RiderVerifyCard [정지]/[해제]+사유·신고증명서 필수뱃지·인계처 표시, rider AuthPage(서류 업로드 화면)
+  신고증명서 필수화+정부24 카피+인계처 입력. pgTAP 07 신설 9(SUSPENDED open_calls 0행/ACCEPT 거부·
+  REQUESTED 잔존/PENDING 거부/APPROVED 대조군+CONSUME/정지 후 ARRIVE 허용/셀프 해제 변조 차단) →
+  7파일 104/104 green. vitest 신규 11(admin RiderVerifyCard 7+rider AuthPage 4), lint/test/build 전체
+  green, deno check(rider-verify·order-accept, vendor 재생성). 02-api.md §6 suspend/reinstate 개정,
+  01 예약 마커 실 DDL 교체. ⚠️ 00-domain.md:121 "허가증은 선택"은 F11-② 필수화와 상충 — 문서 수정
+  허용 범위 밖이라 보고로 이월.
 
 ### F12. 【A】【U】【R】【DB】 CS 1차 — 문의 티켓
 - 작업: ① `cs_tickets(id, author_id FK, role, category enum('ORDER','CASH_DISPUTE','COUPON_PAYMENT',

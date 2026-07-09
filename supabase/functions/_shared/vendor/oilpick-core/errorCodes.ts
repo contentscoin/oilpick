@@ -1,5 +1,5 @@
 // @ts-nocheck — 자동 생성 vendor 산출물(빌드 시 타입 정보 소실). 원본은 packages/core/src/errorCodes.ts.
-// packages/core/src/errorCodes.ts
+// ../../../../packages/core/src/errorCodes.ts
 var TOO_MANY_ACTIVE = "TOO_MANY_ACTIVE";
 var RIDER_NOT_ELIGIBLE = "RIDER_NOT_ELIGIBLE";
 var ALREADY_ACCEPTED = "ALREADY_ACCEPTED";

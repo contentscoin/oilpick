@@ -27,6 +27,8 @@ export function AuthPage() {
   const [displayName, setDisplayName] = useState("");
   const [bizNumber, setBizNumber] = useState("");
   const [vehicleNumber, setVehicleNumber] = useState("");
+  const [recyclerName, setRecyclerName] = useState("");
+  const [recyclerContact, setRecyclerContact] = useState("");
   const [bizDoc, setBizDoc] = useState<PhotoAsset[]>([]);
   const [vehicleDoc, setVehicleDoc] = useState<PhotoAsset[]>([]);
   const [permitDoc, setPermitDoc] = useState<PhotoAsset[]>([]);
@@ -97,8 +99,14 @@ export function AuthPage() {
       setError("입력값을 확인해주세요.");
       return;
     }
-    if (bizDoc.length === 0 || vehicleDoc.length === 0) {
-      setError("사업자등록증과 차량 사진은 필수예요.");
+    // 07 F11-③: 인계처(수거 기름을 인계할 허가 재활용업체)는 승인 조건 — 필수.
+    if (!recyclerName.trim() || !recyclerContact.trim()) {
+      setError("인계처(재활용업체) 업체명과 연락처는 필수예요.");
+      return;
+    }
+    // 07 F11-②: 신고증명서(폐기물처리 수집·운반)는 승인 필수 서류 — 없으면 관리자 승인이 불가.
+    if (bizDoc.length === 0 || vehicleDoc.length === 0 || permitDoc.length === 0) {
+      setError("사업자등록증·차량 사진·폐기물처리 신고증명서는 모두 필수예요.");
       return;
     }
 
@@ -136,6 +144,8 @@ export function AuthPage() {
         doc_biz_url: bizDocPath,
         doc_vehicle_url: vehicleDocPath,
         doc_permit_url: permitDocPath,
+        recycler_name: recyclerName.trim(),
+        recycler_contact: recyclerContact.trim(),
       });
       if (riderError) throw riderError;
 
@@ -280,6 +290,43 @@ export function AuthPage() {
             />
           </div>
 
+          {/* 07 F11-③: 인계처(수거한 기름을 인계·매각할 허가 재활용업체) — 승인 조건(필수). */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <label htmlFor="recycler-name-input" style={{ fontSize: 14, fontWeight: 600 }}>
+              인계처(재활용업체) 업체명
+            </label>
+            <p style={{ margin: 0, fontSize: 13, color: colors.status.wait }}>
+              수거한 기름을 인계·매각할 허가 재활용업체를 등록해주세요.
+            </p>
+            <input
+              id="recycler-name-input"
+              data-testid="recycler-name-input"
+              type="text"
+              required
+              placeholder="○○자원 / ○○유지"
+              value={recyclerName}
+              onChange={(e) => setRecyclerName(e.target.value)}
+              className={inputClassName}
+              style={inputStyle}
+            />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <label htmlFor="recycler-contact-input" style={{ fontSize: 14, fontWeight: 600 }}>
+              인계처 연락처
+            </label>
+            <input
+              id="recycler-contact-input"
+              data-testid="recycler-contact-input"
+              type="text"
+              required
+              placeholder="담당자 전화 또는 사업장 연락처"
+              value={recyclerContact}
+              onChange={(e) => setRecyclerContact(e.target.value)}
+              className={inputClassName}
+              style={inputStyle}
+            />
+          </div>
+
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <span style={{ fontSize: 14, fontWeight: 600 }}>사업자등록증 (필수)</span>
             <PhotoUploader photos={bizDoc} onChange={setBizDoc} maxCount={1} />
@@ -288,8 +335,15 @@ export function AuthPage() {
             <span style={{ fontSize: 14, fontWeight: 600 }}>차량 사진 (필수)</span>
             <PhotoUploader photos={vehicleDoc} onChange={setVehicleDoc} maxCount={1} />
           </div>
+          {/* 07 F11-②: 신고증명서 필수화 + 안내 카피(정부24 폐기물처리 신고, 처리 ~14일). */}
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <span style={{ fontSize: 14, fontWeight: 600 }}>폐기물 수집·운반 허가증 (선택)</span>
+            <span data-testid="permit-doc-label" style={{ fontSize: 14, fontWeight: 600 }}>
+              폐기물처리(수집·운반) 신고증명서 (필수)
+            </span>
+            <p style={{ margin: 0, fontSize: 13, color: colors.status.wait }}>
+              정부24 &lsquo;폐기물처리(수집·운반) 신고&rsquo;로 발급받아요(처리 약 14일). 신고증명서
+              없이는 승인이 불가해요.
+            </p>
             <PhotoUploader photos={permitDoc} onChange={setPermitDoc} maxCount={1} />
           </div>
 

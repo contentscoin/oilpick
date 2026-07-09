@@ -1,5 +1,5 @@
 // @ts-nocheck — 자동 생성 vendor 산출물(빌드 시 타입 정보 소실). 원본은 packages/core/src/schemas.ts.
-// packages/core/src/schemas.ts
+// ../../../../packages/core/src/schemas.ts
 import { z } from "zod";
 function okResponseSchema(dataSchema) {
   return z.object({
@@ -100,12 +100,12 @@ var riderLocationOutputSchema = z.object({
 });
 var riderVerifyInputSchema = z.object({
   riderId: uuidSchema,
-  decision: z.enum(["APPROVED", "REJECTED"]),
+  decision: z.enum(["APPROVED", "REJECTED", "SUSPENDED", "REINSTATED"]),
   rejectReason: z.string().min(1).optional()
 });
 var riderVerifyOutputSchema = z.object({
   riderId: uuidSchema,
-  verifyStatus: z.enum(["PENDING", "APPROVED", "REJECTED"])
+  verifyStatus: z.enum(["PENDING", "APPROVED", "REJECTED", "SUSPENDED"])
 });
 var withdrawRequestInputSchema = z.object({
   amount: z.number().int().min(1e4)

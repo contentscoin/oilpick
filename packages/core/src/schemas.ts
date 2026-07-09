@@ -156,17 +156,20 @@ export const riderLocationOutputSchema = z.object({
 export type RiderLocationOutput = z.infer<typeof riderLocationOutputSchema>;
 
 // ===== 6. rider-verify (admin) =====
-
+// 07 F11-①: SUSPENDED(정지)/REINSTATED(해제) 액션 추가. APPROVED=최초 승인(서류·인계처 서버 검증),
+// REJECTED=반려, SUSPENDED=정지(사유 필수, is_online 강제 false), REINSTATED=정지 해제(APPROVED 복귀,
+// 서류 재검증 없음). REJECTED/SUSPENDED는 rejectReason(사유)을 재사용해 담는다(별도 컬럼 신설 없이
+// rider_profiles.reject_reason에 저장 — 기존 스키마 관례).
 export const riderVerifyInputSchema = z.object({
   riderId: uuidSchema,
-  decision: z.enum(["APPROVED", "REJECTED"]),
+  decision: z.enum(["APPROVED", "REJECTED", "SUSPENDED", "REINSTATED"]),
   rejectReason: z.string().min(1).optional(),
 });
 export type RiderVerifyInput = z.infer<typeof riderVerifyInputSchema>;
 
 export const riderVerifyOutputSchema = z.object({
   riderId: uuidSchema,
-  verifyStatus: z.enum(["PENDING", "APPROVED", "REJECTED"]),
+  verifyStatus: z.enum(["PENDING", "APPROVED", "REJECTED", "SUSPENDED"]),
 });
 export type RiderVerifyOutput = z.infer<typeof riderVerifyOutputSchema>;
 

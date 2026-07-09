@@ -48,6 +48,7 @@ create table rider_profiles (
   last_location_at timestamptz,
   work_radius_km int not null default 15,
   bank_name text, bank_account text, bank_holder text,
+  recycler_name text, recycler_contact text,  -- 인계 재활용업체(승인 조건, 07 F11 D5. 실 DDL: 20260709000008)
   created_at timestamptz not null default now()
 );
 create index idx_rider_location on rider_profiles using gist(last_location);
@@ -245,6 +246,9 @@ from coupon_ledger group by rider_id;
 --   p_fault text default null 추가(admin CANCEL 귀책, 'SUPPLIER'|'RIDER'|'SYSTEM'). ACCEPT는
 --   coupon_cost not null이면 fn_consume_coupon 호출, CONFIRM_MEASURE/FORCE_COMPLETE는 COMPLETED 직행
 --   (cash_paid_amount+completed_at), RESOLVE_DISPUTE는 ARRIVED 복귀(final_kg만 확정). 신 액션 FORCE_COMPLETE.
+-- fn_transition_order ACCEPT 규제 게이트(20260709000009_rpc_transition_verify_gate.sql, 07 F11-①):
+--   ACCEPT 분기에 rider verify_status='APPROVED' 필수 가드 추가(아니면 'RIDER_NOT_ELIGIBLE') — SUSPENDED/
+--   미승인 라이더 신규 콜 수락 차단(최심층 방어). 게이트는 ACCEPT에만; 진행 전이는 무게이트(진행중 완결 허용).
 
 -- ===== 쿠폰 구매 확정·환불 RPC [07 F4] — 실 정의는 supabase/migrations/20260709000005_rpc_purchase.sql =====
 -- PG 결제(토스페이먼츠) 경로. 둘 다 SECURITY DEFINER + search_path=public + revoke all/grant service_role.
@@ -259,10 +263,17 @@ from coupon_ledger group by rider_id;
 --       ADJUST(-qty, purchase_id 필수, unit_price=구매 건 스냅샷) insert(unique(purchase_id,'ADJUST') 멱등) →
 --       status='REFUNDED'. "purchase_id 있는 ADJUST"=PG 환불(v_coupon_sales_daily.pg_refund_qty).
 
--- ===== [07 F11] 라이더 정지·서류 필수화·인계처 (예약 — 전체 DDL은 F11에서) =====
--- verify_status에 'SUSPENDED' 추가는 위 enum 참조(07 F2). rider_profiles 추가 예정:
---   recycler_name text, recycler_contact text  -- 인계 재활용업체(승인 조건 필드, D5 전제)
--- doc_permit_url 라벨을 "폐기물처리(수집·운반) 신고증명서"로 확정 + rider-verify 승인 시 서버 필수 검증.
+-- ===== [07 F11] 라이더 정지·서류 필수화·인계처 (실 DDL: 20260709000008_rider_recycler.sql +
+--       20260709000009_rpc_transition_verify_gate.sql) =====
+-- ① 정지/해제: verify_status에 'SUSPENDED'(20260709000001). rider-verify Edge Function에 suspend/reinstate
+--    액션(admin 전용, 사유 필수 — reject_reason 재사용). 정지 시 is_online 강제 false. guard_rider_verify는
+--    service_role 예외 경로라 Edge Function이 자유롭게 갱신(authenticated 셀프 정지·해제 변조는 트리거로 차단).
+--    자동 차단: p_order_open_calls RLS(위)·order-accept Edge 가드·fn_transition_order ACCEPT 게이트가
+--    모두 verify_status='APPROVED'를 요구 → SUSPENDED는 콜 조회/수락 불가(진행중 주문은 ACCEPT 외 전이라 완결 허용).
+-- ② 서류 필수화: doc_permit_url = "폐기물처리(수집·운반) 신고증명서". rider-verify approve 시 서버 필수
+--    검증(없으면 400 VALIDATION_ERROR). 라이더 가입 폼(AuthPage) 업로드 필수 + 안내 카피.
+-- ③ 인계처: rider_profiles.recycler_name/recycler_contact(위 테이블 정의). approve 시 서버 필수 검증.
+--    본인 update 허용(guard_rider_verify 미보호 컬럼 — p_rider_self RLS 범위 내).
 
 -- ===== [07 F12] CS 문의 티켓 (실 DDL: supabase/migrations/20260709000007_cs_tickets.sql) =====
 -- 원장류가 아니므로 클라이언트 insert 허용(무결성 리스크 없음, 07 F12 ①). CASH_DISPUTE=현금 지급 후

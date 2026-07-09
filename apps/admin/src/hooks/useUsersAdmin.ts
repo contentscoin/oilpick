@@ -55,11 +55,13 @@ export interface AdminRiderRow {
   phone: string;
   bizNumber: string;
   vehicleNumber: string;
-  verifyStatus: "PENDING" | "APPROVED" | "REJECTED";
+  verifyStatus: "PENDING" | "APPROVED" | "REJECTED" | "SUSPENDED";
   rejectReason: string | null;
   docBizUrl: string | null;
   docVehicleUrl: string | null;
   docPermitUrl: string | null;
+  recyclerName: string | null;
+  recyclerContact: string | null;
   isOnline: boolean;
   createdAt: string;
 }
@@ -74,7 +76,7 @@ export function useAdminRiders(statusFilter: string) {
       let q = supabase
         .from("rider_profiles")
         .select(
-          "id, biz_number, vehicle_number, verify_status, reject_reason, doc_biz_url, doc_vehicle_url, doc_permit_url, is_online, created_at",
+          "id, biz_number, vehicle_number, verify_status, reject_reason, doc_biz_url, doc_vehicle_url, doc_permit_url, recycler_name, recycler_contact, is_online, created_at",
         )
         .order("created_at", { ascending: false });
       if (statusFilter !== "ALL") {
@@ -100,6 +102,8 @@ export function useAdminRiders(statusFilter: string) {
           docBizUrl: row.doc_biz_url,
           docVehicleUrl: row.doc_vehicle_url,
           docPermitUrl: row.doc_permit_url,
+          recyclerName: row.recycler_name,
+          recyclerContact: row.recycler_contact,
           isOnline: row.is_online,
           createdAt: row.created_at,
         };
