@@ -2,7 +2,7 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
-import { useLatestPriceTick, usePriceTicks } from "./usePriceTicks";
+import { useLatestPriceTick, usePriceTicks, usePriceTicksSince } from "./usePriceTicks";
 
 const { mockFrom, mockChannel, mockOn, mockSubscribe, mockRemoveChannel } = vi.hoisted(() => ({
   mockFrom: vi.fn(),
@@ -50,6 +50,38 @@ describe("usePriceTicks", () => {
     ]);
     expect(mockFrom).toHaveBeenCalledWith("price_ticks");
     expect(mockChannel).toHaveBeenCalledWith("price_ticks_changes_30");
+  });
+});
+
+describe("usePriceTicksSince", () => {
+  it("queries by effective_at >= now-interval ascending and subscribes on a days-scoped channel", async () => {
+    const gte = vi.fn().mockReturnValue({
+      order: () => Promise.resolve({ data: ROWS, error: null }),
+    });
+    mockFrom.mockReturnValue({
+      select: () => ({ gte }),
+    });
+    mockChannel.mockReturnValue({ on: mockOn.mockReturnThis(), subscribe: mockSubscribe.mockReturnThis() });
+
+    const { result } = renderHook(() => usePriceTicksSince(30), { wrapper });
+
+    await waitFor(() => expect(result.current.data).toBeDefined());
+    expect(result.current.data).toHaveLength(2);
+    // 범위 필터가 effective_at 컬럼에 적용됐는지(값은 now 의존이라 컬럼만 검증).
+    expect(gte).toHaveBeenCalledWith("effective_at", expect.any(String));
+    expect(mockFrom).toHaveBeenCalledWith("price_ticks");
+    expect(mockChannel).toHaveBeenCalledWith("price_ticks_since_30");
+  });
+
+  it("uses a distinct channel per days value", async () => {
+    mockFrom.mockReturnValue({
+      select: () => ({ gte: () => ({ order: () => Promise.resolve({ data: ROWS, error: null }) }) }),
+    });
+    mockChannel.mockReturnValue({ on: mockOn.mockReturnThis(), subscribe: mockSubscribe.mockReturnThis() });
+
+    const { result } = renderHook(() => usePriceTicksSince(90), { wrapper });
+    await waitFor(() => expect(result.current.data).toBeDefined());
+    expect(mockChannel).toHaveBeenCalledWith("price_ticks_since_90");
   });
 });
 

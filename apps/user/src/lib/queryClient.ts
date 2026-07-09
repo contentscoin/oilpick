@@ -22,6 +22,7 @@ export const queryKeys = {
   profile: (userId: string) => ["profile", userId] as const,
   latestPriceTick: () => ["priceTicks", "latest"] as const,
   priceTickHistory: (limit: number) => ["priceTicks", "history", limit] as const,
+  priceTickSince: (days: number) => ["priceTicks", "since", days] as const,
   activeOrder: (userId: string) => ["orders", "active", userId] as const,
   orderDetail: (orderId: string) => ["orders", "detail", orderId] as const,
   riderCard: (riderId: string) => ["riderCard", riderId] as const,

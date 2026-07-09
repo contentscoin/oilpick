@@ -24,6 +24,26 @@
 - surface 색: 앱 배경 `#F5F6F5`(약간 웜뉴트럴), 카드 `#FFFFFF`. 경계는 `zinc-100`.
 - radius: 카드 16px 유지, 히어로 20px, pill 999px. spacing 4px 그리드 유지, 화면 패딩 20px.
 
+## 신규 토큰 (07 F7 — 다크 시세 히어로 축)
+
+07-pivot-plan.md F7에서 유저앱이 "일별 시세 차트가 주인공"으로 피벗하며, 딥그린 브랜드의 **명도 축을
+양방향으로 확장**한다. 새 색은 없다 — 기존 딥그린(#1B7A43/#145C32)을 더 어둡게(히어로 배경) / 더 밝게
+(차트 라인) 뻗은 것이다. **리브랜딩 아님**(위 원칙 유지). packages/ui/src/tokens.ts에 다음을 추가한다:
+
+- `surfaceDark`: 다크 시세 히어로 표면. `hero #133A26`, `heroDeep #0B2317`, `textOnDark #FFFFFF`,
+  `textOnDarkMuted rgba(255,255,255,0.64)`. muted는 **라벨 전용** — 수치는 순백(50대 타깃 대비 4.5:1).
+- `gradient.heroDeep`: `linear-gradient(170deg,#133A26 0%,#0B2317 100%)` — 다크 히어로 배경.
+- `colors.chart`: `lineOnDark #4ADE9B`(다크 위 민트 라인), `areaTop rgba(74,222,155,0.20)`(영역 상단).
+  일반(라이트) 컨텍스트에서 PriceChart는 등락 방향(colors.up/down)이 stroke를 지배하고, 다크 히어로는
+  stroke/areaColor prop으로 이 민트를 주입한다.
+- `typeScale`: `display 40, headline 28, title 20, body 16, label 13, caption 12`(px). base 16px+ 원칙 유지.
+- `motion`: `fast 150ms, base 250ms, slow 400ms, ease cubic-bezier(0.2,0.8,0.2,1)`. 모든 모션은
+  `prefers-reduced-motion` 존중(차트 드로인 600ms·세그먼트 슬라이드 200ms는 컴포넌트 로컬 상수).
+- `elevation.heroDark`: `0 8px 24px rgba(11,35,23,0.35)` — 다크 히어로 카드 그림자.
+
+신규 컴포넌트: `PriceChart`(순수 SVG 라인+영역 차트, 포인터 스크럽, 드로인), `SegmentToggle`(범용
+세그먼트 컨트롤, 기간 7/30/90일 용). DevUiPage(/dev-ui)에 다크 히어로 목업으로 렌더한다.
+
 ## 컴포넌트별 고도화
 
 ### PriceCard (시세 히어로) — U3 홈 상단

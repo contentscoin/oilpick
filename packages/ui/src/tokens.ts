@@ -22,6 +22,14 @@ export const colors = {
     done: "#1B7A43",
     danger: "#E5484D",
   },
+  /**
+   * 07-pivot-plan.md F7 — 다크 시세 히어로 위 차트 선/영역 색.
+   * 딥그린 브랜드의 명도 축을 밝은 쪽으로 확장한 민트(리브랜딩 아님, 05 신규 토큰 절 참조).
+   */
+  chart: {
+    lineOnDark: "#4ADE9B",
+    areaTop: "rgba(74,222,155,0.20)",
+  },
 } as const;
 
 /**
@@ -139,6 +147,8 @@ export const elevation = {
   raised: "0 4px 16px rgba(16,24,40,0.08)",
   /** 눌림(선택). 버튼 active 등에서 참조. */
   pressed: "inset 0 1px 2px rgba(16,24,40,0.10)",
+  /** 07-pivot-plan.md F7 — 다크 시세 히어로 카드 그림자(딥그린 배경 위 depth). */
+  heroDark: "0 8px 24px rgba(11,35,23,0.35)",
 } as const;
 
 /**
@@ -150,6 +160,51 @@ export const gradient = {
   brand: `linear-gradient(135deg, ${colors.primary.DEFAULT}, ${colors.primary.dark})`,
   /** 앰버 계열 포인트 히어로 배경. */
   point: `linear-gradient(135deg, ${colors.accent.DEFAULT}, #E08A00)`,
+  /**
+   * 07-pivot-plan.md F7 — 다크 시세 히어로 배경(딥그린 → 더 딥그린 세로 그라디언트).
+   * 유저앱 홈 히어로(F8)와 /price 상세가 공유. 05 신규 토큰 절 참조.
+   */
+  heroDeep: "linear-gradient(170deg, #133A26 0%, #0B2317 100%)",
+} as const;
+
+/**
+ * 07-pivot-plan.md F7 — 다크 서피스 색.
+ * 시세 히어로가 화면의 주인공이 되는 유저앱(F8)에서 딥그린 배경 위 텍스트/차트를 위한 색.
+ * 딥그린 브랜드의 명도 축을 어두운 쪽으로 확장(리브랜딩 아님, 05 신규 토큰 절 참조).
+ */
+export const surfaceDark = {
+  /** 다크 히어로 상단(그라디언트 시작). */
+  hero: "#133A26",
+  /** 다크 히어로 하단(그라디언트 끝, 더 딥). */
+  heroDeep: "#0B2317",
+  /** 다크 히어로 위 강조 수치·본문(순백, 50대 타깃 대비). */
+  textOnDark: "#FFFFFF",
+  /** 다크 히어로 위 라벨·보조 텍스트(라벨 전용, 수치엔 순백 사용). */
+  textOnDarkMuted: "rgba(255,255,255,0.64)",
+} as const;
+
+/**
+ * 07-pivot-plan.md F7 — 타입 스케일(px). 03-frontend.md "base 16px 미만 금지" 원칙 유지.
+ * 시세 히어로 숫자(display 40)부터 캡션(12)까지 한 축으로 정리한다.
+ */
+export const typeScale = {
+  display: 40,
+  headline: 28,
+  title: 20,
+  body: 16,
+  label: 13,
+  caption: 12,
+} as const;
+
+/**
+ * 07-pivot-plan.md F7 — 모션 토큰(duration·easing).
+ * 차트 드로인/세그먼트 슬라이딩/카운트업 등에서 공유. 모든 모션은 prefers-reduced-motion 존중.
+ */
+export const motion = {
+  fast: "150ms",
+  base: "250ms",
+  slow: "400ms",
+  ease: "cubic-bezier(0.2,0.8,0.2,1)",
 } as const;
 
 /**
@@ -184,8 +239,11 @@ export const tokens = {
   touchTarget,
   radius,
   surface,
+  surfaceDark,
   elevation,
   gradient,
+  typeScale,
+  motion,
   inputStyle,
 } as const;
 

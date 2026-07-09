@@ -81,3 +81,55 @@ export function useLatestPriceTick() {
   const { data, ...rest } = usePriceTicks(30);
   return { ...rest, data: data?.[0] };
 }
+
+/** 일별 차트 기간 세그먼트(07 F7 §1-5). 7/30/90일. */
+export type PriceTicksSinceDays = 7 | 30 | 90;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * 최근 `days`일 범위의 price_ticks 조회(오름차순) + Realtime 구독.
+ * 07-pivot-plan.md F7-③: `effective_at >= now()-interval` 범위 쿼리.
+ * limit 방식(usePriceTicks)은 "30개 ≠ 30일"이라 일별 차트에 부적합 — resampleDaily(§1-5)와 짝을 이룬다.
+ * (기존 usePriceTicks/useLatestPriceTick은 소비처 전환(F8) 전까지 보존한다.)
+ */
+export function usePriceTicksSince(days: PriceTicksSinceDays) {
+  const queryClient = useQueryClient();
+  const queryKey = queryKeys.priceTickSince(days);
+
+  const query = useQuery({
+    queryKey,
+    queryFn: async (): Promise<PriceTick[]> => {
+      const sinceIso = new Date(Date.now() - days * DAY_MS).toISOString();
+      const { data, error } = await supabase
+        .from("price_ticks")
+        .select("id, price_per_kg, rider_fee, effective_at")
+        .gte("effective_at", sinceIso)
+        .order("effective_at", { ascending: true });
+      if (error) throw error;
+      return (data ?? []).map(mapRow);
+    },
+  });
+
+  useEffect(() => {
+    // 채널명은 기간별로 고유해야 한다(usePriceTicks의 limit별 채널명 주석 참조 — 중복 subscribe 크래시 방지).
+    const channel = supabase
+      .channel(`price_ticks_since_${days}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "price_ticks" },
+        () => {
+          queryClient.invalidateQueries({ queryKey: queryKeys.latestPriceTick() });
+          queryClient.invalidateQueries({ queryKey });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+    // queryKey는 days에서 파생 — days 변경 시에만 재구독(usePriceTicks와 동일 규약).
+  }, [days]);
+
+  return query;
+}

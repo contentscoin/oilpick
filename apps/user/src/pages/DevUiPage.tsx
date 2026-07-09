@@ -13,16 +13,31 @@ import {
   PointBalanceCard,
   PointHeroAction,
   PriceCard,
+  PriceChart,
   QtyStepper,
+  SegmentToggle,
   StatusBadge,
   StatusHeadline,
   TabBar,
   Toast,
+  colors,
+  elevation,
+  gradient,
   inputClassName,
   inputStyle,
+  radius,
   surface,
+  surfaceDark,
   type PhotoAsset,
 } from "@oilpick/ui";
+import { formatKrw, resampleDaily } from "@oilpick/core";
+
+/** PriceChart/SegmentToggle 목업용 더미 시세(6월 30일치 일별 tick). resampleDaily로 파이프라인 검증. */
+const DUMMY_PRICE_TICKS = Array.from({ length: 30 }, (_, i) => {
+  const day = String(i + 1).padStart(2, "0");
+  const wave = Math.round(60 * Math.sin(i / 3));
+  return { effectiveAt: `2026-06-${day}T03:00:00Z`, pricePerKg: 700 + wave + i * 4 };
+});
 
 /**
  * 개발 전용 컴포넌트 갤러리 (`/dev-ui`). docs/spec/04-tasks.md T6 DoD:
@@ -34,6 +49,10 @@ export function DevUiPage() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("home");
   const [photos, setPhotos] = useState<PhotoAsset[]>([]);
+  const [chartDays, setChartDays] = useState<"7" | "30" | "90">("30");
+  const [scrub, setScrub] = useState<{ date: string; price: number } | null>(null);
+  const dailySeries = resampleDaily(DUMMY_PRICE_TICKS, Number(chartDays));
+  const heroPrice = scrub?.price ?? dailySeries[dailySeries.length - 1]?.price ?? 0;
 
   return (
     <main
@@ -53,6 +72,49 @@ export function DevUiPage() {
       <section>
         <h2>PriceCard</h2>
         <PriceCard pricePerKg={1250} changeAmount={30} history={[1180, 1200, 1190, 1220, 1250]} />
+      </section>
+
+      <section>
+        <h2>PriceChart + SegmentToggle (다크 히어로)</h2>
+        <div
+          style={{
+            background: gradient.heroDeep,
+            borderRadius: radius.hero,
+            boxShadow: elevation.heroDark,
+            padding: 20,
+            color: surfaceDark.textOnDark,
+            display: "flex",
+            flexDirection: "column",
+            gap: 12,
+          }}
+        >
+          <p style={{ margin: 0, fontSize: 13, color: surfaceDark.textOnDarkMuted }}>오늘 매입가</p>
+          <p
+            className="oilpick-tabular-nums"
+            style={{ margin: 0, fontSize: 40, fontWeight: 800, lineHeight: 1.05 }}
+          >
+            {formatKrw(heroPrice)}
+            <span style={{ fontSize: 16, fontWeight: 500, color: surfaceDark.textOnDarkMuted }}>/kg</span>
+          </p>
+          <PriceChart
+            data={dailySeries}
+            stroke={colors.chart.lineOnDark}
+            areaColor={colors.chart.areaTop}
+            onDark
+            onScrub={setScrub}
+            ariaLabel="더미 시세 추이"
+          />
+          <SegmentToggle
+            options={[
+              { value: "7", label: "7일" },
+              { value: "30", label: "30일" },
+              { value: "90", label: "90일" },
+            ]}
+            value={chartDays}
+            onChange={setChartDays}
+            ariaLabel="기간 선택"
+          />
+        </div>
       </section>
 
       <section style={{ display: "flex", flexDirection: "column", gap: 16 }}>

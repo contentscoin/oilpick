@@ -377,6 +377,7 @@ REQUESTED→CANCELLED: supplier 자진 or 시스템 30분 무수락. 쿠폰 미�
   `motion {fast:150ms, base:250ms, slow:400ms, ease:cubic-bezier(0.2,0.8,0.2,1)}`, `elevation.heroDark`.
   기존 그린의 명도 축 확장이므로 리브랜딩 아님. 모든 모션은 `prefers-reduced-motion` 존중.
 - DoD: resampleDaily/estimateCash/PriceChart/토글 단위 테스트. DevUiPage에 PriceChart 목업 추가(06 구현 규칙 2).
+- [x] 결과(2026-07-09): 【core】priceResample.ts(resampleDaily 종가+캐리포워드+KST 경계 교정, dailyChange 전일종가 헬퍼) / 【U】usePriceTicksSince(7·30·90 범위쿼리+Realtime, 기존 훅 보존) / 【ui】PriceChart(순수SVG 라인+그라디언트 영역, 등락색/민트 override, 포인터 스크럽+onScrub, 드로인 600ms·reduced-motion) + SegmentToggle(범용, radius.pill 슬라이딩 200ms, roving tabindex 키보드) / tokens.ts 확장(surfaceDark/gradient.heroDeep/colors.chart/typeScale/motion/elevation.heroDark) + 05 신규 토큰 절. DevUiPage 다크 히어로 목업(스크럽 시 상단 숫자 치환). ②estimateCash는 F3b 선반영(kg,pricePerKg)이라 미변경. 소비처(PricePage/PriceCard) 무변경—전환은 F8. lint/turbo test(--concurrency=1, resampleDaily 10·usePriceTicksSince 2·PriceChart 6·SegmentToggle 5 신규)/build FULL green.
 
 ### F8. 【U】 홈·시세 화면 전면 리디자인 — 일별 시세 히어로가 주인공
 - 작업: HomePage.tsx 재작성. 정보구조(위→아래):
