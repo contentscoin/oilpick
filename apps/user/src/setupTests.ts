@@ -5,8 +5,8 @@ import { configure } from "@testing-library/react";
 // vite.config.ts의 testTimeout(20s)과 짝으로 전역 상향한다.
 configure({ asyncUtilTimeout: 10_000 });
 
-// jsdom에는 ResizeObserver가 없다 — recharts의 ResponsiveContainer(U4 시세 차트)가
-// 마운트 시 이를 요구하므로 테스트 환경에서만 최소 폴리필을 등록한다.
+// jsdom에는 ResizeObserver가 없다 — 일부 컴포넌트가 마운트 시 이를 요구할 수 있어
+// 테스트 환경에서만 최소 폴리필을 등록한다(무해한 no-op).
 if (typeof globalThis.ResizeObserver === "undefined") {
   class ResizeObserverPolyfill {
     observe() {}

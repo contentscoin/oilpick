@@ -32,6 +32,8 @@
 
 - `surfaceDark`: 다크 시세 히어로 표면. `hero #133A26`, `heroDeep #0B2317`, `textOnDark #FFFFFF`,
   `textOnDarkMuted rgba(255,255,255,0.64)`. muted는 **라벨 전용** — 수치는 순백(50대 타깃 대비 4.5:1).
+  **[07 F8 추가]** `pill rgba(255,255,255,0.10)`(다크 위 pill/칩 배경 — 등락 pill),
+  `skeleton rgba(255,255,255,0.06)`(다크 위 스켈레톤/플레이스홀더 배경).
 - `gradient.heroDeep`: `linear-gradient(170deg,#133A26 0%,#0B2317 100%)` — 다크 히어로 배경.
 - `colors.chart`: `lineOnDark #4ADE9B`(다크 위 민트 라인), `areaTop rgba(74,222,155,0.20)`(영역 상단).
   일반(라이트) 컨텍스트에서 PriceChart는 등락 방향(colors.up/down)이 stroke를 지배하고, 다크 히어로는

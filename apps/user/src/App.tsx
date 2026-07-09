@@ -10,9 +10,9 @@ import { ONBOARDING_DONE_KEY } from "./pages/onboardingKey";
 import { RouteFallback } from "./components/RouteFallback";
 
 /**
- * 라우트 페이지는 React.lazy로 분리해 첫 페인트에 필요없는 코드(특히 U4 시세 화면의 recharts)를
- * 초기 index 청크에서 뺀다. AuthGuard/UserShell/RouteFallback 등 셸/가드는 첫 진입에 반드시
- * 필요하므로 eager import를 유지한다. 동작/데이터흐름은 그대로다(순수 로딩 최적화).
+ * 라우트 페이지는 React.lazy로 분리해 첫 페인트에 필요없는 코드를 초기 index 청크에서 뺀다.
+ * AuthGuard/UserShell/RouteFallback 등 셸/가드는 첫 진입에 반드시 필요하므로 eager import를
+ * 유지한다. 동작/데이터흐름은 그대로다(순수 로딩 최적화).
  */
 const OnboardingPage = lazy(() =>
   import("./pages/OnboardingPage").then((m) => ({ default: m.OnboardingPage })),
@@ -30,9 +30,6 @@ const OrdersHistoryPage = lazy(() =>
   import("./pages/OrdersHistoryPage").then((m) => ({ default: m.OrdersHistoryPage })),
 );
 const WalletPage = lazy(() => import("./pages/WalletPage").then((m) => ({ default: m.WalletPage })));
-const WithdrawPage = lazy(() =>
-  import("./pages/WithdrawPage").then((m) => ({ default: m.WithdrawPage })),
-);
 const NotificationsPage = lazy(() =>
   import("./pages/NotificationsPage").then((m) => ({ default: m.NotificationsPage })),
 );
@@ -43,10 +40,11 @@ const ProfileEditPage = lazy(() =>
 const DevUiPage = lazy(() => import("./pages/DevUiPage").then((m) => ({ default: m.DevUiPage })));
 
 /**
- * 06-enhancement-plan.md E1: 하단 탭이 필요한 화면(홈/이력/포인트/알림/마이)을 한 레이아웃 라우트로
+ * 06-enhancement-plan.md E1: 하단 탭이 필요한 화면(홈/이력/수령액/알림/마이)을 한 레이아웃 라우트로
  * 묶어 `UserShell`(탭바)을 일괄 적용한다. 이전에는 홈에 탭바가 없어 다른 섹션으로 이동하지 못했다.
  * 온보딩 게이트(첫 실행)와 AuthGuard(미인증 → /auth)는 셸 진입 전에 통과해야 한다.
- * 플로우 화면(/request, /orders/:id, /wallet/withdraw, /my/edit)은 탭 없이 풀스크린으로 유지한다.
+ * 플로우 화면(/request, /orders/:id, /my/edit)은 탭 없이 풀스크린으로 유지한다.
+ * (07 F8/D1: /wallet/withdraw 출금 화면은 제거 — /wallet은 "수령 이력"으로 대체.)
  */
 function AppShell() {
   const onboardingDone = localStorage.getItem(ONBOARDING_DONE_KEY) === "1";
@@ -97,7 +95,7 @@ export function App() {
           <Route path="/onboarding" element={<OnboardingPage />} />
           <Route path="/auth" element={<AuthPage />} />
 
-          {/* 탭바가 있는 앱 셸(홈/이력/포인트/알림/마이) */}
+          {/* 탭바가 있는 앱 셸(홈/이력/수령액/알림/마이) */}
           <Route element={<AppShell />}>
             <Route path="/" element={<HomePage />} />
             <Route path="/orders" element={<OrdersHistoryPage />} />
@@ -128,14 +126,6 @@ export function App() {
             element={
               <AuthGuard>
                 <OrderDetailPage />
-              </AuthGuard>
-            }
-          />
-          <Route
-            path="/wallet/withdraw"
-            element={
-              <AuthGuard>
-                <WithdrawPage />
               </AuthGuard>
             }
           />

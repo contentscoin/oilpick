@@ -398,6 +398,16 @@ REQUESTED→CANCELLED: supplier 자진 or 시스템 30분 무수락. 쿠폰 미�
     수치는 순백(50대 타깃 대비 4.5:1, 03-frontend 16px+/48px 원칙 유지).
 - DoD: 홈 최상단이 일별 차트 히어로(스냅샷 테스트). 스크럽/토글 동작 테스트. /price가 동일 차트 체계.
   하드코딩 색상 0건(토큰만). 탭 왕복(E1 회귀) green.
+- [x] 결과(2026-07-09): 【U】HomePage 전면 재작성(헤더+알림벨/이력 → 다크 시세 히어로(현재가 40px 순백·
+  카운트업 400ms·스크럽 시 상단 숫자·날짜 치환·전일대비 pill·PriceChart 민트·7/30/90 토글 기본30) →
+  진행중 주문 카드 → 이번 달 현금 수령 요약 → 최근 이력 2건 → 하단 fixed "수거 요청하기"; QtyStepper+
+  예상포인트 섹션 제거). PricePage recharts 폐기→홈과 동일 PriceChart+resampleDaily+SegmentToggle 히어로+
+  이력 테이블(수거비 열 제거). WalletPage→"수령 이력"(이번달 수령 히어로+주문별 리스트), /wallet 경로 재사용·
+  /wallet/withdraw 라우트 제거. UserShell 탭 "포인트"→"수령액". 신규 useCashReceipts(useMonthlyCashReceipt+
+  useCashReceipts, 레거시 coalesce 규약). 빈 상태(일별<2점) 캡션. 【ui】surfaceDark에 pill/skeleton 토큰
+  추가(05 동기화) — 신규 코드 하드코딩 색상 0(grep). recharts를 apps/user/package.json+lockfile에서 제거
+  ('charts' 청크 소멸). vitest: user 95 green(신규 HomePage 10·PricePage 5·WalletPage 3·useCashReceipts 3 +
+  App "수령액"/E1 회귀). lint·turbo test(--concurrency=1)·build FULL green. /dev-ui 브라우저 육안 확인.
 
 ### F9. 【U】 수거 요청 플로우 고도화 + 현금 카피 전환
 - 작업: 3스텝 골격 유지 + ① 전 스텝 공통 sticky **예상 수령액 푸터**(원화, cans 변경 실시간, "현장 계량 기준

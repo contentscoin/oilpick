@@ -117,6 +117,19 @@ describe("App routing", () => {
     }
   });
 
+  it("renames the 포인트 tab to 수령액 (07 F8)", async () => {
+    authenticate();
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <App />
+      </MemoryRouter>,
+    );
+    await screen.findByTestId("home-page", undefined, WAIT);
+    const tabBar = screen.getByTestId("tab-bar");
+    expect(tabBar).toHaveTextContent("수령액");
+    expect(tabBar).not.toHaveTextContent("포인트");
+  });
+
   it("renders flow screens full-screen without the tab bar (E1)", async () => {
     authenticate();
     render(

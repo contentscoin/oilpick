@@ -31,4 +31,7 @@ export const queryKeys = {
   ledger: (userId: string) => ["ledger", userId] as const,
   bankAccount: (userId: string) => ["bankAccount", userId] as const,
   notifications: (userId: string) => ["notifications", userId] as const,
+  // [07 F8] 현금 수령(cash_paid_amount) 요약·이력. 포인트 지갑(balance/ledger)을 대체한다.
+  monthlyCashReceipt: (userId: string) => ["cashReceipts", "monthly", userId] as const,
+  cashReceipts: (userId: string) => ["cashReceipts", "list", userId] as const,
 };

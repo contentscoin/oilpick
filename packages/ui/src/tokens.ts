@@ -181,6 +181,10 @@ export const surfaceDark = {
   textOnDark: "#FFFFFF",
   /** 다크 히어로 위 라벨·보조 텍스트(라벨 전용, 수치엔 순백 사용). */
   textOnDarkMuted: "rgba(255,255,255,0.64)",
+  /** 07 F8 — 다크 히어로 위 pill/칩 배경(화이트 10% 오버레이). 등락 pill 등. */
+  pill: "rgba(255,255,255,0.10)",
+  /** 07 F8 — 다크 히어로 위 스켈레톤/플레이스홀더 배경(화이트 6% 오버레이). */
+  skeleton: "rgba(255,255,255,0.06)",
 } as const;
 
 /**
