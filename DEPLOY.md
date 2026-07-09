@@ -25,6 +25,10 @@ supabase functions deploy
 # 시크릿 설정
 #  - FCM_SERVICE_ACCOUNT: 미설정 시 푸시는 no-op(알림 테이블 기록은 됨). 키 발급 후 설정.
 supabase secrets set FCM_SERVICE_ACCOUNT="$(cat fcm-service-account.json)"
+#  - TOSS_SECRET_KEY: 토스페이먼츠 "시크릿 키"(07 F4, coupon-purchase-confirm/coupon-refund 전용).
+#    클라이언트 키(VITE_TOSS_CLIENT_KEY, rider 앱 env)와 다르다 — 시크릿 키는 서버(Edge)에만 둔다.
+#    미설정 시 confirm/refund가 PAYMENT_FAILED로 실패한다. 테스트 키(test_sk_...)로 개발/검증 가능.
+supabase secrets set TOSS_SECRET_KEY="test_sk_xxxxxxxxxxxxxxxxxxxx"
 ```
 
 ### 1-1. 프로덕션 초기 데이터(수동 — seed.sql은 로컬 전용)

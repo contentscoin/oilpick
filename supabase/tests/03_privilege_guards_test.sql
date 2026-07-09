@@ -4,7 +4,7 @@
 create extension if not exists pgtap with schema extensions;
 
 begin;
-select plan(9);
+select plan(12);
 
 -- ── 픽스처(postgres = 트리거 예외) ────────────────────────────────────────
 insert into auth.users (id, instance_id, aud, role, email, created_at, updated_at) values
@@ -66,6 +66,14 @@ select ok(not has_function_privilege('authenticated','public.fn_consume_coupon(u
           'authenticated는 fn_consume_coupon EXECUTE 불가');
 select ok(has_function_privilege('service_role','public.fn_charge_coupon(uuid, int, int, uuid, text, uuid)','EXECUTE'),
           'service_role(Edge Function)은 fn_charge_coupon EXECUTE 가능');
+
+-- ── [07 F4] PG 확정·환불 RPC EXECUTE 권한: service_role만(revoke all + grant service_role) ──────
+select ok(not has_function_privilege('authenticated','public.fn_confirm_purchase(uuid, text)','EXECUTE'),
+          'authenticated는 fn_confirm_purchase EXECUTE 불가');
+select ok(not has_function_privilege('authenticated','public.fn_refund_purchase(uuid, int, uuid, text)','EXECUTE'),
+          'authenticated는 fn_refund_purchase EXECUTE 불가');
+select ok(has_function_privilege('service_role','public.fn_refund_purchase(uuid, int, uuid, text)','EXECUTE'),
+          'service_role(Edge Function)은 fn_refund_purchase EXECUTE 가능');
 
 -- ── [07 F3a] coupon_ledger append-only: UPDATE 차단 ──────────────────────────────────
 insert into coupon_ledger (rider_id, entry_type, qty) values ('22222222-2222-2222-2222-222222222222','ADJUST',5);

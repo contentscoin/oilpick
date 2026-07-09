@@ -246,6 +246,19 @@ from coupon_ledger group by rider_id;
 --   coupon_cost not null이면 fn_consume_coupon 호출, CONFIRM_MEASURE/FORCE_COMPLETE는 COMPLETED 직행
 --   (cash_paid_amount+completed_at), RESOLVE_DISPUTE는 ARRIVED 복귀(final_kg만 확정). 신 액션 FORCE_COMPLETE.
 
+-- ===== 쿠폰 구매 확정·환불 RPC [07 F4] — 실 정의는 supabase/migrations/20260709000005_rpc_purchase.sql =====
+-- PG 결제(토스페이먼츠) 경로. 둘 다 SECURITY DEFINER + search_path=public + revoke all/grant service_role.
+-- 토스 승인/취소 API 호출은 RPC 밖(Edge Function)에서 하고, 성공 후 이 RPC로 원장·상태를 원자 확정한다.
+--   fn_confirm_purchase(p_purchase_id uuid, p_payment_key text) returns coupon_ledger
+--     - coupon_purchases FOR UPDATE → PAID면 기존 CHARGE 반환(멱등), PENDING이면 status=PAID·payment_key
+--       기록 + fn_charge_coupon(CHARGE, purchase_id). 그 외 상태는 raise 'INVALID_TRANSITION'.
+--       멱등 3중: 상태 전이 + payment_key unique + unique(purchase_id,'CHARGE').
+--   fn_refund_purchase(p_purchase_id uuid, p_qty int, p_admin_id uuid, p_memo text default null) returns coupon_ledger
+--     - coupon_purchases FOR UPDATE → status='PAID' 확인(아니면 raise 'INVALID_TRANSITION' — 건당 1회) →
+--       환불 qty ≤ 구매 qty → rider 원장 FOR UPDATE 직렬화 + 미사용 잔액 재계산(부족 시 'INSUFFICIENT_COUPON') →
+--       ADJUST(-qty, purchase_id 필수, unit_price=구매 건 스냅샷) insert(unique(purchase_id,'ADJUST') 멱등) →
+--       status='REFUNDED'. "purchase_id 있는 ADJUST"=PG 환불(v_coupon_sales_daily.pg_refund_qty).
+
 -- ===== [07 F11] 라이더 정지·서류 필수화·인계처 (예약 — 전체 DDL은 F11에서) =====
 -- verify_status에 'SUSPENDED' 추가는 위 enum 참조(07 F2). rider_profiles 추가 예정:
 --   recycler_name text, recycler_contact text  -- 인계 재활용업체(승인 조건 필드, D5 전제)

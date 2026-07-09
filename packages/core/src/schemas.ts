@@ -261,6 +261,64 @@ export const couponPriceSetOutputSchema = z.object({
 });
 export type CouponPriceSetOutput = z.infer<typeof couponPriceSetOutputSchema>;
 
+// ===== 11. coupon-purchase-intent (rider) — 07 F4 =====
+// 쿠폰 구매 신청(PG 결제위젯 진입 전). qty 1~200 → 최신 coupon_price_ticks 스냅샷 →
+// coupon_purchases(PENDING) 생성. 단가 미설정 시 409 COUPON_PRICE_NOT_SET.
+
+export const couponPurchaseIntentInputSchema = z.object({
+  qty: z.number().int().min(1).max(200),
+});
+export type CouponPurchaseIntentInput = z.infer<typeof couponPurchaseIntentInputSchema>;
+
+export const couponPurchaseIntentOutputSchema = z.object({
+  purchaseId: uuidSchema,
+  /** 토스 주문번호(pg_order_id). requestPayment()의 orderId로 그대로 넘긴다. */
+  pgOrderId: z.string().min(1),
+  /** 결제 금액(원) = qty × unitPrice. 위젯 setAmount·confirm amount 검증 기준. */
+  amount: z.number().int().positive(),
+  unitPrice: z.number().int().positive(),
+});
+export type CouponPurchaseIntentOutput = z.infer<typeof couponPurchaseIntentOutputSchema>;
+
+// ===== 12. coupon-purchase-confirm (rider) — 07 F4 =====
+// 토스 successUrl 파라미터를 그대로 받아 승인 확정 + 쿠폰 충전(멱등 3중, 07 §1-4).
+// 출력은 충전 후 잔액 {balance}. 재호출 안전(orphan 재시도).
+
+export const couponPurchaseConfirmInputSchema = z.object({
+  purchaseId: uuidSchema,
+  paymentKey: z.string().min(1),
+  pgOrderId: z.string().min(1),
+  amount: z.number().int().positive(),
+});
+export type CouponPurchaseConfirmInput = z.infer<typeof couponPurchaseConfirmInputSchema>;
+
+export const couponPurchaseConfirmOutputSchema = z.object({
+  /** 충전 후 쿠폰 잔액(장). v_coupon_balance 재조회. */
+  balance: z.number().int().nonnegative(),
+});
+export type CouponPurchaseConfirmOutput = z.infer<typeof couponPurchaseConfirmOutputSchema>;
+
+// ===== 13. coupon-refund (admin) — 07 F4 =====
+// 쿠폰 구매 건 환불(구매 건 단위, 건당 1회). qty 생략=전액, 지정=부분 1회. reason 필수.
+// 미사용 잔액 부족 시 409 INSUFFICIENT_COUPON, 토스 취소 실패 시 402 PAYMENT_FAILED.
+
+export const couponRefundInputSchema = z.object({
+  purchaseId: uuidSchema,
+  /** 환불 수량(장). 생략 시 구매 전액. 1 이상, 구매 qty 이하(RPC가 상한 검증). */
+  qty: z.number().int().positive().optional(),
+  reason: z.string().min(1),
+});
+export type CouponRefundInput = z.infer<typeof couponRefundInputSchema>;
+
+export const couponRefundOutputSchema = z.object({
+  purchaseId: uuidSchema,
+  /** 실제 환불된 수량(장). */
+  refundedQty: z.number().int().positive(),
+  /** 환불 후 라이더 쿠폰 잔액(장). */
+  balance: z.number().int().nonnegative(),
+});
+export type CouponRefundOutput = z.infer<typeof couponRefundOutputSchema>;
+
 // ===== U2 supplier 가입 (profiles + supplier_profiles row 생성) =====
 // 이 입력은 Edge Function이 아니라 클라이언트가 anon key로 profiles/supplier_profiles에
 // 직접 insert할 때 쓰인다(01-db-schema.sql RLS p_profiles_insert/p_sup_self가 본인 행

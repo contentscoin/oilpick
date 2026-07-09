@@ -58,6 +58,13 @@ export const INSUFFICIENT_COUPON = "INSUFFICIENT_COUPON";
 export const COUPON_PRICE_NOT_SET = "COUPON_PRICE_NOT_SET";
 
 /**
+ * 토스페이먼츠 결제 승인/취소 API 호출 실패 시 coupon-purchase-confirm/coupon-refund가 반환. HTTP 402.
+ * (07/02에 PG 실패 전용 코드가 없어 F4에서 최소 신설 — 승인 거절·네트워크 오류 등 PG측 실패를
+ * amount 위변조(VALIDATION_ERROR)와 구분한다.) 02-api.md `coupon-purchase-confirm`.
+ */
+export const PAYMENT_FAILED = "PAYMENT_FAILED";
+
+/**
  * 30분 무수락으로 order-expire cron이 자동 취소할 때의 cancel_reason 값
  * (에러 코드가 아니라 취소 사유 코드이지만 클라이언트/관리자 UI가 공유해야 하므로 함께 정의).
  * 00-domain.md "매칭 규칙" 2.
@@ -86,6 +93,7 @@ export const ERROR_CODES = {
   INSUFFICIENT_BALANCE,
   INSUFFICIENT_COUPON,
   COUPON_PRICE_NOT_SET,
+  PAYMENT_FAILED,
   NO_RIDER,
   VALIDATION_ERROR,
   UNAUTHORIZED,
@@ -106,6 +114,7 @@ export const ERROR_MESSAGE_KO: Record<ErrorCode, string> = {
   INSUFFICIENT_BALANCE: "출금 가능 잔액이 부족해요.",
   INSUFFICIENT_COUPON: "수거쿠폰이 부족해요. 충전 후 수락할 수 있어요.",
   COUPON_PRICE_NOT_SET: "쿠폰 단가가 아직 설정되지 않았어요. 관리자 설정 후 이용할 수 있어요.",
+  PAYMENT_FAILED: "결제 승인에 실패했어요. 다시 시도해 주세요.",
   NO_RIDER: "수락한 라이더가 없어 자동 취소되었어요.",
   VALIDATION_ERROR: "입력값을 확인해주세요.",
   UNAUTHORIZED: "로그인이 필요해요.",

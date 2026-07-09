@@ -126,7 +126,8 @@ REQUESTED→CANCELLED: supplier 자진 or 시스템 30분 무수락. 쿠폰 미�
   멱등. 통계에서 "purchase_id 있는 ADJUST"=PG 환불로 구분 집계.
 - **에러코드·응답(확정)**: 단가 tick 미설정 상태의 구매 신청 → `COUPON_PRICE_NOT_SET`(409).
   환불 qty > 미사용 잔액 → `INSUFFICIENT_COUPON` 재사용(동일 의미 — 잔액 부족).
-  coupon-purchase-confirm 성공 응답은 `{ balance }`(충전 후 잔액).
+  PG 승인/취소 실패(토스 거절·네트워크) → `PAYMENT_FAILED`(402, F4 확정 — amount 위변조의
+  VALIDATION_ERROR와 구분). coupon-purchase-confirm 성공 응답은 `{ balance }`(충전 후 잔액).
 - **PG 시크릿 키는 Edge Function 전용**(절대 규칙 3의 확장) — 클라이언트 번들엔 클라이언트 키만.
 - 쿠폰 = **플랫폼 자기 용역(콜 배정) 전용**. 기름값 충당 금지, 제3자 사용처 금지, 환불은 미사용분 단순
   환불로 한정 — 이 3가지가 전금법 선불전자지급수단 비해당의 성립 조건(규제 분석 결과). 설계 변경 금지.
@@ -291,6 +292,21 @@ REQUESTED→CANCELLED: supplier 자진 or 시스템 30분 무수락. 쿠폰 미�
 - DoD: 테스트 키 E2E(intent→위젯→confirm→잔액 증가+충전 알림). 금액 위변조 거부. **confirm 미호출 후
   재진입 재시도 시 잔액 정상 반영(이중 적립 없음)**. 상이 단가 2건 구매 후 부분 환불 시나리오(환불액=해당 건
   단가 기준, 잔액 차감). `pnpm lint/test/build` green.
+- [x] 결과(2026-07-09): 마이그레이션 20260709000005(fn_confirm_purchase/fn_refund_purchase — revoke all+
+  service_role, coupon_purchases FOR UPDATE 상태 기반 멱등, rider 원장 FOR UPDATE 직렬화 후 잔액 재계산;
+  fn_charge_coupon이 못 하는 "purchase_id 있는 ADJUST"를 fn_refund_purchase가 담당·F3a 경계 해소). Edge 3
+  신설: coupon-purchase-intent(최신 tick 스냅샷·PENDING insert·pg_order_id `oc_<uuid>`), coupon-purchase-
+  confirm(소유/pgOrderId·amount 위변조 검증 → 토스 승인(RPC 밖) → fn_confirm_purchase 원자 확정; PAID 멱등,
+  ALREADY_PROCESSED 멱등, 승인후 확정실패 시 토스 취소+FAILED), coupon-refund(fail-fast 잔액 → 토스 취소 →
+  fn_refund_purchase; 취소 실패 시 원장 무변경). `_shared/toss.ts`(confirm/cancel, fetch 주입 — deno test 4
+  green, 네트워크 없이 검증). core: couponPurchaseIntent/Confirm/Refund zod + PAYMENT_FAILED(402) + vitest 10.
+  rider `/coupons/purchase`(수량 10/30/50·직접입력, 예상금액=단가×수량, intent→SDK 위젯(주입/모킹)→successUrl
+  confirm, PENDING 대사+재시도; TOSS_CLIENT_KEY env). pgTAP 05 신설 21(confirm PENDING→PAID+CHARGE 멱등·
+  이중confirm·FAILED거부 / refund PAID만·건당1회·qty상한·미사용잔액부족·ADJUST -qty·unit_price 스냅샷·PG환불
+  구분·롤백) + 03에 EXECUTE 가드 3 → **db reset 21개 마이그레이션 + pgTAP 5파일 86 green**. deno check 4함수·
+  lint·turbo test(rider 8 신규)·build FULL green. 시크릿 격리 grep: TOSS_SECRET_KEY는 _shared/toss.ts의
+  Deno.env만, rider 번들엔 클라이언트 키만(dist 리터럴 0). **실 토스 위젯 브라우저 E2E는 가맹/테스트 키
+  미발급으로 보류** — .env.example(VITE_TOSS_CLIENT_KEY)·DEPLOY.md(TOSS_SECRET_KEY supabase secrets) 문서화.
 
 ## P2 — 라이더앱 (매입자 전환)
 

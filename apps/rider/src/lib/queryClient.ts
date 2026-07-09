@@ -28,4 +28,7 @@ export const queryKeys = {
   ledger: (userId: string) => ["ledger", userId] as const,
   bankAccount: (userId: string) => ["bankAccount", userId] as const,
   notifications: (userId: string) => ["notifications", userId] as const,
+  couponPrice: () => ["couponPrice", "latest"] as const,
+  couponBalance: (riderId: string) => ["couponBalance", riderId] as const,
+  pendingPurchases: (riderId: string) => ["couponPurchases", "pending", riderId] as const,
 };

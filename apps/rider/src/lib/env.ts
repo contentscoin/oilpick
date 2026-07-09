@@ -6,3 +6,7 @@
 export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 export const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 export const KAKAO_KEY: string | undefined = import.meta.env.VITE_KAKAO_KEY || undefined;
+// 토스페이먼츠 결제위젯 클라이언트 키(07 F4). 시크릿 키는 Edge Function(supabase secrets)에만 두고,
+// 클라이언트 번들엔 이 클라이언트 키만 유입한다(절대 규칙 3의 확장, 07 §1-4). 가맹 심사 전에는
+// 미발급이라 undefined — 결제 화면이 "키 미발급" 안내로 폴백한다(04-tasks.md 질문 목록 관례).
+export const TOSS_CLIENT_KEY: string | undefined = import.meta.env.VITE_TOSS_CLIENT_KEY || undefined;

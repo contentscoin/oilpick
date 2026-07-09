@@ -1,5 +1,5 @@
 // @ts-nocheck — 자동 생성 vendor 산출물(빌드 시 타입 정보 소실). 원본은 packages/core/src/schemas.ts.
-// packages/core/src/schemas.ts
+// ../../../../packages/core/src/schemas.ts
 import { z } from "zod";
 function okResponseSchema(dataSchema) {
   return z.object({
@@ -158,6 +158,40 @@ var couponPriceSetOutputSchema = z.object({
   unitPrice: z.number().int().positive(),
   effectiveAt: z.string()
 });
+var couponPurchaseIntentInputSchema = z.object({
+  qty: z.number().int().min(1).max(200)
+});
+var couponPurchaseIntentOutputSchema = z.object({
+  purchaseId: uuidSchema,
+  /** 토스 주문번호(pg_order_id). requestPayment()의 orderId로 그대로 넘긴다. */
+  pgOrderId: z.string().min(1),
+  /** 결제 금액(원) = qty × unitPrice. 위젯 setAmount·confirm amount 검증 기준. */
+  amount: z.number().int().positive(),
+  unitPrice: z.number().int().positive()
+});
+var couponPurchaseConfirmInputSchema = z.object({
+  purchaseId: uuidSchema,
+  paymentKey: z.string().min(1),
+  pgOrderId: z.string().min(1),
+  amount: z.number().int().positive()
+});
+var couponPurchaseConfirmOutputSchema = z.object({
+  /** 충전 후 쿠폰 잔액(장). v_coupon_balance 재조회. */
+  balance: z.number().int().nonnegative()
+});
+var couponRefundInputSchema = z.object({
+  purchaseId: uuidSchema,
+  /** 환불 수량(장). 생략 시 구매 전액. 1 이상, 구매 qty 이하(RPC가 상한 검증). */
+  qty: z.number().int().positive().optional(),
+  reason: z.string().min(1)
+});
+var couponRefundOutputSchema = z.object({
+  purchaseId: uuidSchema,
+  /** 실제 환불된 수량(장). */
+  refundedQty: z.number().int().positive(),
+  /** 환불 후 라이더 쿠폰 잔액(장). */
+  balance: z.number().int().nonnegative()
+});
 var supplierSignupInputSchema = z.object({
   displayName: z.string().min(1),
   storeName: z.string().min(1),
@@ -190,6 +224,12 @@ export {
   couponAdjustOutputSchema,
   couponPriceSetInputSchema,
   couponPriceSetOutputSchema,
+  couponPurchaseConfirmInputSchema,
+  couponPurchaseConfirmOutputSchema,
+  couponPurchaseIntentInputSchema,
+  couponPurchaseIntentOutputSchema,
+  couponRefundInputSchema,
+  couponRefundOutputSchema,
   deliverPayloadSchema,
   disputePayloadSchema,
   errorResponseSchema,

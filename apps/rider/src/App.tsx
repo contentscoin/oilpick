@@ -35,6 +35,9 @@ const EarningsPage = lazy(() =>
 const EarningsWithdrawPage = lazy(() =>
   import("./pages/EarningsWithdrawPage").then((m) => ({ default: m.EarningsWithdrawPage })),
 );
+const CouponPurchasePage = lazy(() =>
+  import("./pages/CouponPurchasePage").then((m) => ({ default: m.CouponPurchasePage })),
+);
 const BadgePage = lazy(() => import("./pages/BadgePage").then((m) => ({ default: m.BadgePage })));
 const NotificationsPage = lazy(() =>
   import("./pages/NotificationsPage").then((m) => ({ default: m.NotificationsPage })),
@@ -109,6 +112,14 @@ export function App() {
             element={
               <AuthGuard>
                 <EarningsWithdrawPage />
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/coupons/purchase"
+            element={
+              <AuthGuard>
+                <CouponPurchasePage />
               </AuthGuard>
             }
           />
