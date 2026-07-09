@@ -346,6 +346,17 @@ REQUESTED→CANCELLED: supplier 자진 or 시스템 30분 무수락. 쿠폰 미�
 - DoD: 수동 시나리오(요청→수락→도착→계량→확인→완료)를 단계별로 실행하고 각 단계 결과를 태스크 완료
   기록에 남김 — 신규 주문이 QR 없이 완결, DISPUTED 패널 표시, 레거시 PICKED_UP 주문 QR 경로 잔존.
   스냅샷·훅 vitest 갱신.
+- [x] 결과(2026-07-09): 【R】 ActiveRunPage 현금 매입 전환(ArrivedPanel "점주에게 지급할 현금"+제출 카피,
+  중재완료(final_kg) 재제출 불가 패널, DISPUTED 안내 패널 신설, COMPLETED 요약 패널+콜홈 복귀, 레거시
+  PICKED_UP QR 분기·스캔 보존). useActiveRun RUN_STATUSES에 DISPUTED/COMPLETED 추가(+final_kg/coupon_cost/
+  cash_paid_amount/completed_at 컬럼, COMPLETED 30분 창 post-filter). useTodayStats 신모델 교체(수거 kg/지급
+  현금/소진 쿠폰, completed_at) + useMonthlyPickupStats 신설(이번 달 건수/kg/현금, coalesce 규약·레거시혼합).
+  EarningsPage→"수거 실적" 재정의(포인트/출금 UI 제거, 이번 달 현금/건수/kg + 쿠폰 요약 + 내역/충전 링크),
+  탭 라벨 "정산"→"실적", /earnings/withdraw 라우트·네비 제거(EarningsWithdrawPage·useEarnings 참조 0 고아→F13
+  삭제). CallHomePage today-stats 교체. CallDetailPage not-found ErrorScreen(E2 이월). 브라우저 E2E 불가 →
+  상태별 렌더/훅 vitest 전수(rider 48, 신규 ActiveRunPage 7·EarningsPage 4·useTodayStats 2 + CallHome/
+  CallDetail 회귀 갱신) + F3a pgTAP(전이 실증) 조합으로 대체. lint·turbo test(--concurrency=1)·build FULL green.
+  신규 경로 포인트/수거비 표기 0건(잔존은 주석·레거시 데이터 필드·고아 파일뿐).
 
 ## P3 — 유저앱 (시세 중심 프리미엄 리디자인)
 

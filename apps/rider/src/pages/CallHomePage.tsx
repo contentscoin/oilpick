@@ -10,7 +10,7 @@ import {
   radius,
   surface,
 } from "@oilpick/ui";
-import { estimateCash, formatPoint } from "@oilpick/core";
+import { estimateCash, formatKg, formatKrw } from "@oilpick/core";
 import { useSession } from "../hooks/useSession";
 import { useRiderProfile } from "../hooks/useRiderProfile";
 import { useOpenCalls } from "../hooks/useOpenCalls";
@@ -110,39 +110,44 @@ export function CallHomePage() {
         }
       />
 
-      {/* 05-design-upgrade.md "라이더 콜홈 스탯": 오늘 실적을 2개 스탯 카드로 나란히. */}
-      <section data-testid="today-stats" style={{ display: "flex", gap: 12 }}>
-        <div
-          style={{
-            flex: 1,
-            borderRadius: radius.card,
-            padding: 16,
-            backgroundColor: surface.card,
-            border: `1px solid ${surface.border}`,
-            boxShadow: elevation.card,
-          }}
-        >
-          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: colors.status.wait }}>오늘 완료</p>
-          <p className="oilpick-tabular-nums" style={{ margin: "6px 0 0", fontSize: 26, fontWeight: 800, letterSpacing: "-0.01em", color: colors.primary.DEFAULT }}>
-            {stats?.completedCount ?? 0}
-            <span style={{ fontSize: 15, fontWeight: 600, color: colors.status.wait }}>건</span>
-          </p>
+      {/* 07 F6-⑥ "오늘 실적": 신모델 현금 매입 기준(수거 kg / 지급 현금 / 소진 쿠폰, completed_at 기준). */}
+      <section data-testid="today-stats" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ display: "flex", gap: 12 }}>
+          <div
+            style={{
+              flex: 1,
+              borderRadius: radius.card,
+              padding: 16,
+              backgroundColor: surface.card,
+              border: `1px solid ${surface.border}`,
+              boxShadow: elevation.card,
+            }}
+          >
+            <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: colors.status.wait }}>오늘 수거량</p>
+            <p data-testid="today-collected-kg" className="oilpick-tabular-nums" style={{ margin: "6px 0 0", fontSize: 24, fontWeight: 800, letterSpacing: "-0.01em", color: colors.primary.DEFAULT }}>
+              {formatKg(stats?.collectedKg ?? 0)}
+            </p>
+            <p style={{ margin: "4px 0 0", fontSize: 12, color: colors.status.wait }}>{stats?.completedCount ?? 0}건</p>
+          </div>
+          <div
+            style={{
+              flex: 1,
+              borderRadius: radius.card,
+              padding: 16,
+              backgroundColor: surface.card,
+              border: `1px solid ${surface.border}`,
+              boxShadow: elevation.card,
+            }}
+          >
+            <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: colors.status.wait }}>오늘 지급 현금</p>
+            <p data-testid="today-cash" className="oilpick-tabular-nums" style={{ margin: "6px 0 0", fontSize: 24, fontWeight: 800, letterSpacing: "-0.01em", color: colors.accent.DEFAULT }}>
+              {formatKrw(stats?.cashPaid ?? 0)}
+            </p>
+          </div>
         </div>
-        <div
-          style={{
-            flex: 1,
-            borderRadius: radius.card,
-            padding: 16,
-            backgroundColor: surface.card,
-            border: `1px solid ${surface.border}`,
-            boxShadow: elevation.card,
-          }}
-        >
-          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: colors.status.wait }}>오늘 확정 포인트</p>
-          <p className="oilpick-tabular-nums" style={{ margin: "6px 0 0", fontSize: 26, fontWeight: 800, letterSpacing: "-0.01em", color: colors.accent.DEFAULT }}>
-            {formatPoint(stats?.earnedPoint ?? 0)}
-          </p>
-        </div>
+        <p data-testid="today-coupons" style={{ margin: 0, fontSize: 13, color: colors.status.wait, textAlign: "center" }}>
+          오늘 소진 쿠폰 {stats?.consumedCoupons ?? 0}장
+        </p>
       </section>
 
       {!rider?.isOnline && (

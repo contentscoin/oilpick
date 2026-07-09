@@ -101,3 +101,14 @@ describe("CallDetailPage — 수락 게이트(07 F5-⑤)", () => {
     await waitFor(() => expect(screen.getByText("운행 화면")).toBeInTheDocument());
   });
 });
+
+describe("CallDetailPage — not-found 탈출(07 F6-⑦/E2)", () => {
+  it("캐시에 없는 콜(만료/수락됨) 진입 시 ErrorScreen + [콜 목록으로]", () => {
+    mockUseOpenCalls.mockReturnValue({ data: [], isLoading: false });
+    renderDetail();
+    expect(screen.getByTestId("error-screen")).toBeInTheDocument();
+    expect(screen.getByText("콜을 찾을 수 없어요")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("call-detail-back-to-list"));
+    expect(screen.getByText("콜 홈")).toBeInTheDocument();
+  });
+});

@@ -44,7 +44,9 @@ beforeEach(() => {
   mockUseRiderProfile.mockReturnValue({ data: { isOnline: true, verifyStatus: "APPROVED" } });
   mockUseOpenCalls.mockReturnValue({ data: [], isLoading: false });
   mockUseCouponBalance.mockReturnValue({ data: 12 });
-  mockUseTodayStats.mockReturnValue({ data: { completedCount: 0, earnedPoint: 0 } });
+  mockUseTodayStats.mockReturnValue({
+    data: { completedCount: 2, collectedKg: 60, cashPaid: 96000, consumedCoupons: 3 },
+  });
   mockUseGeolocation.mockReturnValue(null);
 });
 
@@ -65,5 +67,16 @@ describe("CallHomePage — 쿠폰 잔액 카드(07 F5-①)", () => {
     renderHome();
     fireEvent.click(screen.getByTestId("point-balance-card"));
     expect(screen.getByText("쿠폰 내역 화면")).toBeInTheDocument();
+  });
+});
+
+describe("CallHomePage — 오늘 실적(07 F6-⑥)", () => {
+  it("수거 kg / 지급 현금 / 소진 쿠폰(현금 매입 기준)", () => {
+    renderHome();
+    expect(screen.getByTestId("today-collected-kg")).toHaveTextContent("60.0kg");
+    expect(screen.getByTestId("today-cash")).toHaveTextContent("96,000원");
+    expect(screen.getByTestId("today-coupons")).toHaveTextContent("오늘 소진 쿠폰 3장");
+    // 구모델 포인트 표기 없음.
+    expect(screen.queryByText("오늘 확정 포인트")).not.toBeInTheDocument();
   });
 });

@@ -32,9 +32,6 @@ const PlaceholderPage = lazy(() =>
 const EarningsPage = lazy(() =>
   import("./pages/EarningsPage").then((m) => ({ default: m.EarningsPage })),
 );
-const EarningsWithdrawPage = lazy(() =>
-  import("./pages/EarningsWithdrawPage").then((m) => ({ default: m.EarningsWithdrawPage })),
-);
 const CouponPurchasePage = lazy(() =>
   import("./pages/CouponPurchasePage").then((m) => ({ default: m.CouponPurchasePage })),
 );
@@ -48,10 +45,11 @@ const NotificationsPage = lazy(() =>
 const MyPage = lazy(() => import("./pages/MyPage").then((m) => ({ default: m.MyPage })));
 
 /**
- * apps/rider 라우팅. docs/spec/03-frontend.md "apps/rider" 표(R1~R12) 그대로.
+ * apps/rider 라우팅. docs/spec/03-frontend.md "apps/rider" 표(R1~R12).
  * R1(/auth, /verify), R2(/), R3(/calls/:id), R4~R6(/active)는 T9 구현.
- * R7/R8(/earnings, /earnings/withdraw), R9(/badge), R11/R12(/notifications, /my)는 이번
- * 태스크(T10) 구현. R10(/history)만 아직 범위 밖이라 placeholder를 유지한다.
+ * R7(/earnings="수거 실적"), R9(/badge), R11/R12(/notifications, /my)는 T10 구현.
+ * 07 F6-⑤: 포인트 출금(/earnings/withdraw) 라우트 제거(포인트 모델 폐기). EarningsWithdrawPage.tsx는
+ * 참조 0의 고아 파일로 남겨 F13 레거시 일몰에서 삭제한다. R10(/history)은 placeholder 유지.
  */
 export function App() {
   // 네이티브(Capacitor) 통합: 커스텀 스킴 딥링크 + FCM 푸시 초기화(웹에서는 no-op).
@@ -107,14 +105,6 @@ export function App() {
                 <RiderShell>
                   <EarningsPage />
                 </RiderShell>
-              </AuthGuard>
-            }
-          />
-          <Route
-            path="/earnings/withdraw"
-            element={
-              <AuthGuard>
-                <EarningsWithdrawPage />
               </AuthGuard>
             }
           />

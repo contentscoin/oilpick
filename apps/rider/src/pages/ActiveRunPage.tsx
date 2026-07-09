@@ -13,7 +13,7 @@ import {
   surface,
   type PhotoAsset,
 } from "@oilpick/ui";
-import { formatKg, formatPoint, type OrderStatus } from "@oilpick/core";
+import { estimateCash, formatKg, formatKrw, type OrderStatus } from "@oilpick/core";
 import { KAKAO_KEY } from "../lib/env";
 import { invokeEdgeFunction } from "../lib/edgeFunction";
 import { supabase } from "../lib/supabaseClient";
@@ -79,7 +79,20 @@ export function ActiveRunPage() {
       <OrderTimeline currentStatus={run.status} />
 
       {run.status === "ACCEPTED" && <AcceptedPanel orderId={run.id} pickupAddress={run.pickupAddress} />}
-      {run.status === "ARRIVED" && <ArrivedPanel orderId={run.id} measuredKg={run.measuredKg} snapshotPricePerKg={run.snapshotPricePerKg} />}
+      {run.status === "ARRIVED" && (
+        <ArrivedPanel
+          orderId={run.id}
+          measuredKg={run.measuredKg}
+          finalKg={run.finalKg}
+          snapshotPricePerKg={run.snapshotPricePerKg}
+        />
+      )}
+      {run.status === "DISPUTED" && <DisputedPanel measuredKg={run.measuredKg} photoUrls={run.photoUrls} />}
+      {run.status === "COMPLETED" && (
+        <CompletedPanel cashPaidAmount={run.cashPaidAmount} finalKg={run.finalKg} />
+      )}
+      {/* 레거시 전용: 신모델은 CONFIRM_MEASURE가 COMPLETED로 직행해 PICKED_UP에 도달하지 않는다.
+          프로덕션 잔존분(구모델 PICKED_UP)만 이 QR 배송 경로를 탄다(07 F6-②). */}
       {run.status === "PICKED_UP" && <PickedUpPanel orderId={run.id} depotId={run.depotId} />}
     </main>
   );
@@ -93,7 +106,10 @@ export function ActiveRunPage() {
  */
 const RIDER_HEADLINE: Partial<Record<OrderStatus, { title: string; hint: string }>> = {
   ACCEPTED: { title: "매장으로 이동해주세요", hint: "도착하면 도착 버튼을 눌러주세요." },
-  ARRIVED: { title: "현장에서 계량해주세요", hint: "무게를 재고 사진을 올려주세요." },
+  ARRIVED: { title: "현장에서 계량해주세요", hint: "무게를 재고 현금을 지급한 뒤 사장님 확인을 받아요." },
+  DISPUTED: { title: "사장님이 이의신청했어요", hint: "관리자 중재 결과를 기다리는 중이에요." },
+  COMPLETED: { title: "수거를 완료했어요", hint: "현금 지급이 확인됐어요." },
+  // 레거시 전용(구모델 PICKED_UP 잔존분).
   PICKED_UP: { title: "집하장으로 이동해주세요", hint: "QR로 배송을 완료하세요." },
 };
 
@@ -224,20 +240,60 @@ function AcceptedPanel({ orderId, pickupAddress }: { orderId: string; pickupAddr
   );
 }
 
-/** R5 ARRIVED: 계량 입력(kg)+PhotoUploader(필수)+[계량 제출]. measuredKg 있으면 확인 대기 배너. */
+/**
+ * R5 ARRIVED: 07 F6-① 현금 매입 전환.
+ * - 중재 완료(finalKg not null): 재제출 불가 — 중재 확정 무게·지급 현금 안내(제출 폼 숨김).
+ * - 계량 제출 후(measuredKg not null): "현금 지급 후 사장님 확인 요청" 대기 배너.
+ * - 그 외: kg 입력 + 사진(필수) + 예상 지급 현금 + [계량 제출 → 사장님 확인 요청].
+ */
 function ArrivedPanel({
   orderId,
   measuredKg,
+  finalKg,
   snapshotPricePerKg,
 }: {
   orderId: string;
   measuredKg: number | null;
+  finalKg: number | null;
   snapshotPricePerKg: number;
 }) {
   const [kg, setKg] = useState("");
   const [photos, setPhotos] = useState<PhotoAsset[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // 07 §1-3: 중재로 kg가 확정된(final_kg) 주문은 SUBMIT_MEASURE 재제출이 서버에서 거부된다.
+  // 폼을 숨기고 확정 무게 + 지급할 현금 + 사장님 수령 확인 대기를 안내한다.
+  if (finalKg != null) {
+    return (
+      <Card
+        testId="run-arbitration-complete"
+        style={{ alignItems: "center", textAlign: "center", gap: 8, backgroundColor: colors.primary.light, borderColor: colors.primary.light }}
+      >
+        <span
+          aria-hidden
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 44,
+            height: 44,
+            borderRadius: "50%",
+            backgroundColor: "#fff",
+            color: colors.primary.DEFAULT,
+          }}
+        >
+          <ClockIcon />
+        </span>
+        <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: colors.primary.dark }}>
+          중재 확정 무게 {formatKg(finalKg)}
+        </p>
+        <p style={{ margin: 0, fontSize: 14, color: colors.status.wait }}>
+          사장님께 현금 {formatKrw(estimateCash(finalKg, snapshotPricePerKg))}을 지급한 뒤 앱에서 수령 확인을 받아주세요.
+        </p>
+      </Card>
+    );
+  }
 
   if (measuredKg != null) {
     return (
@@ -262,7 +318,8 @@ function ArrivedPanel({
         </span>
         <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: colors.primary.dark }}>사장님 확인 대기</p>
         <p style={{ margin: 0, fontSize: 14, color: colors.status.wait }}>
-          제출한 계량 {formatKg(measuredKg)} 값을 사장님이 확인하면 다음 단계로 넘어가요.
+          제출한 계량 {formatKg(measuredKg)} · 사장님께 현금{" "}
+          {formatKrw(estimateCash(measuredKg, snapshotPricePerKg))}을 지급하고 앱에서 수령 확인을 요청하세요.
         </p>
       </Card>
     );
@@ -319,7 +376,7 @@ function ArrivedPanel({
     }
   }
 
-  const estimatedPoint = kg ? Math.round(Number(kg) * snapshotPricePerKg) : 0;
+  const cashPayout = kg ? estimateCash(Number(kg), snapshotPricePerKg) : 0;
   const showEstimate = Boolean(kg) && !Number.isNaN(Number(kg));
 
   return (
@@ -343,10 +400,10 @@ function ArrivedPanel({
           />
         </div>
 
-        {/* 예상 지급 포인트: 앰버(accent) 강조 배너. */}
+        {/* 07 F6-①: 점주에게 지급할 현금(원화). 앰버(accent) 강조 배너. */}
         {showEstimate && (
           <div
-            data-testid="run-estimated-point"
+            data-testid="run-cash-payout"
             style={{
               display: "flex",
               alignItems: "center",
@@ -357,18 +414,18 @@ function ArrivedPanel({
               backgroundColor: colors.accent.light,
             }}
           >
-            <span style={{ fontSize: 13, fontWeight: 600, color: colors.status.wait }}>예상 지급 포인트</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: colors.status.wait }}>점주에게 지급할 현금</span>
             <span
               className="oilpick-tabular-nums"
               style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-0.01em", color: colors.accent.DEFAULT }}
             >
-              {formatPoint(estimatedPoint)}
+              {formatKrw(cashPayout)}
             </span>
           </div>
         )}
         {showEstimate && (
           <p style={{ margin: 0, fontSize: 12, color: colors.status.wait, textAlign: "right" }}>
-            현장 계량 기준으로 확정됩니다
+            현장 계량 기준으로 확정 · 점주에게 직접 지급
           </p>
         )}
       </Card>
@@ -385,13 +442,97 @@ function ArrivedPanel({
       )}
 
       <BigButton type="submit" data-testid="submit-measure-button" loading={submitting}>
-        계량 제출
+        계량 제출 → 사장님 확인 요청
       </BigButton>
     </form>
   );
 }
 
-/** R6 PICKED_UP: 집하장 안내 + depotId/qrSecret 수동 입력 폴백 UI → DELIVER. */
+/**
+ * DISPUTED 안내 패널(07 F6-③). 사장님이 계량에 이의를 제기해 관리자 중재를 기다리는 상태.
+ * 예전엔 이 상태가 진행중 목록에서 빠져 라이더가 빈 화면 + 수수께끼 409에 갇혔다.
+ * 제출한 계량/사진 요약을 함께 보여 라이더가 맥락을 잃지 않게 한다. 중재가 끝나면(RESOLVE_DISPUTE
+ * → ARRIVED 복귀) ArrivedPanel의 "중재 확정" 패널로 자연 전환된다.
+ */
+function DisputedPanel({ measuredKg, photoUrls }: { measuredKg: number | null; photoUrls: string[] }) {
+  return (
+    <Card testId="run-disputed-panel" style={{ gap: 12 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: gray[900] }}>사장님이 계량에 이의신청했어요</p>
+        <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: colors.status.wait }}>
+          관리자가 중재 중이에요. 확정 무게가 정해지면 알림으로 알려드릴게요. 아직 현금은 지급하지 마세요.
+        </p>
+      </div>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 6,
+          paddingTop: 12,
+          borderTop: `1px solid ${surface.border}`,
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14 }}>
+          <span style={{ color: colors.status.wait }}>제출한 계량</span>
+          <span className="oilpick-tabular-nums" style={{ fontWeight: 600, color: gray[900] }}>
+            {measuredKg != null ? formatKg(measuredKg) : "-"}
+          </span>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14 }}>
+          <span style={{ color: colors.status.wait }}>첨부 사진</span>
+          <span className="oilpick-tabular-nums" style={{ fontWeight: 600, color: gray[900] }}>
+            {photoUrls.length}장
+          </span>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+/**
+ * 완료 요약 패널(07 F6-④). CONFIRM_MEASURE/FORCE_COMPLETE로 COMPLETED에 도달한 직후,
+ * 현장 지급 현금(cash_paid_amount)을 요약하고 콜 홈으로 복귀시킨다. 오래된 완료분은
+ * useActiveRun이 걸러내므로(창 경과) 이 패널은 "완료 직후"에만 노출된다.
+ */
+function CompletedPanel({ cashPaidAmount, finalKg }: { cashPaidAmount: number | null; finalKg: number | null }) {
+  const navigate = useNavigate();
+  return (
+    <Card
+      testId="run-completed-panel"
+      style={{ alignItems: "center", textAlign: "center", gap: 10, backgroundColor: colors.primary.light, borderColor: colors.primary.light }}
+    >
+      <span
+        aria-hidden
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: 48,
+          height: 48,
+          borderRadius: "50%",
+          backgroundColor: colors.primary.DEFAULT,
+          color: "#fff",
+        }}
+      >
+        <CheckMarkIcon />
+      </span>
+      <p style={{ margin: 0, fontSize: 18, fontWeight: 800, color: colors.primary.dark }}>수거 완료</p>
+      <p className="oilpick-tabular-nums" style={{ margin: 0, fontSize: 15, color: gray[900] }}>
+        현금 {formatKrw(cashPaidAmount ?? 0)} 지급
+        {finalKg != null ? ` · ${formatKg(finalKg)}` : ""}
+      </p>
+      <BigButton data-testid="completed-go-home" onClick={() => navigate("/")}>
+        콜 홈으로
+      </BigButton>
+    </Card>
+  );
+}
+
+/**
+ * 레거시 R6 PICKED_UP: 집하장 안내 + depotId/qrSecret 수동 입력/QR 스캔 → DELIVER.
+ * 07 F6-②: 신모델은 이 상태에 도달하지 않는다(CONFIRM_MEASURE가 COMPLETED로 직행).
+ * 프로덕션에 남은 구모델 PICKED_UP 주문 완결을 위해 분기·QR 스캔 코드를 보존한다(삭제 금지).
+ */
 function PickedUpPanel({ orderId, depotId }: { orderId: string; depotId: string | null }) {
   const [inputDepotId, setInputDepotId] = useState(depotId ?? "");
   const [qrSecret, setQrSecret] = useState("");
@@ -518,6 +659,15 @@ function ClockIcon() {
     <svg width={22} height={22} viewBox="0 0 24 24" fill="none" aria-hidden>
       <circle cx={12} cy={12} r={8.5} stroke="currentColor" strokeWidth={1.7} />
       <path d="M12 7.5V12l3 2" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/** 완료 요약 체크 아이콘(흰색). */
+function CheckMarkIcon() {
+  return (
+    <svg width={24} height={24} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M5 12.5l4.2 4.2L19 7" stroke="#fff" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }

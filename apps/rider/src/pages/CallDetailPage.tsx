@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { BigButton, MapView, Toast, colors, elevation, gray, radius, surface } from "@oilpick/ui";
+import { BigButton, ErrorScreen, MapView, Toast, colors, elevation, gray, radius, surface } from "@oilpick/ui";
 import { INSUFFICIENT_COUPON, estimateCash, formatKg, formatKrw } from "@oilpick/core";
 import { KAKAO_KEY } from "../lib/env";
 import { invokeEdgeFunction } from "../lib/edgeFunction";
@@ -61,13 +61,20 @@ export function CallDetailPage() {
     );
   }
 
+  // E2(07 F6-⑦): 만료됐거나 이미 수락된 콜 id로 진입하면 캐시에 없다 — 막다른 길이므로
+  // 빈 상태가 아닌 ErrorScreen + [콜 목록으로]로 탈출시킨다.
   if (!call) {
     return (
       <main style={{ padding: 20, maxWidth: 480, margin: "0 auto" }}>
-        <p>콜을 찾을 수 없어요. 이미 다른 라이더가 수락했을 수 있어요.</p>
-        <BigButton data-testid="call-detail-back-to-list" onClick={() => navigate("/")}>
-          목록으로
-        </BigButton>
+        <ErrorScreen
+          title="콜을 찾을 수 없어요"
+          description="이미 다른 라이더가 수락했거나 만료된 콜이에요."
+          action={
+            <BigButton data-testid="call-detail-back-to-list" onClick={() => navigate("/")}>
+              콜 목록으로
+            </BigButton>
+          }
+        />
       </main>
     );
   }
