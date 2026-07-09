@@ -1,5 +1,7 @@
--- pgTAP: 레거시 주문 회귀 (07 F3a-③, §0 프로덕션 전제). 신모델 배포 후에도 프로덕션에 잔존할 수
--- 있는 구 경로(PICKED_UP 상태 주문의 집하장 배송·QR 검증·RELEASE 지급)가 여전히 동작하는지 검증한다.
+-- pgTAP: 레거시 주문 회귀 (07 F3a-③, §0 프로덕션 전제 + D1 보강 2026-07-09). 신모델 배포 후에도
+-- 프로덕션에 잔존할 수 있는 구 경로(PICKED_UP 상태 주문의 집하장 배송·QR 검증)가 완결은 되지만
+-- **라이더에게 어떤 포인트도 지급하지 않음**을 검증한다(RELEASE 발행 제거 — 20260709000010.
+-- 라이더는 쿠폰을 구매하는 쪽이지 지급받는 쪽이 아니다).
 -- 신 상태머신은 PICKED_UP에 도달하지 않으므로 픽스처는 PICKED_UP 주문을 직접 삽입한다.
 create extension if not exists pgtap with schema extensions;
 
@@ -30,18 +32,18 @@ insert into point_ledger (user_id, entry_type, amount, order_id, memo) values
   ('11111111-1111-1111-1111-111111111111','EARN',31500,'00000000-cccc-0000-0000-000000000001','legacy'),
   ('22222222-2222-2222-2222-222222222222','HOLD',5000,'00000000-cccc-0000-0000-000000000001','legacy');
 
--- ── 레거시 DELIVER(집하장 QR 검증 → COMPLETED + RELEASE) ─────────────────────
+-- ── 레거시 DELIVER(집하장 QR 검증 → COMPLETED, 지급 없음) ────────────────────
 select fn_transition_order('00000000-cccc-0000-0000-000000000001','DELIVER','22222222-2222-2222-2222-222222222222','rider',
   '{"depotId":"dddddddd-0000-0000-0000-0000000000d1","qrSecret":"secret-qr-123"}'::jsonb);
 
 select is((select status from pickup_orders where id='00000000-cccc-0000-0000-000000000001'), 'COMPLETED', '레거시 DELIVER 후 COMPLETED');
-select is((select amount from point_ledger where order_id='00000000-cccc-0000-0000-000000000001' and entry_type='RELEASE'),
-          5000, '레거시 RELEASE = snapshot_rider_fee(5000)');
-select is((select available from v_point_balance where user_id='22222222-2222-2222-2222-222222222222'), 5000, '레거시: held→available 이동(available 5000)');
-select is((select held from v_point_balance where user_id='22222222-2222-2222-2222-222222222222'), 0, '레거시: held 0');
+select is((select count(*)::int from point_ledger where order_id='00000000-cccc-0000-0000-000000000001' and entry_type='RELEASE'),
+          0, 'D1 보강: 레거시 완결에도 RELEASE 지급 없음');
+select is((select available from v_point_balance where user_id='22222222-2222-2222-2222-222222222222'), 0, 'D1 보강: available 0(지급 없음)');
+select is((select held from v_point_balance where user_id='22222222-2222-2222-2222-222222222222'), 5000, '기존 HOLD는 held에 잔존(과거 회계 기록 — 지급 의무 아님)');
 select is((select count(*)::int from coupon_ledger where rider_id='22222222-2222-2222-2222-222222222222'), 0, '레거시 경로는 쿠폰 원장을 건드리지 않음');
 
--- 멱등: 완료된 주문 DELIVER 재호출 → 이중 RELEASE 없음
+-- 멱등: 완료된 주문 DELIVER 재호출 거부(포인트 미발행은 위에서 검증)
 select throws_ok(
   $$ select fn_transition_order('00000000-cccc-0000-0000-000000000001','DELIVER','22222222-2222-2222-2222-222222222222','rider','{"depotId":"dddddddd-0000-0000-0000-0000000000d1","qrSecret":"secret-qr-123"}'::jsonb) $$,
   'INVALID_TRANSITION', '완료된 레거시 주문 DELIVER 재호출은 INVALID_TRANSITION');

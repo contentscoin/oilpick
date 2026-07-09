@@ -45,11 +45,16 @@
 ### 레거시 주문 전용 전이 (신규 주문 도달 불가 — 프로덕션 잔존분 완결용)
 `coupon_cost is null`(게이트 활성 전 생성)이거나 이미 PICKED_UP에 도달한 잔존 주문만 아래 구모델 경로로 완결한다. enum 값(PICKED_UP/DELIVERED/EARN 등)은 절대 삭제하지 않는다(07 §0 프로덕션 전제).
 
+> **[D1 보강, CEO 2026-07-09]** 레거시 완결(DELIVER)에서도 **라이더 포인트 지급은 없다** —
+> 배송 완료는 어떤 경우에도 라이더 지급 이벤트가 아니다(라이더는 쿠폰을 2,000원/장에 "구매"하는
+> 쪽이고, 쿠폰 1장 = 1통 수거 신청분이다). RELEASE 발행을 RPC에서 제거(20260709000010),
+> 완결 전이(QR 검증)만 유지. 기존 HOLD 잔존분은 held에 남는 과거 회계 기록이며 지급 의무가 아니다.
+
 | 전이 | 트리거(actor) | 가드 조건 | 부수효과 |
 |---|---|---|---|
-| ARRIVED→PICKED_UP | rider | (구모델) 계량+사진+supplier 확인 | ① supplier에 `EARN` = round(확정kg × 시세) ② rider에 `HOLD` = 수거비 (레거시 지급) |
-| DISPUTED→PICKED_UP | admin | (구모델) 중재 수량 확정 | 위와 동일 지급 (중재 수량 기준) |
-| PICKED_UP→DELIVERED | rider | 집하장 QR 코드 스캔 검증 (depot.qr_secret 일치) | rider `HOLD` → `RELEASE` (지급 확정) |
+| ARRIVED→PICKED_UP | rider | (구모델 문서 기록 — 신 RPC 미구현, 도달 불가) | (구모델의 EARN/HOLD 발행 — 신규 발행 전면 중지, 07 D1) |
+| DISPUTED→PICKED_UP | admin | (구모델 문서 기록 — 신 RPC 미구현, 도달 불가) | 동상 |
+| PICKED_UP→DELIVERED | rider | 집하장 QR 코드 스캔 검증 (depot.qr_secret 일치) | **지급 없음(D1 보강)** — RELEASE 발행 제거, 완결 전이만 수행 |
 | DELIVERED→COMPLETED | 시스템 | DELIVERED 즉시 자동 | 별점 요청 푸시(선택) |
 
 ## 매칭 규칙
@@ -59,19 +64,18 @@
 3. 수락은 선착순. 두 번째 이후 수락 시도는 409 `ALREADY_ACCEPTED`.
 
 ## 포인트 원장 규칙 (레거시 — 신규 발행 중지, 07 D1)
-> 신모델은 현금 직거래로 전환했다(07 D1). EARN/HOLD/RELEASE/WITHDRAW의 **신규 발행은 전면 중지**하며, `point_ledger` 테이블·과거 데이터는 append-only 회계 기록으로 **보존**한다(삭제 금지). 지갑/출금 UI는 "수령 이력"으로 대체(07 F8/F13). 아래 규칙은 레거시 주문 완결·감사 목적으로만 유효하다.
+> 신모델은 현금 직거래로 전환했다(07 D1). EARN/HOLD/RELEASE/WITHDRAW의 **신규 발행은 전면 중지**하며, `point_ledger` 테이블·과거 데이터는 append-only 회계 기록으로 **보존**한다(삭제 금지). 지갑/출금 UI는 "수령 이력"으로 대체(07 F8/F13). **D1 보강(2026-07-09)으로 마지막 발행 경로(레거시 DELIVER의 RELEASE)까지 제거 — point_ledger에 insert하는 코드 경로는 이제 0이다.** 아래 규칙은 과거 데이터 감사 목적으로만 유효하다.
 
 - `point_ledger`는 **append-only**. UPDATE/DELETE 금지 (트리거로 차단).
 - entry_type: `EARN`(supplier 매각대금) `HOLD`(rider 수거비 보류) `RELEASE`(보류 확정)
   `WITHDRAW_REQUEST`(출금 신청 시 차감) `WITHDRAW_CANCEL`(반려 시 복구) `ADJUST`(admin 수동) `PURCHASE`(쇼핑몰, Phase 5)
 - 부호 규칙: 잔액 증가 = 양수, 감소 = 음수. HOLD는 `held` 컬럼 별도 집계 (잔액에 미포함, "보류 중" 표시용).
-  - PICKED_UP: rider에 HOLD(+fee, held로 집계) — 사용 가능 잔액 아님
-  - DELIVERED: RELEASE 행 추가 → held에서 빠지고 available로 이동
-- 출금: 신청 시 `WITHDRAW_REQUEST`(-금액) 즉시 차감 → admin 승인(이체는 수동) 또는 반려(`WITHDRAW_CANCEL` +금액).
-  최소 출금 10,000P. 잔액 초과 신청은 400.
+  - (과거 데이터) PICKED_UP 시점의 HOLD(+fee)는 held로 집계 — RELEASE가 더 이상 발행되지 않으므로
+    잔존 HOLD는 held에 머문다(과거 회계 기록, 지급 의무 아님 — D1 보강).
+- 출금: (레거시 기록용) `WITHDRAW_REQUEST`/`WITHDRAW_CANCEL` — 신청·처리 경로는 F13에서 제거됨.
 - 잔액 조회는 `v_point_balance` 뷰만 사용 (user_id, available, held).
-- 불변식(테스트로 검증): 주문 1건 COMPLETED 시 원장 합 = supplier EARN + rider HOLD + rider RELEASE이고
-  HOLD 금액 == RELEASE 금액 == 주문 스냅샷 rider_fee.
+- 불변식(테스트로 검증): 레거시 완결(DELIVER)은 point_ledger를 변경하지 않는다(RELEASE 0행 —
+  04_legacy_flow_test). 과거 완결분의 EARN/HOLD/RELEASE 정합은 회계 감사 영역.
 
 ## 쿠폰 원장 규칙 (07 §1-1 — 절대 규칙 1의 확장)
 - **쿠폰은 클라이언트에서 절대 쓰지 않는다.** `coupon_ledger` insert는 service_role RPC(`fn_charge_coupon`/`fn_consume_coupon`)에만 존재. 잔액은 `v_coupon_balance` 뷰로만 조회. `rider_profiles`에 잔액 컬럼 금지(원장+뷰 분리).
