@@ -4,6 +4,7 @@
 import { assertEquals, assertThrows } from "./vendor/std-assert/mod.ts";
 import { getPgAdapter } from "./pg.ts";
 import { tossAdapter } from "./toss.ts";
+import { koemAdapter } from "./koem.ts";
 
 Deno.test("getPgAdapter: 명시 provider 'toss' → tossAdapter", () => {
   assertEquals(getPgAdapter("toss"), tossAdapter);
@@ -24,8 +25,9 @@ Deno.test("getPgAdapter: PG_PROVIDER env로 선택", () => {
   }
 });
 
-Deno.test("getPgAdapter: koem은 미구현 명시 실패(F14 — 제휴 문서 대기)", () => {
-  assertThrows(() => getPgAdapter("koem"), Error, "코엠페이먼츠 어댑터는 아직 준비되지 않았어요");
+Deno.test("getPgAdapter: koem → koemAdapter (F14)", () => {
+  assertEquals(getPgAdapter("koem"), koemAdapter);
+  assertEquals(getPgAdapter("koem").provider, "koem");
 });
 
 Deno.test("getPgAdapter: 미지원 provider 거부", () => {

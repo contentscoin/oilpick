@@ -29,8 +29,26 @@ supabase secrets set FCM_SERVICE_ACCOUNT="$(cat fcm-service-account.json)"
 #    클라이언트 키(VITE_TOSS_CLIENT_KEY, rider 앱 env)와 다르다 — 시크릿 키는 서버(Edge)에만 둔다.
 #    미설정 시 confirm/refund가 PAYMENT_FAILED로 실패한다. 테스트 키(test_sk_...)로 개발/검증 가능.
 supabase secrets set TOSS_SECRET_KEY="test_sk_xxxxxxxxxxxxxxxxxxxx"
-#  - PG_PROVIDER(선택): 활성 PG 어댑터 선택(07 F14-①). 미설정=toss.
-#    "koem"(코엠페이먼츠)은 어댑터 구현 전까지 설정 금지 — confirm/refund가 즉시 실패한다.
+#  - PG_PROVIDER(선택): 활성 PG 어댑터 선택(07 F14). 미설정=toss. "koem" = 코엠페이먼츠 SIMPLEPAY.
+#    rider 앱 env VITE_PG_PROVIDER와 반드시 같은 값으로 배포할 것.
+supabase secrets set PG_PROVIDER="koem"
+#  - 코엠(SIMPLEPAY) 시크릿(07 F14, PG_PROVIDER=koem일 때 필수). 코엠 계약 시 이메일로 수령.
+#    KOEM_API_KEY는 checkHash(HMAC-SHA256) 생성용 64자리 키 — 클라이언트에 절대 노출 금지.
+supabase secrets set KOEM_MID="M2026xxxxxxxxxxx"
+supabase secrets set KOEM_API_KEY="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+#  - 코엠 도메인(선택, 미설정=상용기). 개발기 테스트 시에만 재정의:
+#    KOEM_PG_DOMAIN="https://test-pay.coam.co.kr:30300", KOEM_APPROV_DOMAIN="https://183.111.29.87:39500"
+#    ※ 개발기 취소 서버는 IP 도메인이라 TLS 인증서 검증 실패 가능(코엠 공식 샘플은 검증을 끈다) —
+#      Deno(Edge)는 검증을 끌 수 없으므로 취소 E2E는 상용기 인증서 도메인에서 확인한다.
+#  - KOEM_RETURN_URL(선택): 결제 결과 rUrl. 미설정 시 ${SUPABASE_URL}/functions/v1/coupon-purchase-return.
+#  - KOEM_RETURN_APP_URL(선택): 결제 완료 화면에서 앱 복귀 딥링크(예: oilpickrider://coupons/purchase).
+#  - KOEM_PAY_GROUP/KOEM_PAY_BRAND(선택): 기본 OPG/OCC — 계약서의 결제그룹·브랜드와 다르면 재정의.
+#
+# ※ 코엠 운영 선행 조건(07 F14 확정 설계):
+#   ① 취소 API는 "가맹점 서버 공인 IP"를 코엠 방화벽에 등록해야 호출 가능(가이드 1.1) —
+#      Supabase Edge Functions는 고정 egress IP가 아니므로 코엠에 egress 대역 등록 가능 여부를
+#      문의하고, 불가하면 고정 IP 프록시 경유를 검토한다(개발기/상용기 각각 등록).
+#   ② rUrl(coupon-purchase-return)은 배포된 함수 URL 기준으로 코엠 측 사전 협의.
 ```
 
 ### 1-1. 프로덕션 초기 데이터(수동 — seed.sql은 로컬 전용)

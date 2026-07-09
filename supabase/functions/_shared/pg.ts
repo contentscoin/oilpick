@@ -3,12 +3,14 @@
 // 호출한다 — 쿠폰 원장·상태머신은 PG 중립(07 §1-4)이라 어댑터 교체만으로 PG를 바꾼다.
 //
 // 구현체 규칙: 네트워크 없이 검증 가능하도록 fetch 주입(PgDeps.fetchImpl)을 받고, 시크릿
-// 키는 Deno.env(supabase secrets)에서만 읽는다(절대 규칙 3의 확장). 코엠페이먼츠 어댑터는
-// 제휴 API 문서 확보 후 이 계약으로 구현한다(F14 잔여).
+// 키는 Deno.env(supabase secrets)에서만 읽는다(절대 규칙 3의 확장).
+// 코엠은 서버 승인 API가 없는 결제창 리다이렉트형이라 confirmPayment가 명시 실패한다 —
+// 확정 경로는 coupon-purchase-return(rUrl 콜백). 상세는 koem.ts와 07 F14 확정 설계 참고.
 //
-// toss.ts와 순환 import지만 서로 런타임(함수 호출 시점) 참조만 있어 안전하다.
+// toss.ts/koem.ts와 순환 import지만 서로 런타임(함수 호출 시점) 참조만 있어 안전하다.
 
 import { tossAdapter } from "./toss.ts";
+import { koemAdapter } from "./koem.ts";
 
 /** 주입 가능한 fetch 시그니처(Deno/브라우저 fetch 호환 최소 형태). */
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
@@ -62,17 +64,14 @@ export interface PgAdapter {
   isAlreadyProcessed(err: unknown): boolean;
 }
 
-/**
- * 활성 PG 어댑터 선택. provider 미지정 시 Deno.env `PG_PROVIDER`(기본 toss).
- * koem은 제휴 API 문서 확보 전까지 미구현(F14 잔여) — 선택 시 명시적으로 실패한다.
- */
+/** 활성 PG 어댑터 선택. provider 미지정 시 Deno.env `PG_PROVIDER`(기본 toss). */
 export function getPgAdapter(provider?: string): PgAdapter {
   const selected = provider ?? Deno.env.get("PG_PROVIDER") ?? "toss";
   switch (selected) {
     case "toss":
       return tossAdapter;
     case "koem":
-      throw new Error("코엠페이먼츠 어댑터는 아직 준비되지 않았어요(F14 — 제휴 API 문서 대기).");
+      return koemAdapter;
     default:
       throw new Error(`지원하지 않는 PG_PROVIDER예요: ${selected}`);
   }

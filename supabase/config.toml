@@ -441,6 +441,12 @@ import_map = "./functions/import_map.json"
 verify_jwt = true
 import_map = "./functions/import_map.json"
 
+# F14: 코엠페이먼츠 rUrl 콜백(PG 서버가 호출) — JWT가 없으므로 verify_jwt=false가 필수.
+# 요청 검증은 함수 내부에서(orderno→구매건 대조·금액 대조, 07 F14 확정 설계).
+[functions.coupon-purchase-return]
+verify_jwt = false
+import_map = "./functions/import_map.json"
+
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 

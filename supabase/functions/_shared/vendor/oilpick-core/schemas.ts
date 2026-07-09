@@ -1,5 +1,5 @@
 // @ts-nocheck — 자동 생성 vendor 산출물(빌드 시 타입 정보 소실). 원본은 packages/core/src/schemas.ts.
-// ../../../../packages/core/src/schemas.ts
+// packages/core/src/schemas.ts
 import { z } from "zod";
 function okResponseSchema(dataSchema) {
   return z.object({
@@ -163,11 +163,17 @@ var couponPurchaseIntentInputSchema = z.object({
 });
 var couponPurchaseIntentOutputSchema = z.object({
   purchaseId: uuidSchema,
-  /** 토스 주문번호(pg_order_id). requestPayment()의 orderId로 그대로 넘긴다. */
+  /** PG 주문번호(pg_order_id). 토스 requestPayment()의 orderId / 코엠 orderno(20자 이내). */
   pgOrderId: z.string().min(1),
   /** 결제 금액(원) = qty × unitPrice. 위젯 setAmount·confirm amount 검증 기준. */
   amount: z.number().int().positive(),
-  unitPrice: z.number().int().positive()
+  unitPrice: z.number().int().positive(),
+  /** 코엠(PG_PROVIDER=koem) 결제창 진입 정보(07 F14). 클라이언트는 params를 수정 없이
+      hidden form으로 payUrl에 POST한다(checkHash 포함 — 서버 생성). 토스 모드에서는 없음. */
+  koem: z.object({
+    payUrl: z.string().min(1),
+    params: z.record(z.string())
+  }).optional()
 });
 var couponPurchaseConfirmInputSchema = z.object({
   purchaseId: uuidSchema,

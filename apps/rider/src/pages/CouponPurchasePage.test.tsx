@@ -33,11 +33,22 @@ function makeWidget() {
 }
 
 function renderPage(
-  opts: { loadWidget?: ReturnType<typeof vi.fn>; clientKey?: string; entry?: string } = {},
+  opts: {
+    loadWidget?: ReturnType<typeof vi.fn>;
+    clientKey?: string;
+    entry?: string;
+    pgProvider?: "toss" | "koem";
+    submitPayForm?: ReturnType<typeof vi.fn>;
+  } = {},
 ) {
   return render(
     <MemoryRouter initialEntries={[opts.entry ?? "/coupons/purchase"]}>
-      <CouponPurchasePage loadWidget={opts.loadWidget} clientKey={opts.clientKey ?? "test_ck_x"} />
+      <CouponPurchasePage
+        loadWidget={opts.loadWidget}
+        clientKey={opts.clientKey ?? "test_ck_x"}
+        pgProvider={opts.pgProvider}
+        submitPayForm={opts.submitPayForm}
+      />
     </MemoryRouter>,
   );
 }
@@ -144,6 +155,80 @@ describe("CouponPurchasePage — PENDING 대사", () => {
     fireEvent.click(screen.getByTestId("pending-retry-button"));
     await waitFor(() => expect(loadWidget).toHaveBeenCalledWith("test_ck_x"));
     await waitFor(() => expect(widget.setAmount).toHaveBeenCalledWith(15000));
+  });
+});
+
+describe("CouponPurchasePage — 코엠 결제창 (07 F14)", () => {
+  const KOEM_INTENT = {
+    ok: true,
+    data: {
+      purchaseId: "p1",
+      pgOrderId: "op123456789012345678",
+      amount: 60000,
+      unitPrice: 2000,
+      koem: {
+        payUrl: "https://pay.coam.co.kr/mobilepage/common/mainFrame.pay",
+        params: { mid: "M1", orderno: "op123456789012345678", buyReqamt: "60000", checkHash: "h" },
+      },
+    },
+  };
+
+  it("clientKey 없이도 구매 폼을 렌더한다(수동 충전 게이트 미적용)", () => {
+    renderPage({ pgProvider: "koem", clientKey: "" });
+    expect(screen.queryByTestId("purchase-manual-notice")).not.toBeInTheDocument();
+    expect(screen.getByTestId("purchase-pay-button")).toBeInTheDocument();
+  });
+
+  it("[결제하기] → intent의 koem 파라미터를 수정 없이 form 제출한다(위젯 미사용)", async () => {
+    const submitPayForm = vi.fn();
+    const loadWidget = vi.fn();
+    mockInvoke.mockResolvedValue(KOEM_INTENT);
+
+    renderPage({ pgProvider: "koem", clientKey: "", submitPayForm, loadWidget });
+    fireEvent.click(screen.getByTestId("qty-preset-30"));
+    fireEvent.click(screen.getByTestId("purchase-pay-button"));
+
+    await waitFor(() =>
+      expect(submitPayForm).toHaveBeenCalledWith(
+        KOEM_INTENT.data.koem.payUrl,
+        KOEM_INTENT.data.koem.params,
+      ),
+    );
+    expect(loadWidget).not.toHaveBeenCalled();
+  });
+
+  it("서버가 koem 파라미터를 안 주면(시크릿 미설정) 준비 중 안내로 폴백", async () => {
+    const submitPayForm = vi.fn();
+    mockInvoke.mockResolvedValue({
+      ok: true,
+      data: { purchaseId: "p1", pgOrderId: "op1", amount: 60000, unitPrice: 2000 },
+    });
+
+    renderPage({ pgProvider: "koem", clientKey: "", submitPayForm });
+    fireEvent.click(screen.getByTestId("purchase-pay-button"));
+
+    expect(await screen.findByTestId("purchase-error")).toHaveTextContent("결제 연동 준비 중");
+    expect(submitPayForm).not.toHaveBeenCalled();
+  });
+
+  it("PENDING 항목은 [결제 상태 새로고침] — refetch만 하고 위젯·confirm을 호출하지 않는다", async () => {
+    const loadWidget = vi.fn();
+    const refetch = vi.fn();
+    mockUsePending.mockReturnValue({
+      data: [
+        { id: "p9", qty: 30, unitPrice: 2000, amount: 60000, pgOrderId: "op9", createdAt: "2026-07-09" },
+      ],
+      refetch,
+    });
+
+    renderPage({ pgProvider: "koem", clientKey: "", loadWidget });
+    const button = screen.getByTestId("pending-retry-button");
+    expect(button).toHaveTextContent("결제 상태 새로고침");
+    fireEvent.click(button);
+
+    await waitFor(() => expect(refetch).toHaveBeenCalled());
+    expect(loadWidget).not.toHaveBeenCalled();
+    expect(mockInvoke).not.toHaveBeenCalled();
   });
 });
 

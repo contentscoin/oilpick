@@ -9,13 +9,17 @@ import {
 import { useSession } from "../hooks/useSession";
 import { useCouponPrice, usePendingPurchases, type PendingPurchase } from "../hooks/useCoupons";
 import { invokeEdgeFunction } from "../lib/edgeFunction";
-import { TOSS_CLIENT_KEY } from "../lib/env";
+import { PG_PROVIDER, TOSS_CLIENT_KEY } from "../lib/env";
 import { loadTossWidget, type TossWidgetHandle, type TossWidgetLoader } from "../lib/tossWidget";
 
 /**
- * R: 쿠폰 결제 화면 `/coupons/purchase` (07 F4-⑤). 수량 프리셋(10/30/50)+직접 입력 → 예상 금액
- * (단가×수량) → [결제하기] → intent → 토스 결제위젯 렌더 → requestPayment → successUrl 콜백에서
- * confirm. orphan 대사: PENDING 잔건 목록 + [결제 확인 재시도](07 §1-4 ⓐ). SDK는 주입 가능(테스트 모킹).
+ * R: 쿠폰 결제 화면 `/coupons/purchase` (07 F4-⑤, F14 코엠 분기). 수량 프리셋(10/30/50)+직접 입력
+ * → 예상 금액(단가×수량) → [결제하기] → intent →
+ *  - 토스: 결제위젯 렌더 → requestPayment → successUrl 콜백에서 confirm.
+ *  - 코엠: intent가 반환한 결제창 파라미터(koem)를 hidden form으로 그대로 POST(현재 창 이동).
+ *    승인 확정은 서버 콜백(coupon-purchase-return)이 처리하므로 이 화면의 confirm 경로는
+ *    사용하지 않는다 — 재진입 시 PENDING 목록에서 "결제 상태 새로고침"으로 반영을 확인한다.
+ * orphan 대사: PENDING 잔건 목록(07 §1-4 ⓐ). SDK·폼 제출은 주입 가능(테스트 모킹).
  * 콜홈 진입점(잔액 카드)은 F5 소관 — 이 태스크는 라우트 직접 진입만으로 동작한다.
  */
 const QTY_PRESETS = [10, 30, 50];
@@ -31,16 +35,38 @@ interface PendingPay {
   qty: number;
 }
 
+/** 코엠 결제창 진입 — intent가 만든 파라미터를 수정 없이 현재 창에서 form POST(07 F14). */
+function submitKoemPayForm(payUrl: string, params: Record<string, string>): void {
+  const form = document.createElement("form");
+  form.method = "POST";
+  form.action = payUrl;
+  for (const [name, value] of Object.entries(params)) {
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = name;
+    input.value = value;
+    form.appendChild(input);
+  }
+  document.body.appendChild(form);
+  form.submit();
+}
+
 export interface CouponPurchasePageProps {
   /** 결제위젯 로더(테스트 주입). 기본값은 실 SDK 로더. */
   loadWidget?: TossWidgetLoader;
   /** 토스 클라이언트 키. 기본값은 env(미발급 시 undefined → 안내 폴백). */
   clientKey?: string;
+  /** 활성 PG(테스트 주입). 기본값은 env VITE_PG_PROVIDER(미설정 시 toss). */
+  pgProvider?: "toss" | "koem";
+  /** 코엠 결제창 form 제출(테스트 주입 — jsdom은 form.submit 미구현). */
+  submitPayForm?: (payUrl: string, params: Record<string, string>) => void;
 }
 
 export function CouponPurchasePage({
   loadWidget = loadTossWidget,
   clientKey = TOSS_CLIENT_KEY,
+  pgProvider = PG_PROVIDER,
+  submitPayForm = submitKoemPayForm,
 }: CouponPurchasePageProps = {}) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -48,7 +74,7 @@ export function CouponPurchasePage({
   const riderId = session?.user.id;
 
   const { data: unitPrice } = useCouponPrice();
-  const { data: pending } = usePendingPurchases(riderId);
+  const { data: pending, refetch: refetchPending } = usePendingPurchases(riderId);
 
   // successUrl 콜백 파라미터(confirm 모드) — Toss가 successUrl에 paymentKey/orderId/amount를 덧붙이고,
   // 우리는 successUrl에 purchaseId를 미리 심어둔다(intent 반환 uuid, orderId=pg_order_id와 별개).
@@ -143,6 +169,16 @@ export function CouponPurchasePage({
       setError(res.message);
       return;
     }
+    // 코엠(F14): 서버가 만든 결제창 파라미터를 그대로 제출 — 승인·확정은 서버 콜백이 담당.
+    if (res.data.koem) {
+      submitPayForm(res.data.koem.payUrl, res.data.koem.params);
+      return;
+    }
+    if (pgProvider === "koem") {
+      // 클라이언트는 koem인데 서버가 결제창 파라미터를 안 줌 — 서버 PG_PROVIDER/시크릿 미설정.
+      setError("결제 연동 준비 중이에요. 쿠폰 충전은 고객센터로 요청해 주세요.");
+      return;
+    }
     await beginPayment({
       purchaseId: res.data.purchaseId,
       pgOrderId: res.data.pgOrderId,
@@ -152,6 +188,11 @@ export function CouponPurchasePage({
   }
 
   function handleRetryPending(p: PendingPurchase) {
+    if (pgProvider === "koem") {
+      // 코엠은 서버 콜백이 확정하므로 재시도 대신 반영 여부만 재조회(07 F14).
+      void refetchPending();
+      return;
+    }
     void beginPayment({ purchaseId: p.id, pgOrderId: p.pgOrderId, amount: p.amount, qty: p.qty });
   }
 
@@ -272,9 +313,9 @@ export function CouponPurchasePage({
   }
 
   // phase === "select"
-  // PG 미연동 게이트(07 F14 대기): 인앱 결제가 불가한 동안은 구매 폼 대신 수동 충전 안내.
-  // 코엠페이먼츠(현장결제 플랫폼)로 입금 → admin이 확인 후 coupon-adjust 수동 충전하는 운영.
-  if (!clientKey) {
+  // PG 미연동 게이트: 토스 모드에서 클라이언트 키 미발급이면 구매 폼 대신 수동 충전 안내
+  // (입금 → admin coupon-adjust). 코엠 모드는 클라이언트 키가 필요 없어 게이트를 타지 않는다(F14).
+  if (pgProvider === "toss" && !clientKey) {
     return (
       <Screen>
         <Header title="쿠폰 충전" onBack={() => navigate(-1)} />
@@ -443,7 +484,7 @@ export function CouponPurchasePage({
                   cursor: "pointer",
                 }}
               >
-                결제 확인 재시도
+                {pgProvider === "koem" ? "결제 상태 새로고침" : "결제 확인 재시도"}
               </button>
             </div>
           ))}
