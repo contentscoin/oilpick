@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { estimateKg, estimatePoint } from "./estimate";
+import { estimateCash, estimateKg, estimatePoint } from "./estimate";
 import { KG_PER_CAN } from "./constants";
 
 describe("estimateKg", () => {
@@ -18,18 +18,25 @@ describe("estimateKg", () => {
   });
 });
 
-describe("estimatePoint", () => {
-  it("multiplies kg by price per kg and rounds to nearest integer", () => {
-    expect(estimatePoint(10, 1000)).toBe(10000);
-    expect(estimatePoint(45.5, 1200)).toBe(54600);
+describe("estimateCash", () => {
+  it("multiplies kg by price per kg and rounds to nearest won", () => {
+    expect(estimateCash(10, 1000)).toBe(10000);
+    expect(estimateCash(45.5, 1200)).toBe(54600);
   });
 
-  it("rounds fractional results to the nearest won/point", () => {
-    expect(estimatePoint(1, 1000.4)).toBe(1000);
-    expect(estimatePoint(1, 1000.6)).toBe(1001);
+  it("rounds fractional results to the nearest won", () => {
+    expect(estimateCash(1, 1000.4)).toBe(1000);
+    expect(estimateCash(1, 1000.6)).toBe(1001);
   });
 
   it("returns 0 for 0 kg", () => {
-    expect(estimatePoint(0, 1500)).toBe(0);
+    expect(estimateCash(0, 1500)).toBe(0);
+  });
+});
+
+describe("estimatePoint (deprecated alias of estimateCash)", () => {
+  it("is the same function as estimateCash (07 D1 호환 별칭)", () => {
+    expect(estimatePoint).toBe(estimateCash);
+    expect(estimatePoint(10, 1000)).toBe(10000);
   });
 });

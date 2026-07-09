@@ -42,11 +42,13 @@ export const orderCreateInputSchema = z.object({
 });
 export type OrderCreateInput = z.infer<typeof orderCreateInputSchema>;
 
+// 07 F3b-①: estimatedPoint→estimatedCash 계약 개정, coupon_cost 스냅샷 추가,
+// snapshotRiderFee 제거(레거시 — rider_fee 신규 미기록, 07 §1-3). 02-api.md "1. order-create" 출력.
 export const orderCreateOutputSchema = z.object({
   orderId: uuidSchema,
   snapshotPricePerKg: z.number().int().positive(),
-  snapshotRiderFee: z.number().int().positive(),
-  estimatedPoint: z.number().int().nonnegative(),
+  couponCost: z.number().int().nonnegative(),
+  estimatedCash: z.number().int().nonnegative(),
 });
 export type OrderCreateOutput = z.infer<typeof orderCreateOutputSchema>;
 
@@ -89,8 +91,19 @@ export const deliverPayloadSchema = z.object({
   qrSecret: z.string().min(1),
 });
 
+/** 귀책(fault) — admin 취소 시 필수(D4·D6). 필수 강제는 RPC가 하지만 값 범위는 zod로도 검증. */
+export const orderFaultSchema = z.enum(["SUPPLIER", "RIDER", "SYSTEM"]);
+export type OrderFault = z.infer<typeof orderFaultSchema>;
+
 export const cancelPayloadSchema = z.object({
   reason: z.string().min(1),
+  // supplier 자진취소는 fault 불필요, admin 취소는 필수(RPC가 누락 시 VALIDATION_ERROR).
+  fault: orderFaultSchema.optional(),
+});
+
+/** 07 F3b-③: FORCE_COMPLETE(admin, D6) — 교착 해소용. memo(사유) 필수. */
+export const forceCompletePayloadSchema = z.object({
+  memo: z.string().min(1),
 });
 
 /** action 판별로 payload 타입을 좁히는 discriminated union. */
@@ -100,6 +113,7 @@ export const orderTransitionInputSchema = z.discriminatedUnion("action", [
   z.object({ orderId: uuidSchema, action: z.literal("CONFIRM_MEASURE"), payload: confirmMeasurePayloadSchema.optional() }),
   z.object({ orderId: uuidSchema, action: z.literal("DISPUTE"), payload: disputePayloadSchema }),
   z.object({ orderId: uuidSchema, action: z.literal("RESOLVE_DISPUTE"), payload: resolveDisputePayloadSchema }),
+  z.object({ orderId: uuidSchema, action: z.literal("FORCE_COMPLETE"), payload: forceCompletePayloadSchema }),
   z.object({ orderId: uuidSchema, action: z.literal("DELIVER"), payload: deliverPayloadSchema }),
   z.object({ orderId: uuidSchema, action: z.literal("CANCEL"), payload: cancelPayloadSchema }),
 ]);
@@ -187,16 +201,15 @@ export type WithdrawProcessOutput = z.infer<typeof withdrawProcessOutputSchema>;
 
 // ===== 9. price-set (admin) =====
 
+// 07 F3b-④: riderFee 계약 삭제(레거시 — rider_fee 신규 미기록, 07 §1-3). 02-api.md "9. price-set".
 export const priceSetInputSchema = z.object({
   pricePerKg: z.number().int().positive(),
-  riderFee: z.number().int().positive(),
 });
 export type PriceSetInput = z.infer<typeof priceSetInputSchema>;
 
 export const priceSetOutputSchema = z.object({
   id: z.number().int(),
   pricePerKg: z.number().int().positive(),
-  riderFee: z.number().int().positive(),
   effectiveAt: z.string(),
 });
 export type PriceSetOutput = z.infer<typeof priceSetOutputSchema>;
@@ -215,6 +228,38 @@ export const pointAdjustOutputSchema = z.object({
   amount: z.number().int(),
 });
 export type PointAdjustOutput = z.infer<typeof pointAdjustOutputSchema>;
+
+// ===== 14. coupon-adjust (admin) — 07 F3b-⑤ =====
+// 쿠폰 수동 조정(CS 보조/데모 라이더 선지급). point-adjust 패턴 미러 → fn_charge_coupon(ADJUST).
+// qty는 ±(0 불가). 음수 조정이 잔액을 초과하면 RPC가 INSUFFICIENT_COUPON(409)을 raise한다.
+
+export const couponAdjustInputSchema = z.object({
+  riderId: uuidSchema,
+  qty: z.number().int().refine((v) => v !== 0, { message: "조정 수량은 0이 될 수 없어요." }),
+  memo: z.string().min(1),
+});
+export type CouponAdjustInput = z.infer<typeof couponAdjustInputSchema>;
+
+export const couponAdjustOutputSchema = z.object({
+  riderId: uuidSchema,
+  qty: z.number().int(),
+});
+export type CouponAdjustOutput = z.infer<typeof couponAdjustOutputSchema>;
+
+// ===== 15. coupon-price-set (admin) — 07 F3b-⑤ =====
+// 쿠폰 단가 tick 등록(price-set 패턴 미러 → coupon_price_ticks insert). unitPrice > 0.
+
+export const couponPriceSetInputSchema = z.object({
+  unitPrice: z.number().int().positive(),
+});
+export type CouponPriceSetInput = z.infer<typeof couponPriceSetInputSchema>;
+
+export const couponPriceSetOutputSchema = z.object({
+  id: z.number().int(),
+  unitPrice: z.number().int().positive(),
+  effectiveAt: z.string(),
+});
+export type CouponPriceSetOutput = z.infer<typeof couponPriceSetOutputSchema>;
 
 // ===== U2 supplier 가입 (profiles + supplier_profiles row 생성) =====
 // 이 입력은 Edge Function이 아니라 클라이언트가 anon key로 profiles/supplier_profiles에

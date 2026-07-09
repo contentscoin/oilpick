@@ -9,6 +9,15 @@ function formatKrw(n) {
 function formatKg(n) {
   return `${n.toFixed(1)}kg`;
 }
+function formatTimeOfDay(date, now = /* @__PURE__ */ new Date()) {
+  const target = typeof date === "object" ? date : new Date(date);
+  const base = typeof now === "number" ? new Date(now) : now;
+  const hh = String(target.getHours()).padStart(2, "0");
+  const mm = String(target.getMinutes()).padStart(2, "0");
+  const time = `${hh}:${mm}`;
+  const sameDay = target.getFullYear() === base.getFullYear() && target.getMonth() === base.getMonth() && target.getDate() === base.getDate();
+  return sameDay ? `\uC624\uB298 ${time}` : `${target.getMonth() + 1}/${target.getDate()} ${time}`;
+}
 var RELATIVE_UNITS = [
   { limitMs: 6e4, divisor: 1, unit: "\uCD08" },
   { limitMs: 36e5, divisor: 6e4, unit: "\uBD84" },
@@ -36,5 +45,6 @@ export {
   formatKg,
   formatKrw,
   formatPoint,
-  formatRelativeTime
+  formatRelativeTime,
+  formatTimeOfDay
 };

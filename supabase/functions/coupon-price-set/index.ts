@@ -1,13 +1,12 @@
-// price-set (admin). docs/spec/02-api.md "9. price-set (admin)":
-// - 입력: { pricePerKg } → price_ticks insert. riderFee 계약 삭제(레거시 — rider_fee 미기록, 07 §1-3, F3b-④).
-// 00-domain.md "시세 규칙": "admin이 (원/kg 매입가) 설정 → price_ticks insert
-// (effective_at now). 현재 시세 = effective_at 최신 1건." 수거비 입력은 삭제(레거시).
+// coupon-price-set (admin). docs/spec/02-api.md "15. coupon-price-set (admin)" (07 F3b-⑤):
+// - 입력: { unitPrice } (>0) → coupon_price_ticks insert. price-set 패턴 복제.
 //
-// price_ticks는 상태머신/원장 테이블이 아니라 단순 시계열 insert이므로 RPC 트랜잭션 없이
-// service_role insert로 충분하다(02-api.md "핵심 RPC: fn_transition_order, fn_post_ledger"에
-// price_ticks는 포함되지 않음). 입력 검증(양수)은 zod 스키마(z.number().int().positive())로 수행.
+// coupon_price_ticks는 price_ticks 미러(07 §1-4): 전체 read, admin insert, update/delete 정책 없음
+// (정정 불가·신규 tick만). price-set과 동일하게 service_role(admin) 클라이언트로 insert한다
+// (RLS is_admin() insert 정책이 있으나 Edge Function은 service_role로 접근 — price-set 관례 그대로).
+// 상태머신/원장 테이블이 아니라 단순 시계열 insert이므로 RPC 트랜잭션 불필요.
 
-import { priceSetInputSchema } from "@oilpick/core/index.ts";
+import { couponPriceSetInputSchema } from "@oilpick/core/index.ts";
 import { AuthError, requireAuth, requireRole } from "../_shared/auth.ts";
 import { errorResponse, okResponse, withErrorHandling } from "../_shared/response.ts";
 
@@ -28,16 +27,16 @@ Deno.serve((req) =>
     const { uid, admin } = ctx;
 
     const body = await req.json().catch(() => null);
-    const parsed = priceSetInputSchema.safeParse(body);
+    const parsed = couponPriceSetInputSchema.safeParse(body);
     if (!parsed.success) {
       return errorResponse("VALIDATION_ERROR", 400, parsed.error.issues[0]?.message);
     }
-    const { pricePerKg } = parsed.data;
+    const { unitPrice } = parsed.data;
 
     const { data: tick, error: insertErr } = await admin
-      .from("price_ticks")
+      .from("coupon_price_ticks")
       .insert({
-        price_per_kg: pricePerKg,
+        unit_price: unitPrice,
         created_by: uid,
       })
       .select("*")
@@ -46,7 +45,7 @@ Deno.serve((req) =>
 
     return okResponse({
       id: tick.id,
-      pricePerKg: tick.price_per_kg,
+      unitPrice: tick.unit_price,
       effectiveAt: tick.effective_at,
     });
   })

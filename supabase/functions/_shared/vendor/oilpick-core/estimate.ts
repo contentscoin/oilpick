@@ -6,10 +6,12 @@ var KG_PER_CAN = 15;
 function estimateKg(cans) {
   return cans * KG_PER_CAN;
 }
-function estimatePoint(kg, pricePerKg) {
+function estimateCash(kg, pricePerKg) {
   return Math.round(kg * pricePerKg);
 }
+var estimatePoint = estimateCash;
 export {
+  estimateCash,
   estimateKg,
   estimatePoint
 };

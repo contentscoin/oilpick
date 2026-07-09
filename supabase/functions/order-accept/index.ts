@@ -1,8 +1,11 @@
 // order-accept (rider). docs/spec/02-api.md "2. order-accept (rider)":
 // - 입력: { orderId }
-// - 가드: verified·online·진행중 주문 없음. 아니면 403 RIDER_NOT_ELIGIBLE.
-// - 동시성: fn_transition_order의 ACCEPT 액션(조건부 UPDATE)이 이미 보장 — 0행이면 예외를
-//   던지고 이 함수는 그 예외를 409 ALREADY_ACCEPTED로 매핑만 한다.
+// - 가드: verified·online·진행중 주문 없음(ACCEPTED/ARRIVED/PICKED_UP/DISPUTED — idx_rider_single_active_order
+//   와 정합, 07 F3b-②). 아니면 403 RIDER_NOT_ELIGIBLE.
+// - 쿠폰 사전 체크(fail-fast, UX용): v_coupon_balance.balance ≥ coupon_cost 아니면 409 INSUFFICIENT_COUPON.
+//   coupon_cost null(레거시)은 skip. **동시성 방어의 유일한 진실은 RPC(fn_consume_coupon)** — 이 체크는 UX용.
+// - 동시성: fn_transition_order의 ACCEPT 액션(조건부 UPDATE + 쿠폰 CONSUME)이 이미 보장 — 0행/부족이면
+//   예외를 던지고 이 함수는 그 예외를 409(ALREADY_ACCEPTED/INSUFFICIENT_COUPON)로 매핑만 한다.
 // - 부수효과: order_events, supplier 푸시(RPC 내부에서 order_events는 이미 insert됨).
 //
 // CLAUDE.md/태스크 지시: Edge Function은 RPC 결과를 응답으로 변환만 하고 상태머신/원장
@@ -47,17 +50,41 @@ Deno.serve((req) =>
       return errorResponse("RIDER_NOT_ELIGIBLE", 403);
     }
 
+    // 진행중 주문 가드. DISPUTED 포함(07 F3b-②, idx_rider_single_active_order와 정합 —
+    // 분쟁 중 라이더가 새 콜을 수락하면 단일활성 유니크가 뒤늦게 409를 내는 간극을 여기서 선차단).
     const { count: activeCount, error: activeErr } = await admin
       .from("pickup_orders")
       .select("id", { count: "exact", head: true })
       .eq("rider_id", uid)
-      .in("status", ["ACCEPTED", "ARRIVED", "PICKED_UP"]);
+      .in("status", ["ACCEPTED", "ARRIVED", "PICKED_UP", "DISPUTED"]);
     if (activeErr) throw activeErr;
     if ((activeCount ?? 0) > 0) {
       return errorResponse("RIDER_NOT_ELIGIBLE", 403);
     }
 
-    // 동시성 보장(선착순 조건부 UPDATE)은 fn_transition_order 내부(ACCEPT 액션)에 이미 구현됨.
+    // 쿠폰 사전 체크(fail-fast). coupon_cost null(레거시)은 skip. 진실은 RPC의 fn_consume_coupon.
+    const { data: orderRow, error: orderErr } = await admin
+      .from("pickup_orders")
+      .select("coupon_cost")
+      .eq("id", orderId)
+      .maybeSingle();
+    if (orderErr) throw orderErr;
+    if (!orderRow) {
+      return errorResponse("NOT_FOUND", 404);
+    }
+    if (orderRow.coupon_cost != null) {
+      const { data: balanceRow, error: balanceErr } = await admin
+        .from("v_coupon_balance")
+        .select("balance")
+        .eq("rider_id", uid)
+        .maybeSingle();
+      if (balanceErr) throw balanceErr;
+      if ((balanceRow?.balance ?? 0) < orderRow.coupon_cost) {
+        return errorResponse("INSUFFICIENT_COUPON", 409);
+      }
+    }
+
+    // 동시성 보장(선착순 조건부 UPDATE + 쿠폰 CONSUME)은 fn_transition_order 내부(ACCEPT 액션)에 이미 구현됨.
     const { data: order, error: rpcErr } = await admin.rpc("fn_transition_order", {
       p_order_id: orderId,
       p_action: "ACCEPT",
@@ -92,6 +119,7 @@ Deno.serve((req) =>
 function mapTransitionError(rpcErr: { message?: string }): Response {
   const message = rpcErr.message ?? "";
   if (message.includes("ALREADY_ACCEPTED")) return errorResponse("ALREADY_ACCEPTED", 409);
+  if (message.includes("INSUFFICIENT_COUPON")) return errorResponse("INSUFFICIENT_COUPON", 409);
   if (message.includes("NOT_FOUND")) return errorResponse("NOT_FOUND", 404);
   if (message.includes("INVALID_TRANSITION")) return errorResponse("INVALID_TRANSITION", 409);
   console.error("order-accept: 예기치 못한 RPC 에러", rpcErr);

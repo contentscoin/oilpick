@@ -44,6 +44,20 @@ export const NO_BANK_ACCOUNT = "NO_BANK_ACCOUNT";
 export const INSUFFICIENT_BALANCE = "INSUFFICIENT_BALANCE";
 
 /**
+ * 라이더의 수거쿠폰 잔액이 주문 coupon_cost보다 작을 때 반환. HTTP 409.
+ * order-accept 사전 체크(fail-fast) + fn_consume_coupon/fn_charge_coupon(음수 ADJUST)/
+ * coupon-refund가 raise하는 'INSUFFICIENT_COUPON' 예외의 매핑 코드.
+ * 02-api.md `order-accept`/`coupon-adjust`/`coupon-refund`, 07 §1-1·§1-4.
+ */
+export const INSUFFICIENT_COUPON = "INSUFFICIENT_COUPON";
+
+/**
+ * 쿠폰 단가 tick(coupon_price_ticks)이 아직 하나도 없을 때 coupon-purchase-intent가 반환. HTTP 409.
+ * (F4 intent용 — F3b에서 에러 상수만 선등록.) 02-api.md `coupon-purchase-intent`, 07 §1-4.
+ */
+export const COUPON_PRICE_NOT_SET = "COUPON_PRICE_NOT_SET";
+
+/**
  * 30분 무수락으로 order-expire cron이 자동 취소할 때의 cancel_reason 값
  * (에러 코드가 아니라 취소 사유 코드이지만 클라이언트/관리자 UI가 공유해야 하므로 함께 정의).
  * 00-domain.md "매칭 규칙" 2.
@@ -70,6 +84,8 @@ export const ERROR_CODES = {
   INVALID_QR,
   NO_BANK_ACCOUNT,
   INSUFFICIENT_BALANCE,
+  INSUFFICIENT_COUPON,
+  COUPON_PRICE_NOT_SET,
   NO_RIDER,
   VALIDATION_ERROR,
   UNAUTHORIZED,
@@ -88,6 +104,8 @@ export const ERROR_MESSAGE_KO: Record<ErrorCode, string> = {
   INVALID_QR: "QR 코드가 일치하지 않아요.",
   NO_BANK_ACCOUNT: "먼저 출금 계좌를 등록해주세요.",
   INSUFFICIENT_BALANCE: "출금 가능 잔액이 부족해요.",
+  INSUFFICIENT_COUPON: "수거쿠폰이 부족해요. 충전 후 수락할 수 있어요.",
+  COUPON_PRICE_NOT_SET: "쿠폰 단가가 아직 설정되지 않았어요. 관리자 설정 후 이용할 수 있어요.",
   NO_RIDER: "수락한 라이더가 없어 자동 취소되었어요.",
   VALIDATION_ERROR: "입력값을 확인해주세요.",
   UNAUTHORIZED: "로그인이 필요해요.",

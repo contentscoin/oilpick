@@ -267,6 +267,13 @@ REQUESTED→CANCELLED: supplier 자진 or 시스템 30분 무수락. 쿠폰 미�
 - DoD: `pnpm lint/test/build` green. zod 계약 테스트. notifyForAction 분기 단위 테스트(신 카피).
   구버전 앱 호환 확인: 에러 응답 본문에 서버가 한국어 message를 담아 내려줌(_shared/response.ts:38-39의
   ERROR_MESSAGE_KO 자동 대입은 **서버 측** 동작이므로 구버전 번들에서도 표시 가능).
+- [x] 결과(2026-07-09): Edge 6개 개정/신설(order-create couponCost·estimatedCash / order-accept DISPUTED
+  가드+fail-fast+409 매핑 / order-transition FORCE_COMPLETE·fault·notify 매트릭스 전면 교체(순수 헬퍼
+  buildActionNotifications 분리) / price-set riderFee 삭제 / coupon-adjust·coupon-price-set 신규).
+  core: errorCodes 2종·estimateCash·orderMachine 신/레거시 분리·쿠폰 zod. 게이트 전체 green(테스트 505),
+  클라이언트 .tsx 무수정 호환. ⚠️ F7 주의: estimateCash는 **(kg, pricePerKg) 시그니처로 구현됨**(F7-②의
+  cans 기반과 다름 — F7은 estimateKg(cans, canSizeL)와 조합할 것). admin PricePage riderFee UI 잔존은
+  서버가 무시(F10에서 제거).
 
 ### F4. 【API】【R】 PG 결제 연동 (토스페이먼츠) — 외부 의존: 가맹 심사
 - 작업: ① `coupon-purchase-intent`(rider 전용): qty 검증(1~200) → 최신 coupon_price_ticks 스냅샷 →
