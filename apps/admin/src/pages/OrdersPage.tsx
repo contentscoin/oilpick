@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ORDER_STATUS_LABEL, formatKg, type OrderStatus } from "@oilpick/core";
 import { useAdminOrderDetail, useAdminOrderEvents, useAdminOrders } from "../hooks/useOrdersAdmin";
 import { OrderDetailDrawer } from "../components/OrderDetailDrawer";
+import { downloadCsv, toCsv } from "../lib/csv";
 
 const STATUS_FILTERS: Array<{ value: string; label: string }> = [
   { value: "ALL", label: "전체" },
@@ -18,17 +19,46 @@ const STATUS_FILTERS: Array<{ value: string; label: string }> = [
 /**
  * 03-frontend.md apps/admin "/orders": "테이블(상태 필터) → 상세 드로어(이벤트 타임라인, 사진).
  * DISPUTED 건: RESOLVE_DISPUTE 폼(finalKg 입력). CANCEL 버튼".
+ * 07 F10-⑤·⑥: 드로어에 쿠폰/현금/귀책 취소/FORCE_COMPLETE(OrderDetailDrawer 참조), 주문 CSV 내보내기.
  */
 export function OrdersPage() {
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const { data: orders, isLoading } = useAdminOrders(statusFilter);
 
+  function handleCsv() {
+    const csv = toCsv(
+      ["주문ID", "상태", "공급업체", "라이더", "예상kg", "계량kg", "확정kg", "주소", "생성일"],
+      (orders ?? []).map((o) => [
+        o.id,
+        ORDER_STATUS_LABEL[o.status] ?? o.status,
+        o.supplierName,
+        o.riderName,
+        o.requestedKg,
+        o.measuredKg,
+        o.finalKg,
+        o.pickupAddress,
+        new Date(o.createdAt).toLocaleString("ko-KR"),
+      ]),
+    );
+    downloadCsv(`주문_${statusFilter}`, csv);
+  }
+
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">주문 관리</h1>
-        <p className="text-sm text-gray-500">주문 상태를 확인하고 분쟁을 중재해요.</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">주문 관리</h1>
+          <p className="text-sm text-gray-500">주문 상태를 확인하고 분쟁을 중재해요.</p>
+        </div>
+        <button
+          type="button"
+          onClick={handleCsv}
+          className="h-8 rounded-button border border-gray-200 bg-white px-3 text-xs font-medium text-gray-600 hover:bg-gray-50"
+          data-testid="orders-csv-button"
+        >
+          CSV
+        </button>
       </div>
 
       <div className="flex flex-wrap gap-2">

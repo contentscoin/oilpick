@@ -14,7 +14,7 @@ const NAV_ITEMS = [
   { to: "/price", label: "시세 관리" },
   { to: "/orders", label: "주문 관리" },
   { to: "/users", label: "회원 관리" },
-  { to: "/settlement", label: "정산" },
+  { to: "/settlement", label: "매출·정산" }, // 07 F10-③ 재편
   { to: "/depots", label: "집하장" },
   { to: "/notify", label: "공지" },
 ];

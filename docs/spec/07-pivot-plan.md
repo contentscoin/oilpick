@@ -442,6 +442,22 @@ REQUESTED→CANCELLED: supplier 자진 or 시스템 30분 무수락. 쿠폰 미�
 - DoD: 단가 설정→라이더 구매 금액 반영 E2E. 귀책 취소→환급 매트릭스 3케이스(SUPPLIER/SYSTEM→환급+
   라이더 "쿠폰 N장 환급" 알림 발송, RIDER→없음) UI 검증. FORCE_COMPLETE 동작. 매출 수치가 원장 합계와
   일치(테스트). 스냅샷 갱신.
+- [x] 결과(2026-07-09): 【A】①PricePage 쿠폰 단가 섹션(현재 단가 카드+coupon-price-set 폼+이력, 기존 tick
+  패턴)+rider_fee 입력 제거(이력 "수거비(레거시)" 열만 유지, useCouponPriceHistory 신설) ②UsersPage 라이더탭
+  RiderCouponPanel(잔액 v_coupon_balance Map join + [수동 조정] 모달 memo 필수·INSUFFICIENT_COUPON 안내 +
+  라이더별 coupon_ledger 이력, RiderVerifyCard footer 슬롯) ③SettlementPage→"매출·정산"(v_coupon_sales_daily
+  14일 대시+합계 카드/v_pickup_stats_daily 수거 추이/쿠폰 원장 감사 100건 entry_type 라벨·PG환불 배지/
+  coupon_purchases status 필터+EXPIRED 대사 안내+[환불] 부분 qty·건당 1회 카피; 출금 큐·point_ledger UI 제거 —
+  useSettlementAdmin 라우트 참조 0, 파일 삭제는 F13) ④Dashboard KPI 6종 교체(쿠폰 판매액/소진 쿠폰/현금
+  거래액 completed_at 기준, "오늘 발행 포인트" 제거) ⑤드로어 coupon_cost·환급됨 배지(REFUND 원장 조회)·
+  cash_paid_amount + 귀책 취소 라디오 3종(의미 설명+환급 예고 "쿠폰 N장 자동 환급"/"환급 없음", 미선택 비활성,
+  {ACCEPTED|ARRIVED|DISPUTED}) + FORCE_COMPLETE(계량 ARRIVED 한정·memo 필수) + RESOLVE_DISPUTE "ARRIVED
+  복귀·점주 확인 필요" 카피 교정 ⑥CSV 유틸(toCsv BOM·RFC4180 이스케이프/downloadCsv 분리)→원장/일별 매출/주문
+  3곳. admin vitest 62(신규 lib 7·PricePage 8·RiderCouponPanel 7·Settlement 12·Dashboard 2+2·드로어 17·CSV 버튼)
+  green — 매출 정합 테스트(mock 원장→aggregateCouponSalesDaily(뷰 SQL 미러)→합계=CHARGE 합·§1-4 환불 구분
+  일치) 포함. lint·turbo test --concurrency=1·build 전체 green. admin 표시 문자열 "출금/포인트" 잔존 0(주석·
+  부재 검증 테스트만). 보류: 실 브라우저 E2E(단가 설정→구매 반영, 환급 알림 발송)는 로컬 Supabase/PG 키 제약으로
+  컴포넌트 테스트+F3a/F4 pgTAP(전이·환급·알림 RPC 실증) 조합으로 대체.
 
 ### F11. 【A】【R】【DB】 라이더 관리 강화 — 정지·서류 필수화·인계처 (규제 게이트)
 - 작업: ① SUSPENDED(F2-⑦): rider-verify Edge Function에 suspend/reinstate 액션 추가(guard_rider_verify

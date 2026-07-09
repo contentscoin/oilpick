@@ -1,12 +1,15 @@
 import { useState } from "react";
-import { useAdminRiders, useAdminSuppliers } from "../hooks/useUsersAdmin";
+import { useAdminRiders, useAdminSuppliers, useCouponBalances } from "../hooks/useUsersAdmin";
 import { RiderVerifyCard } from "../components/RiderVerifyCard";
+import { RiderCouponPanel } from "../components/RiderCouponPanel";
 
 type Tab = "supplier" | "rider";
 
 /**
  * 03-frontend.md apps/admin "/users": "supplier/rider 탭. rider PENDING 큐: 서류 이미지 뷰어 +
  * 승인/반려(rider-verify)".
+ * 07 F10-②: 라이더탭에 쿠폰 잔액(v_coupon_balance) + [수동 조정](coupon-adjust, 사유 필수) +
+ * 충전/조정 이력(coupon_ledger) — RiderCouponPanel을 카드 footer로 붙인다.
  */
 export function UsersPage() {
   const [tab, setTab] = useState<Tab>("rider");
@@ -115,6 +118,7 @@ function SupplierTable() {
 
 function RiderList({ statusFilter }: { statusFilter: "PENDING" | "ALL" }) {
   const { data: riders, isLoading, refetch } = useAdminRiders(statusFilter);
+  const { data: balances, refetch: refetchBalances } = useCouponBalances();
 
   if (isLoading) return <p className="text-sm text-gray-400">불러오는 중...</p>;
   if (!riders || riders.length === 0) {
@@ -128,7 +132,21 @@ function RiderList({ statusFilter }: { statusFilter: "PENDING" | "ALL" }) {
   return (
     <div className="flex flex-col gap-4" data-testid="rider-list">
       {riders.map((rider) => (
-        <RiderVerifyCard key={rider.id} rider={rider} onProcessed={refetch} />
+        <RiderVerifyCard
+          key={rider.id}
+          rider={rider}
+          onProcessed={refetch}
+          footer={
+            <RiderCouponPanel
+              riderId={rider.id}
+              // 원장 행이 없는 라이더는 뷰에 행이 없음 = 잔액 0 (07 §1-1 — 잔액은 뷰로만).
+              balance={balances ? (balances.get(rider.id) ?? 0) : undefined}
+              onAdjusted={() => {
+                refetchBalances();
+              }}
+            />
+          }
+        />
       ))}
     </div>
   );

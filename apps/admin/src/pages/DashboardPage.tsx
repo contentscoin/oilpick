@@ -1,5 +1,5 @@
 import { MapView, type MapMarker } from "@oilpick/ui";
-import { ORDER_STATUS_LABEL } from "@oilpick/core";
+import { ORDER_STATUS_LABEL, formatKrw } from "@oilpick/core";
 import { KAKAO_KEY } from "../lib/env";
 import { useDashboardKpi, useDashboardOrders, useDashboardRiders } from "../hooks/useDashboard";
 
@@ -15,8 +15,9 @@ function KpiCard({ label, value, accent = false }: { label: string; value: strin
 }
 
 /**
- * 03-frontend.md apps/admin "/": "카카오맵 전체 지도(진행중 주문 핀 + 온라인 라이더 핀,
- * Realtime) + 오늘 KPI 카드 4개(주문수/수거kg/발행P/활성 라이더)". 04-tasks.md T11 지시사항:
+ * 03-frontend.md apps/admin "/" + 07 F10-④ KPI 개정: "카카오맵 전체 지도(진행중 주문 핀 +
+ * 온라인 라이더 핀, Realtime) + 오늘 KPI(주문수/수거kg/쿠폰 판매액/소진 쿠폰/활성 라이더/
+ * 현금 거래액 — 포인트 카드 제거)". 04-tasks.md T11 지시사항:
  * "카카오키 없으니 packages/ui MapView 재사용, 리스트 형태 보조 표시도 병행해도 됨".
  * 카카오 키가 없는 이 개발 환경에서는 MapView가 placeholder를 렌더하므로, 핀 정보를 확인할 수
  * 있도록 리스트를 항상 병행 표시한다.
@@ -40,15 +41,18 @@ export function DashboardPage() {
         <p className="text-sm text-gray-500">오늘의 현황과 진행 중인 주문을 한눈에 확인해요.</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      {/* 07 F10-④ KPI 교체: "오늘 발행 포인트" 제거(D1), 쿠폰 판매액/소진 쿠폰/현금 거래액 추가. */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
         <KpiCard label="오늘 주문 수" value={kpiLoading ? "-" : `${kpi?.orderCount ?? 0}건`} />
         <KpiCard label="오늘 수거 kg" value={kpiLoading ? "-" : `${(kpi?.collectedKg ?? 0).toFixed(1)}kg`} />
         <KpiCard
-          label="오늘 발행 포인트"
-          value={kpiLoading ? "-" : `${(kpi?.issuedPoint ?? 0).toLocaleString("ko-KR")}P`}
+          label="오늘 쿠폰 판매액"
+          value={kpiLoading ? "-" : formatKrw(kpi?.couponSalesAmount ?? 0)}
           accent
         />
+        <KpiCard label="오늘 소진 쿠폰" value={kpiLoading ? "-" : `${kpi?.consumedCoupons ?? 0}장`} />
         <KpiCard label="활성 라이더" value={kpiLoading ? "-" : `${kpi?.activeRiderCount ?? 0}명`} />
+        <KpiCard label="오늘 현금 거래액" value={kpiLoading ? "-" : formatKrw(kpi?.cashPaidAmount ?? 0)} />
       </div>
 
       <div className="rounded-card bg-white p-5 shadow-card">

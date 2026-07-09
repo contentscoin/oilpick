@@ -16,7 +16,16 @@ const VERIFY_STATUS_LABEL: Record<string, string> = {
  * doc_*_url에 저장하는 값은 Storage 경로 — 04-tasks.md 질문 목록 "order-photos 비공개 버킷" 항목과
  * 동일한 종류의 계약).
  */
-export function RiderVerifyCard({ rider, onProcessed }: { rider: AdminRiderRow; onProcessed: () => void }) {
+export function RiderVerifyCard({
+  rider,
+  onProcessed,
+  footer,
+}: {
+  rider: AdminRiderRow;
+  onProcessed: () => void;
+  /** 카드 하단 확장 슬롯(07 F10-② 쿠폰 잔액/조정 패널). */
+  footer?: React.ReactNode;
+}) {
   const [docUrls, setDocUrls] = useState<Record<string, string | null>>({});
   const [rejectReason, setRejectReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -132,6 +141,8 @@ export function RiderVerifyCard({ rider, onProcessed }: { rider: AdminRiderRow; 
           </div>
         </div>
       )}
+
+      {footer}
     </div>
   );
 }

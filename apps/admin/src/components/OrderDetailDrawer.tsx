@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ORDER_STATUS_LABEL, formatKg, formatPoint, formatRelativeTime } from "@oilpick/core";
+import { ORDER_STATUS_LABEL, formatKg, formatKrw, formatRelativeTime, type OrderFault } from "@oilpick/core";
 import type { AdminOrderDetail, AdminOrderEvent } from "../hooks/useOrdersAdmin";
 import { invokeEdgeFunction } from "../lib/edgeFunction";
 
@@ -11,14 +11,43 @@ interface OrderDetailDrawerProps {
   onMutated: () => void;
 }
 
+/** 귀책(fault) 선택지 — D4·D6. SUPPLIER/SYSTEM은 쿠폰 자동 환급, RIDER는 소진 유지. */
+const FAULT_OPTIONS: Array<{ value: OrderFault; label: string; description: string; refunds: boolean }> = [
+  {
+    value: "SUPPLIER",
+    label: "점주 귀책",
+    description: "노쇼·현장 거래 거부 등 점주 사유",
+    refunds: true,
+  },
+  {
+    value: "RIDER",
+    label: "라이더 귀책",
+    description: "미방문·수거 불이행 등 라이더 사유",
+    refunds: false,
+  },
+  {
+    value: "SYSTEM",
+    label: "플랫폼 귀책",
+    description: "시세 오등록·매칭 오류 등 플랫폼 사유",
+    refunds: true,
+  },
+];
+
+/** admin 취소(+fault)가 가능한 상태 — 07 §1-3 {ACCEPTED|ARRIVED|DISPUTED}→CANCELLED. */
+const ADMIN_CANCELLABLE = new Set(["ACCEPTED", "ARRIVED", "DISPUTED"]);
+
 /**
- * 03-frontend.md apps/admin "/orders": "상세 드로어(이벤트 타임라인, 사진). DISPUTED 건:
- * RESOLVE_DISPUTE 폼(finalKg 입력). CANCEL 버튼". order-transition Edge Function만을 통해
- * 전이한다(CLAUDE.md 절대 규칙 2 — pickup_orders.status 직접 update 금지).
+ * 03-frontend.md apps/admin "/orders" + 07 F10-⑤ 개정: 상세 드로어에 coupon_cost·환급 여부·
+ * cash_paid_amount 표시. admin 취소는 귀책(fault) 선택 필수(D4 — 환급 결과 예고 포함,
+ * {ACCEPTED|ARRIVED|DISPUTED}). FORCE_COMPLETE(D6)는 계량 제출된 ARRIVED 한정 + 사유 필수.
+ * RESOLVE_DISPUTE는 "중재 후 ARRIVED 복귀·점주 확인 필요" 카피로 교정(07 §1-3 재정의).
+ * 모든 전이는 order-transition Edge Function만 경유(절대 규칙 2).
  */
 export function OrderDetailDrawer({ order, events, isLoading, onClose, onMutated }: OrderDetailDrawerProps) {
   const [finalKg, setFinalKg] = useState("");
   const [cancelReason, setCancelReason] = useState("");
+  const [fault, setFault] = useState<OrderFault | null>(null);
+  const [forceMemo, setForceMemo] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -44,20 +73,26 @@ export function OrderDetailDrawer({ order, events, isLoading, onClose, onMutated
       setError(result.message);
       return;
     }
-    setMessage("분쟁이 중재되어 포인트가 지급됐어요.");
+    setMessage(
+      "중재 완료 — 무게가 확정되고 주문이 현장 도착(ARRIVED)으로 복귀했어요. 점주가 현금 수령을 확인해야 완료돼요.",
+    );
     setFinalKg("");
     onMutated();
   }
 
   async function handleCancel() {
     if (!order) return;
+    if (!fault) {
+      setError("귀책 대상을 선택해주세요(취소 필수 항목).");
+      return;
+    }
     setBusy(true);
     setError(null);
     setMessage(null);
     const result = await invokeEdgeFunction("order-transition", {
       orderId: order.id,
       action: "CANCEL",
-      payload: { reason: cancelReason || "관리자 취소" },
+      payload: { reason: cancelReason || "관리자 취소", fault },
     });
     setBusy(false);
     if (!result.ok) {
@@ -67,6 +102,38 @@ export function OrderDetailDrawer({ order, events, isLoading, onClose, onMutated
     setMessage("주문이 취소되었어요.");
     onMutated();
   }
+
+  async function handleForceComplete(e: React.FormEvent) {
+    e.preventDefault();
+    if (!order) return;
+    const memo = forceMemo.trim();
+    if (!memo) {
+      setError("강제 완결 사유를 입력해주세요(필수).");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    const result = await invokeEdgeFunction("order-transition", {
+      orderId: order.id,
+      action: "FORCE_COMPLETE",
+      payload: { memo },
+    });
+    setBusy(false);
+    if (!result.ok) {
+      setError(result.message);
+      return;
+    }
+    setMessage("관리자 확인으로 주문이 완료 처리되었어요.");
+    setForceMemo("");
+    onMutated();
+  }
+
+  // FORCE_COMPLETE(D6): 계량 제출(또는 중재 확정) kg이 있는 ARRIVED에서만 노출.
+  const canForceComplete =
+    order?.status === "ARRIVED" && (order.measuredKg !== null || order.finalKg !== null);
+
+  const selectedFault = FAULT_OPTIONS.find((f) => f.value === fault);
 
   return (
     <div className="fixed inset-0 z-40 flex justify-end bg-black/30" onClick={onClose} data-testid="order-drawer-backdrop">
@@ -116,10 +183,29 @@ export function OrderDetailDrawer({ order, events, isLoading, onClose, onMutated
                   {order.finalKg !== null ? formatKg(order.finalKg) : "-"}
                 </p>
               </div>
+              {/* 07 F10-⑤: 포인트 → 쿠폰/현금 표기. coupon_cost null = 레거시 주문(쿠폰 미소진). */}
               <div>
-                <p className="text-xs text-gray-400">지급 포인트</p>
-                <p className="font-bold tabular-nums text-accent">
-                  {order.supplierPoint !== null ? formatPoint(order.supplierPoint) : "-"}
+                <p className="text-xs text-gray-400">소진 쿠폰</p>
+                <p className="font-medium tabular-nums text-gray-800" data-testid="order-coupon-cost">
+                  {order.couponCost !== null ? `${order.couponCost}장` : "- (레거시)"}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400">쿠폰 환급</p>
+                <p className="font-medium text-gray-800" data-testid="order-coupon-refunded">
+                  {order.refunded ? (
+                    <span className="rounded-pill bg-primary-light px-2 py-0.5 text-xs font-semibold text-primary">
+                      환급됨
+                    </span>
+                  ) : (
+                    "-"
+                  )}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400">현금 지급액</p>
+                <p className="font-bold tabular-nums text-accent" data-testid="order-cash-paid">
+                  {order.cashPaidAmount !== null ? formatKrw(order.cashPaidAmount) : "-"}
                 </p>
               </div>
               <div className="col-span-2 border-t border-gray-50 pt-3">
@@ -186,7 +272,11 @@ export function OrderDetailDrawer({ order, events, isLoading, onClose, onMutated
 
             {order.status === "DISPUTED" && (
               <form onSubmit={handleResolveDispute} className="rounded-card bg-white p-4 shadow-card">
-                <p className="mb-2 text-sm font-semibold text-gray-800">분쟁 중재</p>
+                <p className="mb-1 text-sm font-semibold text-gray-800">분쟁 중재</p>
+                <p className="mb-2 text-xs text-gray-500">
+                  중재는 무게 확정까지만이에요 — 확정 후 주문은 현장 도착(ARRIVED)으로 복귀하고, 점주가 현금 수령을
+                  확인해야 완료돼요.
+                </p>
                 <label className="mb-3 block">
                   <span className="mb-1 block text-xs text-gray-500">확정 kg</span>
                   <input
@@ -205,14 +295,82 @@ export function OrderDetailDrawer({ order, events, isLoading, onClose, onMutated
                   className="h-10 w-full rounded-button bg-primary text-sm font-semibold text-white shadow-card disabled:opacity-60"
                   data-testid="resolve-dispute-submit"
                 >
-                  중재 확정
+                  중재 확정 (ARRIVED 복귀)
                 </button>
               </form>
             )}
 
-            {(order.status === "REQUESTED" || order.status === "ACCEPTED") && (
+            {canForceComplete && (
+              <form onSubmit={handleForceComplete} className="rounded-card border border-accent/30 bg-white p-4 shadow-card">
+                <p className="mb-1 text-sm font-semibold text-accent">강제 완결 (FORCE_COMPLETE)</p>
+                <p className="mb-2 text-xs text-gray-500">
+                  점주가 수령 확인을 거부·방치하는 교착을 해소해요. 제출/중재된 무게 기준으로 현금 지급액이 기록되고
+                  즉시 완료 처리돼요. 사유는 필수예요.
+                </p>
+                <input
+                  type="text"
+                  placeholder="사유(필수)"
+                  value={forceMemo}
+                  onChange={(e) => setForceMemo(e.target.value)}
+                  className="mb-3 w-full rounded-button border border-gray-200 px-3 py-2 text-sm outline-none focus:border-accent"
+                  data-testid="force-complete-memo"
+                />
+                <button
+                  type="submit"
+                  disabled={busy}
+                  className="h-10 w-full rounded-button bg-accent text-sm font-semibold text-white shadow-card disabled:opacity-60"
+                  data-testid="force-complete-button"
+                >
+                  강제 완결
+                </button>
+              </form>
+            )}
+
+            {ADMIN_CANCELLABLE.has(order.status) && (
               <div className="rounded-card border border-status-danger/20 bg-white p-4 shadow-card">
-                <p className="mb-2 text-sm font-semibold text-status-danger">주문 취소</p>
+                <p className="mb-1 text-sm font-semibold text-status-danger">주문 취소 (귀책 선택 필수)</p>
+                <p className="mb-3 text-xs text-gray-500">
+                  귀책에 따라 쿠폰 환급이 갈려요 — 점주/플랫폼 귀책이면 라이더에게 쿠폰이 자동 환급되고, 라이더
+                  귀책이면 소진이 유지돼요.
+                </p>
+                <div className="mb-3 flex flex-col gap-2" role="radiogroup" aria-label="귀책 대상">
+                  {FAULT_OPTIONS.map((option) => (
+                    <label
+                      key={option.value}
+                      className={`flex cursor-pointer items-start gap-2 rounded-button border px-3 py-2 ${
+                        fault === option.value ? "border-status-danger bg-status-danger/5" : "border-gray-200"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="fault"
+                        value={option.value}
+                        checked={fault === option.value}
+                        onChange={() => setFault(option.value)}
+                        className="mt-0.5"
+                        data-testid={`fault-option-${option.value}`}
+                      />
+                      <span>
+                        <span className="block text-sm font-medium text-gray-800">{option.label}</span>
+                        <span className="block text-xs text-gray-500">{option.description}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                {selectedFault && (
+                  <p
+                    className={`mb-3 rounded-button px-3 py-2 text-xs font-medium ${
+                      selectedFault.refunds ? "bg-primary-light text-primary" : "bg-gray-100 text-gray-600"
+                    }`}
+                    data-testid="fault-refund-preview"
+                  >
+                    {selectedFault.refunds
+                      ? order.couponCost !== null
+                        ? `점주/플랫폼 귀책 → 라이더에게 쿠폰 ${order.couponCost}장 자동 환급`
+                        : "점주/플랫폼 귀책 — 레거시 주문(쿠폰 미소진)이라 환급 없이 취소돼요"
+                      : "라이더 귀책 → 쿠폰 환급 없음(소진 유지)"}
+                  </p>
+                )}
                 <input
                   type="text"
                   placeholder="취소 사유(선택)"
@@ -224,7 +382,7 @@ export function OrderDetailDrawer({ order, events, isLoading, onClose, onMutated
                 <button
                   type="button"
                   onClick={handleCancel}
-                  disabled={busy}
+                  disabled={busy || !fault}
                   className="h-10 w-full rounded-button bg-status-danger text-sm font-semibold text-white disabled:opacity-60"
                   data-testid="cancel-order-button"
                 >

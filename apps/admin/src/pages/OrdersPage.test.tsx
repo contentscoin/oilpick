@@ -95,4 +95,10 @@ describe("OrdersPage", () => {
     render(<OrdersPage />);
     expect(screen.getByText("해당 상태의 주문이 없어요.")).toBeInTheDocument();
   });
+
+  it("CSV 내보내기 버튼을 노출한다 (07 F10-⑥)", () => {
+    mockUseAdminOrders.mockReturnValue({ data: [order()], isLoading: false });
+    render(<OrdersPage />);
+    expect(screen.getByTestId("orders-csv-button")).toBeInTheDocument();
+  });
 });

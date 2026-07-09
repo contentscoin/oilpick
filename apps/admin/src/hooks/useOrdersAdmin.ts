@@ -131,8 +131,13 @@ export interface AdminOrderDetail extends AdminOrderRow {
   disputeReason: string | null;
   cancelReason: string | null;
   snapshotPricePerKg: number;
-  snapshotRiderFee: number;
-  supplierPoint: number | null;
+  /** 07 F10-⑤: 소진 쿠폰 장수(주문 생성 시 스냅샷). 레거시 주문은 null. */
+  couponCost: number | null;
+  /** 07 F10-⑤: 완료 시 지급된 현금(round(final_kg×snapshot_price)). 미완료 null. */
+  cashPaidAmount: number | null;
+  completedAt: string | null;
+  /** 07 F10-⑤: 이 주문에 대한 쿠폰 환급(REFUND 원장) 존재 여부. 귀책 취소 시 true. */
+  refunded: boolean;
 }
 
 export function useAdminOrderDetail(orderId: string | undefined) {
@@ -141,17 +146,25 @@ export function useAdminOrderDetail(orderId: string | undefined) {
     enabled: Boolean(orderId),
     queryFn: async (): Promise<AdminOrderDetail | null> => {
       if (!orderId) return null;
-      const [{ data, error }, { supplierNames, riderNames }] = await Promise.all([
+      const [{ data, error }, { supplierNames, riderNames }, refundRes] = await Promise.all([
         supabase
           .from("pickup_orders")
           .select(
-            "id, status, supplier_id, rider_id, requested_kg, final_kg, measured_kg, photo_urls, dispute_reason, cancel_reason, pickup_address, created_at, snapshot_price_per_kg, snapshot_rider_fee, supplier_point",
+            "id, status, supplier_id, rider_id, requested_kg, final_kg, measured_kg, photo_urls, dispute_reason, cancel_reason, pickup_address, created_at, snapshot_price_per_kg, coupon_cost, cash_paid_amount, completed_at",
           )
           .eq("id", orderId)
           .maybeSingle(),
         fetchNameMaps(),
+        // 귀책 환급(REFUND) 여부 — coupon_ledger에서 이 주문의 REFUND 원장을 admin RLS로 조회.
+        supabase
+          .from("coupon_ledger")
+          .select("id")
+          .eq("order_id", orderId)
+          .eq("entry_type", "REFUND")
+          .limit(1),
       ]);
       if (error) throw error;
+      if (refundRes.error) throw refundRes.error;
       if (!data) return null;
       return {
         id: data.id,
@@ -169,8 +182,11 @@ export function useAdminOrderDetail(orderId: string | undefined) {
         pickupAddress: data.pickup_address,
         createdAt: data.created_at,
         snapshotPricePerKg: data.snapshot_price_per_kg,
-        snapshotRiderFee: data.snapshot_rider_fee,
-        supplierPoint: data.supplier_point,
+        couponCost: data.coupon_cost !== null && data.coupon_cost !== undefined ? Number(data.coupon_cost) : null,
+        cashPaidAmount:
+          data.cash_paid_amount !== null && data.cash_paid_amount !== undefined ? Number(data.cash_paid_amount) : null,
+        completedAt: data.completed_at ?? null,
+        refunded: (refundRes.data ?? []).length > 0,
       };
     },
   });
