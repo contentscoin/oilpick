@@ -18,7 +18,7 @@ const SLIDES: Slide[] = [
   {
     emoji: "🛢️",
     title: "폐식용유, 앱으로 간편하게 수거 요청",
-    description: "통 수만 입력하면 예상 포인트를 바로 확인할 수 있어요.",
+    description: "통 수만 입력하면 예상 현금 수령액을 바로 확인할 수 있어요.",
   },
   {
     emoji: "🚚",
@@ -27,8 +27,8 @@ const SLIDES: Slide[] = [
   },
   {
     emoji: "💰",
-    title: "수거 완료 시 포인트 자동 지급",
-    description: "지급된 포인트는 언제든 계좌로 출금 신청할 수 있어요.",
+    title: "수거 완료 시 현장에서 현금 수령",
+    description: "라이더가 계량한 무게만큼 그 자리에서 현금을 지급해요.",
   },
 ];
 

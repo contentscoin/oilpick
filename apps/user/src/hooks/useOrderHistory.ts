@@ -9,6 +9,7 @@ export interface OrderHistoryItem {
   requestedKg: number;
   finalKg: number | null;
   supplierPoint: number | null;
+  cashPaidAmount: number | null;
   createdAt: string;
 }
 
@@ -30,7 +31,7 @@ export function useOrderHistory(userId: string | undefined, page: number) {
 
       const { data, error } = await supabase
         .from("pickup_orders")
-        .select("id, status, requested_kg, final_kg, supplier_point, created_at")
+        .select("id, status, requested_kg, final_kg, supplier_point, cash_paid_amount, created_at")
         .eq("supplier_id", userId)
         .order("created_at", { ascending: false })
         .range(from, to);
@@ -44,6 +45,7 @@ export function useOrderHistory(userId: string | undefined, page: number) {
         requestedKg: row.requested_kg,
         finalKg: row.final_kg,
         supplierPoint: row.supplier_point,
+        cashPaidAmount: row.cash_paid_amount,
         createdAt: row.created_at,
       }));
       return { items, hasNextPage };

@@ -1,18 +1,18 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { BigButton, ConfirmSheet, DriverCard, ErrorScreen, InfoStatCard, MapView, OrderTimeline, StatusHeadline, colors, elevation, gray, radius, surface, touchTarget } from "@oilpick/ui";
-import { formatKg, formatKrw, formatPoint, formatTimeOfDay, type OrderStatus } from "@oilpick/core";
+import { estimateCash, formatKg, formatKrw, formatPoint, formatTimeOfDay, type OrderStatus } from "@oilpick/core";
 import { KAKAO_KEY } from "../lib/env";
 import { invokeEdgeFunction } from "../lib/edgeFunction";
 import { useOrder } from "../hooks/useOrder";
 import { useAssignedRiderCard } from "../hooks/useAssignedRiderCard";
 
 /**
- * U6~U9 "/orders/:id" 상태별 단일 화면. 03-frontend.md 63행:
+ * U6~U9 "/orders/:id" 상태별 단일 화면. 03-frontend.md(07 F9 개정):
  * "status로 분기 렌더. REQUESTED: 반경 애니메이션+취소. ACCEPTED~: MapView(라이더 위치 Realtime
- * broadcast 구독)+OrderTimeline+라이더 카드(이름/차량/인증배지/전화 tel:). ARRIVED+measured_kg
- * 있음: 계량 확인 UI(사진 뷰어+확정 kg+포인트 미리보기+[확인][이의신청]). COMPLETED: 지급 포인트
- * 대형 표시".
+ * broadcast 구독)+OrderTimeline+라이더 카드. ARRIVED+measured_kg(또는 중재 final_kg): 계량 확인 UI
+ * (사진 뷰어+확정 kg+받을 현금+[무게·현금 수령 확인][이의신청]). COMPLETED: 받은 현금(cash_paid_amount)
+ * 대형 표시". 신모델(07 D1): 포인트 표기 폐기 → 현장 현금 수령. CONFIRM_MEASURE = 무게+현금 2자 확인.
  *
  * 라이더 위치 Realtime broadcast(`order:{orderId}:location`, 02-api.md rider-location)는
  * rider-location 함수가 아직 실제 호출되지 않을 수 있으므로(04-tasks.md 태스크 지시) 좌표가
@@ -105,19 +105,35 @@ export function OrderDetailPage() {
     setShowDisputeForm(false);
   }
 
-  const showMeasureConfirmUi = order.status === "ARRIVED" && order.measuredKg != null;
+  // 07 F9: 계량 제출(measuredKg) 또는 중재 확정(finalKg)이 있으면 확인 패널을 노출한다.
+  // 중재(RESOLVE_DISPUTE) 후에는 DISPUTED→ARRIVED로 복귀하고 final_kg가 고정된다(재제출 불가) —
+  // 이때 현금 지급·수령 확인(CONFIRM_MEASURE)만 남는다(00-domain.md 신 상태머신).
+  const isArbitrated = order.status === "ARRIVED" && order.finalKg != null;
+  const showMeasureConfirmUi =
+    order.status === "ARRIVED" && (order.measuredKg != null || order.finalKg != null);
+  // 확인·완료 계산 기준 kg = 중재 확정(finalKg) 우선, 없으면 계량 제출(measuredKg).
+  const confirmKg = order.finalKg ?? order.measuredKg ?? 0;
+  const confirmCash = Math.round(confirmKg * order.snapshotPricePerKg);
+
   const showRiderCard = order.status !== "REQUESTED" && order.status !== "CANCELLED";
   const showMapAndTimeline = order.status !== "REQUESTED" && order.status !== "CANCELLED";
 
-  // "예상" 스탯 카드는 계량 확정 전에만 노출한다. 라이더가 계량을 제출(measuredKg 존재)하면
-  // 계량 확인 패널이 확정 수량·포인트를 보여주므로 예상 카드와 중복되면 안 되고(두 포인트 값이 한
-  // 화면에 뜨는 버그), PICKED_UP 이후는 이미 지급된 확정 포인트를 지급포인트 패널로 보여준다.
+  // "예상" 스탯 카드는 계량 확정 전(ACCEPTED, 또는 계량/중재 전 ARRIVED)에만 노출한다.
   const showInfoStatCard =
-    order.status === "ACCEPTED" || (order.status === "ARRIVED" && order.measuredKg == null);
-  // 확정 포인트(EARN) 패널: 계량 확정(PICKED_UP)부터 COMPLETED까지 이미 지급된 supplier_point 표시.
-  const showPaidPointPanel =
-    (order.status === "PICKED_UP" || order.status === "COMPLETED") && order.supplierPoint != null;
-  const estimatedPoint = Math.round(order.requestedKg * order.snapshotPricePerKg);
+    order.status === "ACCEPTED" ||
+    (order.status === "ARRIVED" && order.measuredKg == null && order.finalKg == null);
+  const estimatedCash = estimateCash(order.requestedKg, order.snapshotPricePerKg);
+
+  // 신모델 완료 히어로: 현장 수령 현금(cash_paid_amount). 07 §1-3, D1.
+  const showCashHero = order.status === "COMPLETED" && order.cashPaidAmount != null;
+  // 레거시(구모델 EARN 포인트) 완료 패널 — 신규 주문은 도달 불가(cash 없이 supplier_point 존재).
+  // 레거시 렌더 분기(프로덕션 잔존 주문 완결 표시용).
+  const showLegacyPointPanel =
+    (order.status === "PICKED_UP" || order.status === "COMPLETED") &&
+    order.cashPaidAmount == null &&
+    order.supplierPoint != null;
+  // 07 F9-⑦: 레거시 주문(picked_up_at/delivered_at 존재)은 OrderTimeline 구경로로 렌더한다.
+  const isLegacyOrder = order.pickedUpAt != null || order.deliveredAt != null;
 
   // U7 목업: 라이더 배정 이후 보조문구에 라이더명 포함. 배정 전/취소는 status 기본값 사용.
   const headlineSubtitle =
@@ -240,19 +256,26 @@ export function OrderDetailPage() {
           stats={[
             { label: "예상 수량", value: formatKg(order.requestedKg) },
             { label: "오늘 매입가", value: `${formatKrw(order.snapshotPricePerKg)}/kg` },
-            { label: "예상 포인트", value: formatPoint(estimatedPoint), accent: true },
+            { label: "예상 수령액", value: formatKrw(estimatedCash), accent: true },
           ]}
           footnote="현장 계량 기준으로 확정됩니다"
         />
       )}
 
       {showMapAndTimeline && (
-        <OrderTimeline currentStatus={order.status} timestamps={timelineTimestamps} />
+        <OrderTimeline currentStatus={order.status} timestamps={timelineTimestamps} legacy={isLegacyOrder} />
       )}
 
       {showMeasureConfirmUi && !showDisputeForm && (
         <section data-testid="measure-confirm-panel" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <h2 style={{ fontSize: 16, margin: 0 }}>계량 결과를 확인해주세요</h2>
+          <h2 style={{ fontSize: 16, margin: 0 }}>
+            {isArbitrated ? "중재 결과를 확인해주세요" : "계량 결과를 확인해주세요"}
+          </h2>
+          {isArbitrated && (
+            <p data-testid="arbitration-notice" style={{ margin: 0, fontSize: 14, color: colors.status.wait }}>
+              중재 확정 무게 {formatKg(confirmKg)} — 라이더에게 현금 {formatKrw(confirmCash)}을 받고 확인해 주세요.
+            </p>
+          )}
           {order.photoUrls.length > 0 && (
             <div data-testid="measure-photo-viewer" style={{ display: "flex", gap: 8, overflowX: "auto" }}>
               {order.photoUrls.map((url) => (
@@ -267,33 +290,36 @@ export function OrderDetailPage() {
           )}
           <div style={{ borderRadius: radius.card, backgroundColor: surface.card, border: `1px solid ${surface.border}`, boxShadow: elevation.card, padding: 16, display: "flex", flexDirection: "column", gap: 8 }}>
             <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ fontSize: 14, color: colors.status.wait }}>확정 계량</span>
+              <span style={{ fontSize: 14, color: colors.status.wait }}>{isArbitrated ? "중재 확정 무게" : "확정 계량"}</span>
               <span data-testid="measured-kg-value" style={{ fontSize: 14, fontWeight: 600 }}>
-                {formatKg(order.measuredKg ?? 0)}
+                {formatKg(confirmKg)}
               </span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ fontSize: 14, color: colors.status.wait }}>예상 지급 포인트</span>
+              <span style={{ fontSize: 14, color: colors.status.wait }}>받을 현금</span>
               <span
-                data-testid="measure-estimated-point"
+                data-testid="measure-cash-amount"
                 className="oilpick-tabular-nums"
-                style={{ fontSize: 18, fontWeight: 700, color: colors.accent.DEFAULT }}
+                style={{ fontSize: 18, fontWeight: 700, color: colors.primary.dark }}
               >
-                {formatPoint(Math.round((order.measuredKg ?? 0) * order.snapshotPricePerKg))}
+                {formatKrw(confirmCash)}
               </span>
             </div>
           </div>
+          {/* 07 F9-⑥: CONFIRM = "무게 확인 + 현금 수령 확인" 2자 확인(현금 수령 증빙). */}
           <BigButton data-testid="confirm-measure-button" loading={confirming} onClick={handleConfirmMeasure}>
-            확인
+            무게 {formatKg(confirmKg)} 확인 · 현금 {formatKrw(confirmCash)} 받았습니다
           </BigButton>
-          <button
-            type="button"
-            data-testid="open-dispute-form"
-            onClick={() => setShowDisputeForm(true)}
-            style={{ background: "none", border: "none", color: colors.status.danger, fontSize: 14, fontWeight: 600, cursor: "pointer", padding: 0 }}
-          >
-            이의신청
-          </button>
+          {!isArbitrated && (
+            <button
+              type="button"
+              data-testid="open-dispute-form"
+              onClick={() => setShowDisputeForm(true)}
+              style={{ background: "none", border: "none", color: colors.status.danger, fontSize: 14, fontWeight: 600, cursor: "pointer", padding: 0 }}
+            >
+              이의신청
+            </button>
+          )}
         </section>
       )}
 
@@ -334,9 +360,37 @@ export function OrderDetailPage() {
         </section>
       )}
 
-      {showPaidPointPanel && (
+      {/* 07 F9-⑥: COMPLETED 히어로 — 현장에서 받은 현금(cash_paid_amount). */}
+      {showCashHero && (
         <section
           data-testid="completed-panel"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 6,
+            padding: "28px 20px",
+            borderRadius: radius.hero,
+            backgroundColor: colors.primary.light,
+            border: `1px solid ${surface.border}`,
+            boxShadow: elevation.card,
+          }}
+        >
+          <p style={{ margin: 0, fontSize: 15, fontWeight: 600, color: colors.status.wait }}>받은 현금</p>
+          <p
+            data-testid="completed-cash-amount"
+            className="oilpick-tabular-nums"
+            style={{ margin: 0, fontSize: 40, fontWeight: 800, letterSpacing: "-0.02em", color: colors.primary.dark }}
+          >
+            {formatKrw(order.cashPaidAmount ?? 0)}
+          </p>
+        </section>
+      )}
+
+      {/* 레거시 렌더 분기(구모델 EARN 포인트) — 프로덕션 잔존 주문 완결 표시용. 신규 주문 미도달. */}
+      {showLegacyPointPanel && (
+        <section
+          data-testid="completed-legacy-panel"
           style={{
             display: "flex",
             flexDirection: "column",

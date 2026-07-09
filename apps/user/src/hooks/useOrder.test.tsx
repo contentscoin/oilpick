@@ -40,6 +40,8 @@ const ORDER_ROW = {
   measured_kg: 29.5,
   final_kg: null,
   supplier_point: null,
+  coupon_cost: 2,
+  cash_paid_amount: null,
   photo_urls: ["https://example.com/photo.jpg"],
   cancel_reason: null,
   dispute_reason: null,
@@ -47,6 +49,7 @@ const ORDER_ROW = {
   accepted_at: "2026-07-01T00:05:00Z",
   picked_up_at: null,
   delivered_at: null,
+  completed_at: null,
 };
 
 describe("useOrder", () => {
@@ -81,6 +84,8 @@ describe("useOrder", () => {
       measuredKg: 29.5,
       finalKg: null,
       supplierPoint: null,
+      couponCost: 2,
+      cashPaidAmount: null,
       photoUrls: ["https://example.com/photo.jpg"],
       cancelReason: null,
       disputeReason: null,
@@ -88,6 +93,7 @@ describe("useOrder", () => {
       acceptedAt: "2026-07-01T00:05:00Z",
       pickedUpAt: null,
       deliveredAt: null,
+      completedAt: null,
     });
   });
 

@@ -27,6 +27,8 @@ const BASE_ORDER = {
   measuredKg: null as number | null,
   finalKg: null as number | null,
   supplierPoint: null as number | null,
+  couponCost: 1 as number | null,
+  cashPaidAmount: null as number | null,
   photoUrls: [] as string[],
   cancelReason: null as string | null,
   disputeReason: null as string | null,
@@ -34,6 +36,7 @@ const BASE_ORDER = {
   acceptedAt: null as string | null,
   pickedUpAt: null as string | null,
   deliveredAt: null as string | null,
+  completedAt: null as string | null,
 };
 
 function renderPage() {
@@ -107,11 +110,11 @@ describe("OrderDetailPage", () => {
     expect(screen.getByTestId("status-headline-pill")).toHaveTextContent("진행 중");
     expect(screen.getByText("박라이더 라이더가 매장으로 이동 중이에요")).toBeInTheDocument();
 
-    // 정보 스탯 카드: 예상 수량 / 오늘 매입가 / 예상 포인트(15 * 700 = 10,500P).
+    // 정보 스탯 카드: 예상 수량 / 오늘 매입가 / 예상 수령액(15 * 700 = 10,500원).
     expect(screen.getByTestId("info-stat-card")).toBeInTheDocument();
     expect(screen.getByText("15.0kg")).toBeInTheDocument();
     expect(screen.getByText("700원/kg")).toBeInTheDocument();
-    expect(screen.getByText("10,500P")).toBeInTheDocument();
+    expect(screen.getByText("10,500원")).toBeInTheDocument();
 
     // 하단 단일 CTA: 라이더에게 전화(tel:).
     const cta = screen.getByTestId("order-call-rider");
@@ -128,7 +131,7 @@ describe("OrderDetailPage", () => {
     expect(screen.queryByTestId("order-cancel-button")).not.toBeInTheDocument();
   });
 
-  it("shows the measure confirmation UI with confirm/dispute actions when ARRIVED with measuredKg", () => {
+  it("shows the measure confirmation UI with cash copy and confirm/dispute actions when ARRIVED with measuredKg", () => {
     mockUseOrder.mockReturnValue({
       data: { ...BASE_ORDER, status: "ARRIVED", riderId: "rider-1", measuredKg: 14.5, photoUrls: ["https://example.com/a.jpg"] },
       isLoading: false,
@@ -137,10 +140,30 @@ describe("OrderDetailPage", () => {
 
     expect(screen.getByTestId("measure-confirm-panel")).toBeInTheDocument();
     expect(screen.getByTestId("measured-kg-value")).toHaveTextContent("14.5kg");
-    // 14.5kg * 700원/kg = 10,150P
-    expect(screen.getByTestId("measure-estimated-point")).toHaveTextContent("10,150P");
-    expect(screen.getByTestId("confirm-measure-button")).toBeInTheDocument();
+    // 14.5kg * 700원/kg = 10,150원
+    expect(screen.getByTestId("measure-cash-amount")).toHaveTextContent("10,150원");
+    // 07 F9-⑥: CONFIRM 버튼 = 무게+현금 2자 확인 카피.
+    expect(screen.getByTestId("confirm-measure-button")).toHaveTextContent("무게 14.5kg 확인 · 현금 10,150원 받았습니다");
     expect(screen.getByTestId("open-dispute-form")).toBeInTheDocument();
+    // 일반 계량(중재 전)은 중재 안내가 없다.
+    expect(screen.queryByTestId("arbitration-notice")).not.toBeInTheDocument();
+  });
+
+  it("shows the post-arbitration confirmation (final_kg) without a dispute option when ARRIVED after RESOLVE_DISPUTE", () => {
+    mockUseOrder.mockReturnValue({
+      data: { ...BASE_ORDER, status: "ARRIVED", riderId: "rider-1", measuredKg: 14.5, finalKg: 13.0, photoUrls: ["https://example.com/a.jpg"] },
+      isLoading: false,
+    });
+    renderPage();
+
+    expect(screen.getByTestId("measure-confirm-panel")).toBeInTheDocument();
+    // 중재 확정 무게(final_kg=13.0)를 기준으로 현금 계산 = 13.0 * 700 = 9,100원.
+    expect(screen.getByTestId("arbitration-notice")).toHaveTextContent("중재 확정 무게 13.0kg");
+    expect(screen.getByTestId("measured-kg-value")).toHaveTextContent("13.0kg");
+    expect(screen.getByTestId("measure-cash-amount")).toHaveTextContent("9,100원");
+    expect(screen.getByTestId("confirm-measure-button")).toHaveTextContent("무게 13.0kg 확인 · 현금 9,100원 받았습니다");
+    // 중재 완료 후에는 재이의신청 불가.
+    expect(screen.queryByTestId("open-dispute-form")).not.toBeInTheDocument();
   });
 
   it("does not show the measure confirmation UI when ARRIVED without measuredKg yet", () => {
@@ -186,14 +209,38 @@ describe("OrderDetailPage", () => {
     );
   });
 
-  it("shows the large supplier point display when COMPLETED", () => {
+  it("shows the large received-cash hero when COMPLETED (new model)", () => {
     mockUseOrder.mockReturnValue({
-      data: { ...BASE_ORDER, status: "COMPLETED", riderId: "rider-1", finalKg: 14.5, supplierPoint: 10150 },
+      data: { ...BASE_ORDER, status: "COMPLETED", riderId: "rider-1", finalKg: 14.5, cashPaidAmount: 10150, completedAt: "2026-07-02T00:00:00Z" },
       isLoading: false,
     });
     renderPage();
     expect(screen.getByTestId("completed-panel")).toBeInTheDocument();
+    expect(screen.getByText("받은 현금")).toBeInTheDocument();
+    expect(screen.getByTestId("completed-cash-amount")).toHaveTextContent("10,150원");
+    // 신규 완료 주문에는 포인트 패널이 없다.
+    expect(screen.queryByTestId("completed-legacy-panel")).not.toBeInTheDocument();
+  });
+
+  it("falls back to the legacy point hero for legacy completed orders (cash null, supplierPoint set)", () => {
+    mockUseOrder.mockReturnValue({
+      data: {
+        ...BASE_ORDER,
+        status: "COMPLETED",
+        riderId: "rider-1",
+        finalKg: 14.5,
+        supplierPoint: 10150,
+        cashPaidAmount: null,
+        couponCost: null,
+        pickedUpAt: "2026-07-01T00:10:00Z",
+        deliveredAt: "2026-07-01T00:20:00Z",
+      },
+      isLoading: false,
+    });
+    renderPage();
+    expect(screen.getByTestId("completed-legacy-panel")).toBeInTheDocument();
     expect(screen.getByTestId("completed-supplier-point")).toHaveTextContent("10,150P");
+    expect(screen.queryByTestId("completed-cash-amount")).not.toBeInTheDocument();
   });
 
   it("shows a not-found message when the order does not exist", () => {

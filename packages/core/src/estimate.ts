@@ -3,11 +3,21 @@
 // (fn_transition_order의 CONFIRM_MEASURE/FORCE_COMPLETE)가 기록하며, 이 파일은 UI 표시용
 // "예상" 값만 다룬다.
 
-import { KG_PER_CAN } from "./constants";
+import { CAN_SIZE_L_DEFAULT, KG_PER_CAN } from "./constants";
 
-/** 통 수 → 예상 kg. 예상 kg = 통 수 × 15kg(KG_PER_CAN). */
-export function estimateKg(cans: number): number {
-  return cans * KG_PER_CAN;
+/**
+ * 통 수 → 예상 kg. 07 F9-③ 통 크기 프리셋 지원.
+ * - 기본(18L 말통): `cans × KG_PER_CAN`(15kg) — 현행 동작 유지(단일 인자 호출 하위 호환).
+ * - 10L 등 다른 용량: 18L 대비 비례 환산 `cans × 15 × (canSizeL / 18)` 후 소수 1자리 반올림
+ *   (numeric(8,1) 규칙, 01-db-schema.sql).
+ * "기타"(kg 직접 입력)는 이 함수를 거치지 않고 kg을 그대로 쓴다.
+ *
+ * ⚠️ coupon_cost는 서버(order-create)가 requestedKg 기준으로 산정한다(07 §1-2, D2).
+ * 통 크기 프리셋은 이 공식(ceil(kg/15))에 영향이 없다 — 클라이언트는 kg만 정확히 보내면 된다.
+ */
+export function estimateKg(cans: number, canSizeL: number = CAN_SIZE_L_DEFAULT): number {
+  const perCanKg = KG_PER_CAN * (canSizeL / CAN_SIZE_L_DEFAULT);
+  return Math.round(cans * perCanKg * 10) / 10;
 }
 
 /**

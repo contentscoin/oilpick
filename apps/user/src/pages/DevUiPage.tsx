@@ -143,7 +143,7 @@ export function DevUiPage() {
           stats={[
             { label: "예상 수량", value: "15.0kg" },
             { label: "오늘 매입가", value: "700원/kg" },
-            { label: "예상 포인트", value: "10,500P", accent: true },
+            { label: "예상 수령액", value: "10,500원", accent: true },
           ]}
           footnote="현장 계량 기준으로 확정됩니다"
         />
@@ -210,7 +210,7 @@ export function DevUiPage() {
           items={[
             { key: "home", label: "홈" },
             { key: "pickup", label: "수거" },
-            { key: "wallet", label: "포인트" },
+            { key: "wallet", label: "수령액" },
             { key: "my", label: "마이" },
           ]}
           activeKey={activeTab}

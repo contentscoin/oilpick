@@ -34,11 +34,14 @@ describe("OrdersHistoryPage", () => {
     expect(screen.getByTestId("empty-state")).toBeInTheDocument();
   });
 
-  it("renders order items and navigates to the detail page on click", () => {
+  it("shows the received cash for a new-model completed order and legacy points for legacy orders", () => {
     mockUseOrderHistory.mockReturnValue({
       data: {
         items: [
-          { id: "order-1", status: "COMPLETED", requestedKg: 30, finalKg: 29.5, supplierPoint: 20650, createdAt: "2026-07-01T00:00:00Z" },
+          // 신모델 완료 주문: 현장 수령 현금.
+          { id: "order-1", status: "COMPLETED", requestedKg: 30, finalKg: 29.5, supplierPoint: null, cashPaidAmount: 20650, createdAt: "2026-07-02T00:00:00Z" },
+          // 레거시 완료 주문: 구모델 EARN 포인트(레거시 렌더 분기).
+          { id: "order-2", status: "COMPLETED", requestedKg: 30, finalKg: 29.5, supplierPoint: 18000, cashPaidAmount: null, createdAt: "2026-07-01T00:00:00Z" },
         ],
         hasNextPage: false,
       },
@@ -47,8 +50,9 @@ describe("OrdersHistoryPage", () => {
     renderPage();
 
     expect(screen.getByTestId("orders-history-list")).toBeInTheDocument();
-    expect(screen.getByText("20,650P")).toBeInTheDocument();
-    fireEvent.click(screen.getByTestId("orders-history-item"));
+    expect(screen.getByText("20,650원")).toBeInTheDocument();
+    expect(screen.getByText("18,000P")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByTestId("orders-history-item")[0]!);
     expect(screen.getByText("ORDER_DETAIL_PAGE")).toBeInTheDocument();
   });
 

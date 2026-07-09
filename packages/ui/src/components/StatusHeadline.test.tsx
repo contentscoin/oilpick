@@ -9,9 +9,10 @@ describe("StatusHeadline", () => {
     expect(screen.getByTestId("status-headline")).toBeInTheDocument();
   });
 
-  it("renders the completed headline for COMPLETED", () => {
+  it("renders the cash-based completed headline for COMPLETED (07 F9)", () => {
     render(<StatusHeadline status="COMPLETED" />);
-    expect(screen.getByText("배송까지 완료됐어요")).toBeInTheDocument();
+    expect(screen.getByText("수거가 완료됐어요")).toBeInTheDocument();
+    expect(screen.getByText("현금 수령이 확인됐어요.")).toBeInTheDocument();
   });
 
   it("auto-maps the status to a pill label", () => {

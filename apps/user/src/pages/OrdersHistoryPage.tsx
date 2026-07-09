@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { EmptyState, StatusBadge, colors, gray, radius, surface } from "@oilpick/ui";
-import { formatKg, formatPoint } from "@oilpick/core";
+import { formatKg, formatKrw, formatPoint } from "@oilpick/core";
 import { useSession } from "../hooks/useSession";
 import { useOrderHistory } from "../hooks/useOrderHistory";
 
@@ -67,10 +67,17 @@ export function OrdersHistoryPage() {
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ fontSize: 14 }}>{formatKg(order.finalKg ?? order.requestedKg)}</span>
-                  {order.supplierPoint != null && (
-                    <span className="oilpick-tabular-nums" style={{ fontSize: 16, fontWeight: 700, color: colors.accent.DEFAULT }}>
-                      {formatPoint(order.supplierPoint)}
+                  {/* 07 F9: 신모델 완료 주문은 현장 수령 현금. 레거시(supplier_point) 주문은 포인트 표기(레거시 렌더 분기). */}
+                  {order.cashPaidAmount != null ? (
+                    <span className="oilpick-tabular-nums" style={{ fontSize: 16, fontWeight: 700, color: colors.primary.dark }}>
+                      {formatKrw(order.cashPaidAmount)}
                     </span>
+                  ) : (
+                    order.supplierPoint != null && (
+                      <span className="oilpick-tabular-nums" style={{ fontSize: 16, fontWeight: 700, color: colors.accent.DEFAULT }}>
+                        {formatPoint(order.supplierPoint)}
+                      </span>
+                    )
                   )}
                 </div>
               </button>

@@ -37,17 +37,20 @@ const HEADLINE: Record<OrderStatus, Headline> = {
     title: "라이더가 도착했어요",
     subtitle: "현장에서 수거를 준비하고 있어요.",
   },
+  // 07 F9-⑦: PICKED_UP/DELIVERED는 레거시(구모델) 전용 — 신규 주문은 도달 불가(신규 주문 화면에 미노출).
+  // 프로덕션 잔존 주문 완결 표시용으로만 유지한다.
   PICKED_UP: {
     title: "수거가 완료됐어요",
     subtitle: "라이더가 집하장으로 이동 중이에요.",
   },
   DELIVERED: {
     title: "집하장에 전달됐어요",
-    subtitle: "확정 계량 후 포인트가 지급돼요.",
+    subtitle: "확정 계량 후 정산이 확정돼요.",
   },
+  // 신 상태머신의 종착 상태 — 현장 현금 수령 확인(07 §1-3, D1). "배송"·"포인트" 표기 폐기.
   COMPLETED: {
-    title: "배송까지 완료됐어요",
-    subtitle: "포인트 지급이 확정됐어요.",
+    title: "수거가 완료됐어요",
+    subtitle: "현금 수령이 확인됐어요.",
   },
   CANCELLED: {
     title: "주문이 취소됐어요",

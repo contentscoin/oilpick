@@ -8,14 +8,15 @@ import { colors, gray } from "../tokens";
  * 완료 구간 green / 미완 구간 zinc-200.
  * 정상 진행 경로(00-domain.md 상태머신)만 스텝으로 표시한다. DISPUTED/CANCELLED는
  * currentStatus로 들어오면 별도 강조 스텝으로 치환 렌더한다(정상 경로에 끼워 넣지 않음).
+ *
+ * 07 F9-⑦: 신 상태머신은 ARRIVED→COMPLETED 직행(현금 2자 확인)으로 PICKED_UP/DELIVERED를
+ * 생략한다. 신규 주문은 4스텝 HAPPY_PATH를 쓰고, 레거시 주문(picked_up_at/delivered_at 존재 →
+ * `legacy` prop 또는 currentStatus가 PICKED_UP/DELIVERED)만 구경로 5스텝을 조건부 렌더한다.
  */
-const HAPPY_PATH: OrderStatus[] = [
-  "REQUESTED",
-  "ACCEPTED",
-  "ARRIVED",
-  "PICKED_UP",
-  "COMPLETED",
-];
+const HAPPY_PATH: OrderStatus[] = ["REQUESTED", "ACCEPTED", "ARRIVED", "COMPLETED"];
+
+/** 레거시(구모델) 경로 — 프로덕션 잔존 주문 완결용. PICKED_UP 단계 포함. 07 §1-3 레거시 전이. */
+const LEGACY_PATH: OrderStatus[] = ["REQUESTED", "ACCEPTED", "ARRIVED", "PICKED_UP", "COMPLETED"];
 
 export interface OrderTimelineProps {
   currentStatus: OrderStatus;
@@ -25,6 +26,11 @@ export interface OrderTimelineProps {
    * 미전달 시 시각 컬럼을 아예 렌더하지 않아 기존 사용처 무영향.
    */
   timestamps?: Partial<Record<OrderStatus, string>>;
+  /**
+   * 07 F9-⑦: 레거시 주문(picked_up_at/delivered_at 존재)이면 true. 구경로 5스텝을 렌더한다.
+   * currentStatus가 PICKED_UP/DELIVERED면(신규 주문은 도달 불가) 자동으로 레거시로 간주한다.
+   */
+  legacy?: boolean;
   className?: string;
 }
 
@@ -42,9 +48,12 @@ function CheckIcon() {
   );
 }
 
-export function OrderTimeline({ currentStatus, timestamps, className }: OrderTimelineProps) {
+export function OrderTimeline({ currentStatus, timestamps, legacy, className }: OrderTimelineProps) {
   const isExceptional = currentStatus === "CANCELLED" || currentStatus === "DISPUTED";
-  const currentIndex = HAPPY_PATH.indexOf(currentStatus);
+  // 신규 주문은 PICKED_UP/DELIVERED에 도달할 수 없으므로, 그 상태가 들어오면 레거시 주문으로 간주.
+  const isLegacy = legacy || currentStatus === "PICKED_UP" || currentStatus === "DELIVERED";
+  const path = isLegacy ? LEGACY_PATH : HAPPY_PATH;
+  const currentIndex = path.indexOf(currentStatus);
 
   if (isExceptional) {
     const color = currentStatus === "CANCELLED" ? colors.status.danger : colors.status.wait;
@@ -64,10 +73,10 @@ export function OrderTimeline({ currentStatus, timestamps, className }: OrderTim
       data-testid="order-timeline"
       style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column" }}
     >
-      {HAPPY_PATH.map((step, i) => {
+      {path.map((step, i) => {
         const done = i < currentIndex;
         const active = i === currentIndex;
-        const isLast = i === HAPPY_PATH.length - 1;
+        const isLast = i === path.length - 1;
         return (
           <li key={step} style={{ display: "flex", gap: 14, minHeight: 52 }}>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>

@@ -34,4 +34,6 @@ export const queryKeys = {
   // [07 F8] 현금 수령(cash_paid_amount) 요약·이력. 포인트 지갑(balance/ledger)을 대체한다.
   monthlyCashReceipt: (userId: string) => ["cashReceipts", "monthly", userId] as const,
   cashReceipts: (userId: string) => ["cashReceipts", "list", userId] as const,
+  // [07 F9] 최근 완료 주문 주소 재사용 칩(distinct 최근 2건).
+  recentAddresses: (userId: string) => ["recentAddresses", userId] as const,
 };

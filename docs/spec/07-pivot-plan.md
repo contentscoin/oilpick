@@ -424,6 +424,7 @@ REQUESTED→CANCELLED: supplier 자진 or 시스템 30분 무수락. 쿠폰 미�
   공용 컴포넌트이므로 rider 화면 회귀 확인 포함.
 - DoD: 수동 시나리오(요청→수락→계량→확인→COMPLETED)를 단계별 기록 — 전 구간 포인트 표기 0건(전부 원화),
   타임라인에 PICKED_UP 스텝 미표시(신규 주문). 폼/훅 vitest. 스냅샷 갱신.
+- [x] 결과(2026-07-09): 【U】RequestPage 3스텝 골격 유지 + ①전스텝 sticky 예상 현금 수령액 푸터(cans/통 크기 실시간·"현장 계량 기준으로 확정돼요") ②최근 주소 재사용 칩 2건(신규 useRecentAddresses — 완료주문 distinct, pickup_location GeoJSON 파싱 재사용) ③통 크기 프리셋 18L/10L/기타(kg 직접) ④희망시간 퀵칩 지금/오늘 오후/내일 오전/직접 ⑤제출 성공 ConfirmSheet([주문 상세]/[홈으로]) + 1/2/3 도트·라벨 인디케이터. 【core】estimateKg(cans, canSizeL?) 확장(18L=15kg 유지·10L 비례·소수1자리, estimateCash 시그니처 무변경) + CAN_SIZE_L_DEFAULT. ⑥현금 카피 전수: RequestPage/OrderDetailPage(InfoStat "예상 수령액", CONFIRM "무게 OO.Okg 확인 · 현금 ₩N 받았습니다", COMPLETED 현금 히어로 cash_paid_amount, 중재 후 ARRIVED 복귀 카피)·OnboardingPage·OrdersHistoryPage·DevUiPage(useOrder/useOrderHistory에 cash_paid_amount/coupon_cost/completed_at 추가). ⑦【ui】OrderTimeline HAPPY_PATH 4스텝[REQUESTED,ACCEPTED,ARRIVED,COMPLETED]+legacy 5스텝 조건부(currentStatus PICKED_UP/DELIVERED 자동 레거시)·StatusHeadline COMPLETED 현금 카피·PICKED_UP/DELIVERED 레거시 표기·ORDER_STATUS_LABEL 레거시 주석. lint·turbo test(--concurrency=1)·build FULL green(core 354/ui 83/user 104/rider 51/admin 19). user 앱 표시문자열 포인트 잔존 0(레거시 렌더 분기·deprecated WithdrawPage 제외). 공용 OrderTimeline rider 회귀 green(ActiveRunPage PICKED_UP 자동 레거시). 실 브라우저 E2E 불가 → 요청→수락→계량/중재→확인→COMPLETED 화면 상태 컴포넌트 테스트로 전수 대체.
 
 ## P4 — 관리자앱 (운영·통계·CS)
 
