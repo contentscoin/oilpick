@@ -12,9 +12,7 @@ function estimateKg(cans, canSizeL = CAN_SIZE_L_DEFAULT) {
 function estimateCash(kg, pricePerKg) {
   return Math.round(kg * pricePerKg);
 }
-var estimatePoint = estimateCash;
 export {
   estimateCash,
-  estimateKg,
-  estimatePoint
+  estimateKg
 };

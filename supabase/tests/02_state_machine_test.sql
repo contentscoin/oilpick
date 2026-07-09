@@ -29,8 +29,12 @@ insert into profiles (id, role, phone, display_name) values
   ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','rider','018','H');
 insert into supplier_profiles (id, biz_number, store_name, address, location) values
   ('11111111-1111-1111-1111-111111111111','b','s','a', ST_SetSRID(ST_MakePoint(127,37.5),4326)::geography);
+-- 07 F13: seed.sql이 신모델 데모 라이더(rider_profiles 포함)를 선주입하므로, 이 픽스처는
+-- 이미 존재하는 rider_profiles와 충돌하지 않도록 멱등 처리한다(assert 대상은 아래 특정 order/rider
+-- id로 스코프돼 있어 시드 라이더가 결과에 영향 없음).
 insert into rider_profiles (id, biz_number, vehicle_number, verify_status)
-  select id, 'b', '12가'||right(id::text,4), 'APPROVED' from profiles where role='rider';
+  select id, 'b', '12가'||right(id::text,4), 'APPROVED' from profiles where role='rider'
+  on conflict (id) do nothing;
 
 -- 신 주문 8건(coupon_cost 1) + 레거시 1건(O5, coupon_cost null). 모두 10kg, 시세 700.
 insert into pickup_orders (id, supplier_id, status, requested_kg, pickup_address, pickup_location, snapshot_price_per_kg, coupon_cost) values

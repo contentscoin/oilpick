@@ -32,8 +32,8 @@ export const queryKeys = {
   riders: (statusFilter: string) => ["admin", "users", "riders", statusFilter] as const,
   couponBalances: () => ["admin", "users", "couponBalances"] as const,
   riderCouponLedger: (riderId: string) => ["admin", "users", "couponLedger", riderId] as const,
-  withdrawals: (statusFilter: string) => ["admin", "settlement", "withdrawals", statusFilter] as const,
-  ledgerAudit: (page: number) => ["admin", "settlement", "ledger", page] as const,
+  // [07 F13] withdrawals/ledgerAudit 키 제거 — 구모델 출금 큐·point_ledger 감사(useSettlementAdmin)
+  // 소멸(D1). 매출·정산은 couponSalesDaily/couponLedgerAudit(useSalesAdmin)로 대체됨.
   couponSalesDaily: (days: number) => ["admin", "sales", "couponDaily", days] as const,
   pickupStatsDaily: (days: number) => ["admin", "sales", "pickupDaily", days] as const,
   couponLedgerAudit: (limit: number) => ["admin", "sales", "couponLedger", limit] as const,

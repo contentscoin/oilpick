@@ -29,9 +29,5 @@ export function estimateCash(kg: number, pricePerKg: number): number {
   return Math.round(kg * pricePerKg);
 }
 
-/**
- * @deprecated 07 D1로 포인트 적립 모델이 폐기됐다. `estimateCash`를 사용하라.
- * 구모델 소비처(HomePage/RequestPage 등, F8·F9에서 원화 카피로 전환) 호환을 위한 별칭이며
- * 계산식은 estimateCash와 동일하다(kg × 시세, 정수 반올림). F13 레거시 일몰에서 제거한다.
- */
-export const estimatePoint = estimateCash;
+// [07 F13] estimatePoint(deprecated 별칭) 제거 — 구모델 소비처(HomePage/RequestPage 등)는
+// F8·F9에서 estimateCash 원화 카피로 전환 완료, 잔존 참조 0.

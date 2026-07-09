@@ -162,11 +162,13 @@ export function DevUiPage() {
       </section>
 
       <section>
+        {/* 07 F5로 쿠폰 잔액 히어로로 일반화(label/formatValue). 07 F13: 구모델 "출금 신청" 액션 라벨 제거. */}
         <h2>PointBalanceCard</h2>
         <PointBalanceCard
-          available={128000}
-          held={15000}
-          action={<PointHeroAction>출금 신청</PointHeroAction>}
+          available={20}
+          label="보유 수거쿠폰"
+          formatValue={(n) => `${n}장`}
+          action={<PointHeroAction>충전하기</PointHeroAction>}
         />
       </section>
 
@@ -257,12 +259,14 @@ export function DevUiPage() {
       </section>
 
       <section>
-        <h2>LedgerList</h2>
+        {/* 07 F5 쿠폰 변형(현행). 레거시 point 변형(EARN/WITHDRAW_REQUEST 라벨)은 admin 원장 감사에서만 잔존. */}
+        <h2>LedgerList (쿠폰)</h2>
         <LedgerList
+          variant="coupon"
           entries={[
-            { id: 1, entryType: "EARN", amount: 54000, createdAt: new Date() },
-            { id: 2, entryType: "HOLD", amount: 5000, createdAt: new Date() },
-            { id: 3, entryType: "WITHDRAW_REQUEST", amount: -20000, createdAt: new Date() },
+            { id: 1, entryType: "CHARGE", amount: 30, createdAt: new Date() },
+            { id: 2, entryType: "CONSUME", amount: -2, createdAt: new Date() },
+            { id: 3, entryType: "REFUND", amount: 2, createdAt: new Date() },
           ]}
         />
       </section>

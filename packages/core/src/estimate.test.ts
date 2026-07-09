@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { estimateCash, estimateKg, estimatePoint } from "./estimate";
+import { estimateCash, estimateKg } from "./estimate";
 import { KG_PER_CAN } from "./constants";
 
 describe("estimateKg", () => {
@@ -49,12 +49,5 @@ describe("estimateCash", () => {
 
   it("returns 0 for 0 kg", () => {
     expect(estimateCash(0, 1500)).toBe(0);
-  });
-});
-
-describe("estimatePoint (deprecated alias of estimateCash)", () => {
-  it("is the same function as estimateCash (07 D1 호환 별칭)", () => {
-    expect(estimatePoint).toBe(estimateCash);
-    expect(estimatePoint(10, 1000)).toBe(10000);
   });
 });

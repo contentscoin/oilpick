@@ -507,6 +507,23 @@ REQUESTED→CANCELLED: supplier 자진 or 시스템 30분 무수락. 쿠폰 미�
   `WITHDRAW_REQUEST`(UI 라벨), `snapshotRiderFee`(신규 코드 경로) — 각각 참조 0 확인 후 제거, 결과를 완료
   기록에 남김(레거시 렌더 분기가 쓰는 것은 예외 명시).
 - DoD: `pnpm lint/test/build` green. 위 grep 목록 전수 결과 기록(잔존 시 사유 명시).
+- [x] 결과(2026-07-09): ① Edge 3종 코드 삭제(supabase/functions/{withdraw-request,withdraw-process,point-adjust})
+  — 프로덕션 undeploy는 배포 체크리스트 **ⓖ 신설**(앱 배포 후). 02-api.md §7/8/10 "삭제됨(F13)+ⓖ"로 갱신,
+  DB fn_request_withdraw/fn_process_withdraw/fn_post_ledger는 레거시 보존. ② DepotsPage 일몰 — admin App.tsx
+  라우트+lazy 제거, AdminShell 네비 제거, DepotsPage 신규 등록 폼(NewDepotForm) 제거+일몰 배너(테이블·데이터·
+  QR 시크릿·활성토글·QR 재열람 보존). ③ qa-checklist.md "카메라 QR 스캔"→제외(대상 플로우 소멸). ④ seed.sql
+  신모델: 쿠폰 단가 tick 1(2,000원/장 잠정), 데모 공급자 1 + 데모 라이더 2(APPROVED), 라이더별 coupon_ledger
+  ADJUST +20(memo), 신모델 데모 주문 1(coupon_cost=2). `supabase db reset` 24개 마이그레이션+시드 성공,
+  v_coupon_balance(b1=20)·coupon_cost=2 psql 검증. ⑤ 고아 sweep 삭제: WithdrawPage(user)·EarningsWithdrawPage
+  (rider)·useWallet+test(user)·useEarnings(rider)·useSettlementAdmin(admin)·estimatePoint 별칭+test(core)+vendor·
+  queryKeys.withdrawals/ledgerAudit. 보존(사유): PointBalanceCard(F5 쿠폰 히어로·rider 현역)·formatPoint(레거시
+  OrderDetail/OrdersHistory 렌더+point LedgerList)·snapshotRiderFee(useOpenCalls/useActiveRun/useOrder 레거시
+  필드)·WITHDRAW_* 라벨(LedgerList 레거시 point 변형·admin 원장 감사)·WalletPage(F8 수령 이력 현역). DevUiPage
+  목업 2건 신모델 전환(PointBalanceCard 쿠폰 히어로/LedgerList 쿠폰 변형 — "출금 신청"/EARN·WITHDRAW_REQUEST
+  잔존 문자열 제거). useBankAccount(user·rider)는 삭제 페이지가 유일 소비처였으나 sweep 목록 밖+계좌 DB 계약
+  미러라 보존(노트). **게이트**: lint 7/7, vitest 786(core359/ui83/user104/admin81/rider59) 7/7, build 5/5,
+  pgTAP 104/104(시드 공존 — 02_state_machine 픽스처 `insert rider_profiles ... on conflict do nothing` 멱등
+  1줄 보정, assert 32개 무변경). "포인트 적립/출금 도달 가능 UI" 0건(잔존은 주석·레거시 렌더 분기·보존 라벨).
 
 ---
 
@@ -572,3 +589,7 @@ REQUESTED→CANCELLED: supplier 자진 or 시스템 30분 무수락. 쿠폰 미�
      **같은 릴리즈로 동시 배포**(RPC만 먼저 바꾸면 INSUFFICIENT_COUPON이 구 mapTransitionError에서
      INVALID_TRANSITION/500으로 새는 간극 발생)
    ⓕ 앱 순차 배포: rider→user→admin. Vercel은 정적 원샷 배포라 재빌드+재배포 필요(DEPLOY.md).
+   ⓖ **구모델 함수 3종 undeploy(withdraw-request/withdraw-process/point-adjust) — ⓕ 앱 배포 완료 후.**
+     코드는 F13에서 이미 삭제했으나 프로덕션 undeploy는 구모델 앱이 완전히 교체된 뒤 실행한다(지금
+     내리면 가동 중 구모델 앱/데모가 파손). `supabase functions delete withdraw-request` 등. DB 함수
+     fn_request_withdraw/fn_process_withdraw/fn_post_ledger는 레거시 회계 기록용으로 **보존**(내리지 않음).

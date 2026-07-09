@@ -2,20 +2,29 @@ import { useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
 import { useAdminDepots, useDepotMutations, type AdminDepotRow } from "../hooks/useDepotsAdmin";
 
-/** 03-frontend.md apps/admin "/depots": "CRUD + QR 인쇄 뷰(qr_secret을 QR 이미지로)". */
+/**
+ * 03-frontend.md apps/admin "/depots": "CRUD + QR 인쇄 뷰(qr_secret을 QR 이미지로)".
+ * [07 F13] 집하장 일몰 — 집하장/QR 배송(구모델)이 신모델에서 소멸(07 §0). 라우트·네비는 제거됐고
+ * (App.tsx/AdminShell), 이 화면은 파일·테이블·QR 시크릿 보존을 위해 남겨두되 **신규 등록은 차단**한다.
+ * 기존(레거시) 집하장 목록 조회·활성/비활성 토글·QR 재열람만 허용.
+ */
 export function DepotsPage() {
   const { data: depots, isLoading } = useAdminDepots();
-  const { createDepot, updateDepot } = useDepotMutations();
+  const { updateDepot } = useDepotMutations();
   const [printDepot, setPrintDepot] = useState<AdminDepotRow | null>(null);
 
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">집하장</h1>
-        <p className="text-sm text-gray-500">집하장을 등록하고 QR 코드를 인쇄해요.</p>
+        <h1 className="text-2xl font-bold text-gray-900">집하장 (레거시)</h1>
+        <p className="text-sm text-gray-500">
+          집하장·QR 배송은 신모델 피벗(07)으로 종료됐어요. 신규 등록은 불가하며, 기존 집하장 조회만 가능해요.
+        </p>
       </div>
 
-      <NewDepotForm onCreate={createDepot} />
+      <div className="rounded-card border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800" data-testid="depot-sunset-notice">
+        신규 집하장 등록은 중단됐어요 (07 F13 레거시 일몰). 기존 데이터·QR 시크릿은 보존됩니다.
+      </div>
 
       <div className="rounded-card bg-white p-6 shadow-card">
         <h2 className="mb-4 text-lg font-semibold text-gray-900">등록된 집하장</h2>
@@ -69,86 +78,8 @@ export function DepotsPage() {
   );
 }
 
-function NewDepotForm({ onCreate }: { onCreate: (input: { name: string; address: string; lat: number; lng: number }) => Promise<void> }) {
-  const [name, setName] = useState("");
-  const [address, setAddress] = useState("");
-  const [lat, setLat] = useState("37.5509");
-  const [lng, setLng] = useState("126.8225");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    const latNum = Number(lat);
-    const lngNum = Number(lng);
-    if (!name.trim() || !address.trim() || !Number.isFinite(latNum) || !Number.isFinite(lngNum)) {
-      setError("모든 값을 올바르게 입력해주세요.");
-      return;
-    }
-    setBusy(true);
-    try {
-      await onCreate({ name: name.trim(), address: address.trim(), lat: latNum, lng: lngNum });
-      setName("");
-      setAddress("");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "집하장 등록에 실패했어요.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="rounded-card bg-white p-6 shadow-card">
-      <h2 className="mb-4 text-lg font-semibold text-gray-900">새 집하장 등록</h2>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <label className="block">
-          <span className="mb-1 block text-sm font-medium text-gray-700">이름</span>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="w-full rounded-button border border-gray-200 px-3 py-2.5 text-base outline-none focus:border-primary"
-            data-testid="depot-name-input"
-          />
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-sm font-medium text-gray-700">주소</span>
-          <input
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-            className="w-full rounded-button border border-gray-200 px-3 py-2.5 text-base outline-none focus:border-primary"
-            data-testid="depot-address-input"
-          />
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-sm font-medium text-gray-700">위도</span>
-          <input
-            value={lat}
-            onChange={(e) => setLat(e.target.value)}
-            className="w-full rounded-button border border-gray-200 px-3 py-2.5 text-base outline-none focus:border-primary"
-          />
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-sm font-medium text-gray-700">경도</span>
-          <input
-            value={lng}
-            onChange={(e) => setLng(e.target.value)}
-            className="w-full rounded-button border border-gray-200 px-3 py-2.5 text-base outline-none focus:border-primary"
-          />
-        </label>
-      </div>
-      {error && <p className="mt-3 text-sm font-medium text-status-danger">{error}</p>}
-      <button
-        type="submit"
-        disabled={busy}
-        className="mt-4 h-11 rounded-button bg-primary px-5 text-sm font-semibold text-white shadow-card disabled:opacity-60"
-        data-testid="depot-create-submit"
-      >
-        {busy ? "등록 중..." : "집하장 등록"}
-      </button>
-    </form>
-  );
-}
+// [07 F13] NewDepotForm 제거 — 신규 집하장 등록 차단(집하장 소멸). useDepotMutations.createDepot도
+// 미사용화(훅은 updateDepot 활성/비활성 토글 용도로 유지 — 레거시 depot 관리).
 
 function DepotQrModal({ depot, onClose }: { depot: AdminDepotRow; onClose: () => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);

@@ -84,22 +84,26 @@ ACCEPTED 이후 모든 전이 단일 엔드포인트.
     가능. authenticated의 셀프 정지·해제 변조는 트리거로 차단.
 
 ## 7. `withdraw-request` (supplier/rider)
-> ⚠️ **deprecated — 07 D1 포인트 폐기, F13에서 제거 예정.**
-- 입력: `{ amount }` (≥10000). 프로필에 계좌 없으면 400 `NO_BANK_ACCOUNT`.
-- RPC 트랜잭션: v_point_balance.available >= amount 검증(행 잠금은 원장 insert 직렬화로) →
-  WITHDRAW_REQUEST(-amount) → withdrawals insert. 잔액 부족 400 `INSUFFICIENT_BALANCE`.
+> ⚠️ **삭제됨 (07 F13)** — 포인트 적립·출금 모델 폐기(D1). Edge Function 코드는 저장소에서 삭제.
+> **프로덕션 undeploy는 배포 체크리스트 ⓖ**(구모델 앱 가동 중 — 앱 배포 완료 후 내림).
+> DB 함수 `fn_request_withdraw`는 레거시 회계 기록용으로 **보존**(삭제 금지).
+- (구) 입력: `{ amount }` (≥10000). 프로필에 계좌 없으면 400 `NO_BANK_ACCOUNT`.
+- (구) RPC 트랜잭션: v_point_balance.available >= amount 검증 → WITHDRAW_REQUEST(-amount) → withdrawals insert.
 
 ## 8. `withdraw-process` (admin)
-> ⚠️ **deprecated — 07 D1 포인트 폐기, F13에서 제거 예정.**
-- 입력: `{ withdrawalId, decision: 'APPROVED'|'REJECTED'|'PAID', memo? }`
-- REJECTED 시 WITHDRAW_CANCEL(+amount) 복구. 상태 전이: REQUESTED→APPROVED→PAID 또는 REQUESTED→REJECTED.
+> ⚠️ **삭제됨 (07 F13)** — 포인트 적립·출금 모델 폐기(D1). Edge Function 코드는 저장소에서 삭제.
+> **프로덕션 undeploy는 배포 체크리스트 ⓖ**. DB 함수 `fn_process_withdraw`는 레거시 보존(삭제 금지).
+- (구) 입력: `{ withdrawalId, decision: 'APPROVED'|'REJECTED'|'PAID', memo? }`
+- (구) REJECTED 시 WITHDRAW_CANCEL(+amount) 복구. 상태 전이: REQUESTED→APPROVED→PAID 또는 REQUESTED→REJECTED.
 
 ## 9. `price-set` (admin)
 - 입력: `{ pricePerKg }` → price_ticks insert. **riderFee 입력 삭제**(레거시 — 07 F3b-④, priceSetInputSchema 개정. rider_fee 미기록).
 
 ## 10. `point-adjust` (admin)
-> ⚠️ **deprecated — 07 D1 포인트 폐기, F13에서 제거 예정.** 쿠폰 수동 조정은 §14 `coupon-adjust` 참조.
-- 입력: `{ userId, amount, memo }` (memo 필수) → ADJUST insert.
+> ⚠️ **삭제됨 (07 F13)** — 포인트 적립·출금 모델 폐기(D1). Edge Function 코드는 저장소에서 삭제.
+> **프로덕션 undeploy는 배포 체크리스트 ⓖ**. DB 함수 `fn_post_ledger`는 레거시 회계 기록용 보존(삭제 금지).
+> 쿠폰 수동 조정은 §14 `coupon-adjust` 참조.
+- (구) 입력: `{ userId, amount, memo }` (memo 필수) → ADJUST insert.
 
 ## 11. `coupon-purchase-intent` (rider) — 07 F4
 쿠폰 구매 신청(PG 결제 위젯 진입 전 단계).

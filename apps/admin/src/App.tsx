@@ -23,9 +23,8 @@ const UsersPage = lazy(() => import("./pages/UsersPage").then((m) => ({ default:
 const SettlementPage = lazy(() =>
   import("./pages/SettlementPage").then((m) => ({ default: m.SettlementPage })),
 );
-const DepotsPage = lazy(() =>
-  import("./pages/DepotsPage").then((m) => ({ default: m.DepotsPage })),
-);
+// [07 F13] DepotsPage 일몰 — 집하장/QR 배송(구모델) 소멸(07 §0). 라우트·네비 제거,
+// 파일·테이블·QR 시크릿은 레거시 보존(신모델은 depot 미사용). 신규 등록도 DepotsPage 내부에서 차단.
 const NotifyPage = lazy(() =>
   import("./pages/NotifyPage").then((m) => ({ default: m.NotifyPage })),
 );
@@ -94,14 +93,6 @@ export function App() {
             element={
               <Protected>
                 <CsPage />
-              </Protected>
-            }
-          />
-          <Route
-            path="/depots"
-            element={
-              <Protected>
-                <DepotsPage />
               </Protected>
             }
           />
