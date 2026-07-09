@@ -100,7 +100,7 @@ export function CouponPurchasePage({
   useEffect(() => {
     if (phase !== "widget" || !pendingPay || widgetRef.current) return;
     if (!clientKey) {
-      setError("결제 키가 아직 발급되지 않았어요. 가맹 심사 완료 후 이용할 수 있어요.");
+      setError("결제 연동 준비 중이에요. 쿠폰 충전은 고객센터로 요청해 주세요.");
       setPhase("select");
       return;
     }
@@ -272,6 +272,41 @@ export function CouponPurchasePage({
   }
 
   // phase === "select"
+  // PG 미연동 게이트(07 F14 대기): 인앱 결제가 불가한 동안은 구매 폼 대신 수동 충전 안내.
+  // 코엠페이먼츠(현장결제 플랫폼)로 입금 → admin이 확인 후 coupon-adjust 수동 충전하는 운영.
+  if (!clientKey) {
+    return (
+      <Screen>
+        <Header title="쿠폰 충전" onBack={() => navigate(-1)} />
+        <section
+          data-testid="purchase-manual-notice"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+            padding: 20,
+            borderRadius: radius.card,
+            backgroundColor: colors.primary.light,
+            border: `1px solid ${surface.border}`,
+          }}
+        >
+          <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: colors.primary.dark }}>
+            앱 결제 연동을 준비 중이에요
+          </p>
+          <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, color: gray[600] }}>
+            지금은 고객센터로 충전을 요청해 주세요. 입금 확인 후 관리자가 쿠폰을 충전해 드려요.
+          </p>
+        </section>
+        <BigButton
+          data-testid="purchase-manual-support"
+          onClick={() => navigate("/support?category=COUPON_PAYMENT")}
+        >
+          고객센터로 충전 요청하기
+        </BigButton>
+      </Screen>
+    );
+  }
+
   const payDisabled = unitPrice == null || amount == null || qty < QTY_MIN || qty > QTY_MAX;
 
   return (

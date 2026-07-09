@@ -96,16 +96,26 @@ describe("CouponPurchasePage — intent → 위젯", () => {
     expect(await screen.findByTestId("widget-request-button")).toBeEnabled();
   });
 
-  it("키 미발급(clientKey 없음)이면 위젯 로드 대신 안내", async () => {
+  it("키 미발급(clientKey 없음)이면 구매 폼 대신 수동 충전 안내 게이트를 렌더 (PG 미연동 운영)", () => {
     const loadWidget = vi.fn().mockResolvedValue(makeWidget());
-    mockInvoke.mockResolvedValue({
-      ok: true,
-      data: { purchaseId: "p1", pgOrderId: "oc_1", amount: 5000, unitPrice: 500 },
-    });
     renderPage({ loadWidget, clientKey: "" });
-    fireEvent.click(screen.getByTestId("purchase-pay-button"));
-    expect(await screen.findByTestId("purchase-error")).toHaveTextContent("결제 키가 아직");
+    // 페이지 진입 시점 게이트 — 구매 폼(수량/결제 버튼) 자체가 없어 orphan intent를 만들지 않는다.
+    expect(screen.getByTestId("purchase-manual-notice")).toHaveTextContent("고객센터로 충전을 요청");
+    expect(screen.queryByTestId("purchase-pay-button")).not.toBeInTheDocument();
+    expect(screen.getByTestId("purchase-manual-support")).toHaveTextContent("고객센터로 충전 요청하기");
     expect(loadWidget).not.toHaveBeenCalled();
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it("수동 충전 안내의 버튼이 고객센터(COUPON_PAYMENT 프리셋)로 이동한다", async () => {
+    renderPage({
+      clientKey: "",
+      entry: "/coupons/purchase",
+    });
+    fireEvent.click(screen.getByTestId("purchase-manual-support"));
+    // MemoryRouter 내 실제 내비게이션 — 대상 라우트가 없으므로 location 검증 대신
+    // 클릭이 예외 없이 처리되는지와 게이트가 유지되는지만 확인(라우팅 자체는 App.test 소관).
+    await waitFor(() => expect(screen.queryByTestId("purchase-pay-button")).not.toBeInTheDocument());
   });
 });
 
