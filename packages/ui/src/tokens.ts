@@ -60,9 +60,14 @@ export const fontFamily = {
   sans: '"Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
 } as const;
 
-/** CDN(jsDelivr)에서 서빙되는 Pretendard Variable woff2 경로. */
+/**
+ * CDN(jsDelivr)에서 서빙되는 Pretendard Variable woff2 경로.
+ * jsDelivr의 npm 엔드포인트(`/npm/pretendard@…`)를 쓴다 — npm 배포 tarball을 그대로 미러링하므로
+ * 경로가 안정적이다. GitHub 엔드포인트(`/gh/orioncactus/pretendard@…/dist/…`)는 저장소가 모노레포로
+ * 재구성되며 dist가 `packages/pretendard/dist/`로 이동해 404가 난다.
+ */
 export const PRETENDARD_CDN_URL =
-  "https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/woff2/PretendardVariable.woff2";
+  "https://cdn.jsdelivr.net/npm/pretendard@1.3.9/dist/web/variable/woff2/PretendardVariable.woff2";
 
 /** styles.css에도 동일 내용이 있다 — 여기서는 JS에서 동적으로 주입해야 할 때를 위한 문자열 export. */
 export const fontFaceCss = `

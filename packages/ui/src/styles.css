@@ -6,7 +6,8 @@
   font-weight: 45 920;
   font-style: normal;
   font-display: swap;
-  src: url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/woff2/PretendardVariable.woff2")
+  /* jsDelivr npm 엔드포인트(배포 tarball 미러) — /gh/ 경로는 저장소 모노레포화로 dist 위치가 바뀌어 404. */
+  src: url("https://cdn.jsdelivr.net/npm/pretendard@1.3.9/dist/web/variable/woff2/PretendardVariable.woff2")
     format("woff2-variations");
 }
 
