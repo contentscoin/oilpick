@@ -56,6 +56,16 @@ export interface AdminOrderRow {
  * 닿을 수 없다(RLS/뷰 변경 없음). 경계는 브라우저 로컬 자정 기준 — 목록의 toLocaleString
  * 표시와 같은 타임존으로 맞춘다(created_at은 timestamptz).
  */
+/** 06 E10-① 시작 경계: 시작일 로컬 자정(포함). 목록 toLocaleString 표시와 동일 타임존 기준. */
+export function dateFromBoundaryIso(dateFrom: string): string {
+  return new Date(`${dateFrom}T00:00:00`).toISOString();
+}
+
+/** 06 E10-① 종료 경계(배타 상한): 종료일 "다음날" 로컬 자정 — .lt와 짝지어 종료일 전체를 포함시킨다. */
+export function dateToExclusiveBoundaryIso(dateTo: string): string {
+  return new Date(new Date(`${dateTo}T00:00:00`).getTime() + 24 * 60 * 60 * 1000).toISOString();
+}
+
 export function useAdminOrders(statusFilter: string, dateFrom = "", dateTo = "") {
   const queryClient = useQueryClient();
 
@@ -74,10 +84,10 @@ export function useAdminOrders(statusFilter: string, dateFrom = "", dateTo = "")
       }
       // 시작일 로컬 자정 이상 ~ 종료일 다음날 로컬 자정 미만(종료일 포함).
       if (dateFrom) {
-        q = q.gte("created_at", new Date(`${dateFrom}T00:00:00`).toISOString());
+        q = q.gte("created_at", dateFromBoundaryIso(dateFrom));
       }
       if (dateTo) {
-        q = q.lt("created_at", new Date(new Date(`${dateTo}T00:00:00`).getTime() + 24 * 60 * 60 * 1000).toISOString());
+        q = q.lt("created_at", dateToExclusiveBoundaryIso(dateTo));
       }
       const [{ data, error }, { supplierNames, riderNames }] = await Promise.all([q, fetchNameMaps()]);
       if (error) throw error;

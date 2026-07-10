@@ -33,4 +33,6 @@ export const queryKeys = {
   couponBalance: (riderId: string) => ["couponBalance", riderId] as const,
   couponLedger: (riderId: string) => ["couponLedger", riderId] as const,
   pendingPurchases: (riderId: string) => ["couponPurchases", "pending", riderId] as const,
+  // 06 E9 운행 히스토리 — "orders" 프리픽스로 주문 Realtime invalidate 대상에 포함.
+  runHistory: (riderId: string, page: number) => ["orders", "runHistory", riderId, page] as const,
 };
