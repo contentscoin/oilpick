@@ -60,7 +60,7 @@ supabase secrets set KOEM_API_KEY="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
 ### 1-1. 프로덕션 초기 데이터(수동 — seed.sql은 로컬 전용)
-프로덕션 DB에는 admin·집하장·시세 tick이 없다. 대시보드 SQL Editor 또는 psql로 최소 1회 생성:
+프로덕션 DB에는 admin·집하장·시세 tick·쿠폰 단가가 없다. 대시보드 SQL Editor 또는 psql로 최소 1회 생성:
 
 - **admin 계정**: 로그인은 **아이디/비밀번호**다(이메일 아님). LoginPage가 입력한 아이디를
   `<아이디>@oilpick.local`로 매핑해 GoTrue에 넘긴다. 즉 아이디 `admin`은 내부적으로 이메일
@@ -86,6 +86,11 @@ supabase secrets set KOEM_API_KEY="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
   `update auth.users set encrypted_password=crypt('<강한값>',gen_salt('bf')) where email='admin@oilpick.local';`
 - **집하장 1개 이상**: admin 웹의 집하장 관리에서 생성(또는 SQL). QR secret 자동 생성됨.
 - **초기 시세 tick**: admin 웹의 시세 관리에서 첫 매입가·수거비 설정(`price-set`).
+- **초기 쿠폰 단가**: admin 웹 시세 관리(PricePage)의 "수거쿠폰 단가" 섹션에서 첫 단가 등록
+  (`coupon-price-set`). 신모델 기본 단가는 **2,000원/장**(07-pivot-plan.md). ⚠️ **미설정 시
+  라이더 쿠폰 구매(coupon-purchase-intent)가 409 `COUPON_PRICE_NOT_SET`으로 막혀 콜 수락 전
+  구간이 전부 멈춘다** — 흰 화면 해소(Vercel env) 다음의 필수 초기 데이터. 원장·tick은 Edge
+  Function 경유라 raw SQL 대신 admin 웹 폼으로 설정한다(절대 규칙 1).
 
 ### 1-2. 인증(전화 OTP)
 로컬은 `config.toml`의 test_otp(고정 123456)를 쓴다. **프로덕션은 실제 SMS 프로바이더 필요** —
