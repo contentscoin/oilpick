@@ -13,6 +13,13 @@ export const colors = {
   accent: {
     DEFAULT: "#F5A623",
     light: "#FFF4E0",
+    /**
+     * 05-design-upgrade.md 2026-07-10 폴리시 — 밝은 배경 위 "돈" 텍스트 전용 딥앰버.
+     * #F5A623은 흰 배경 대비 ~1.9:1로 텍스트 색으로는 미달(50대 타깃 4.5:1 원칙).
+     * 앰버의 명도 축을 어두운 쪽으로 확장한 것(리브랜딩 아님 — surfaceDark와 같은 방식).
+     * 배경이 앰버(gradient.point)일 때는 기존처럼 흰 텍스트를 쓴다.
+     */
+    deep: "#B45309",
   },
   up: "#E5484D",
   down: "#3B82F6",

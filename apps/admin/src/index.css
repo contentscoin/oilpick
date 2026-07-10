@@ -1,3 +1,23 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  body {
+    /* 한국어 줄바꿈: 어절 중간에서 꺾이지 않게(packages/ui styles.css와 동일 규칙). */
+    word-break: keep-all;
+    overflow-wrap: break-word;
+  }
+
+  /* 키보드 포커스 링(05 admin 고도화 후속): 입력이 outline-none으로 UA 기본 링을 지운 곳이 많아
+     키보드 사용자의 현재 위치가 보이지 않았다. 마우스 클릭에는 나타나지 않는 :focus-visible로
+     브랜드 그린 링을 전역 제공한다(.oilpick-input 포커스 링과 같은 시각 언어).
+     box-shadow가 아니라 outline을 쓰는 이유: ① shadow-* 유틸리티(utilities 레이어)가 base의
+     box-shadow를 덮어써 링이 사라진다 ② Windows 고대비(forced-colors)에서 box-shadow는 제거되지만
+     outline은 시스템 색으로 유지된다 ③ outline은 요소의 border-radius를 그대로 따라가
+     모양을 강제로 바꾸지 않는다. */
+  :focus-visible {
+    outline: 3px solid rgba(27, 122, 67, 0.45);
+    outline-offset: 1px;
+  }
+}

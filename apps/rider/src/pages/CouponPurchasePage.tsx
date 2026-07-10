@@ -570,6 +570,12 @@ function Header({ title, onBack }: { title: string; onBack: () => void }) {
         aria-label="뒤로가기"
         onClick={onBack}
         style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: 44,
+          height: 44,
+          marginLeft: -12,
           background: "none",
           border: "none",
           fontSize: 20,
@@ -593,7 +599,7 @@ function Header({ title, onBack }: { title: string; onBack: () => void }) {
       >
         {title}
       </h1>
-      <span aria-hidden style={{ width: 20 }} />
+      <span aria-hidden style={{ width: 32 }} />
     </div>
   );
 }

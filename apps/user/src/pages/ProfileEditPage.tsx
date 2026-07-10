@@ -145,7 +145,7 @@ export function ProfileEditPage() {
           data-testid="profile-edit-back"
           aria-label="뒤로가기"
           onClick={() => navigate("/my")}
-          style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", padding: 0, color: gray[900], lineHeight: 1 }}
+          style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 44, height: 44, marginLeft: -12, background: "none", border: "none", fontSize: 20, cursor: "pointer", padding: 0, color: gray[900], lineHeight: 1 }}
         >
           &lt;
         </button>

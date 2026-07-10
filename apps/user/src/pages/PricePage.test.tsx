@@ -48,6 +48,9 @@ describe("PricePage", () => {
     renderPage();
     expect(screen.getByTestId("price-chart-skeleton")).toBeInTheDocument();
     expect(screen.queryByTestId("price-chart")).not.toBeInTheDocument();
+    // 최근 이력 목록도 빈 문구 대신 스켈레톤 행을 보여준다(로딩 플래시 제거).
+    expect(screen.getByTestId("price-history-skeleton")).toBeInTheDocument();
+    expect(screen.queryByText("선택한 기간에 등록된 시세가 없어요.")).not.toBeInTheDocument();
   });
 
   it("switches range tabs (7/30/90)", () => {

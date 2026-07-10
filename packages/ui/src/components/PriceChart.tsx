@@ -130,11 +130,11 @@ export function PriceChart({
       data-testid="price-chart"
       viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
       width="100%"
-      height="auto"
       preserveAspectRatio="xMidYMid meet"
       role="img"
       aria-label={ariaLabel ?? autoLabel}
-      style={{ display: "block", touchAction: "pan-y" }}
+      /* SVG 속성 height는 길이만 허용("auto"는 콘솔 에러) — 비율 유지는 CSS height:auto로. */
+      style={{ display: "block", height: "auto", touchAction: "pan-y" }}
       onPointerDown={handleScrub}
       onPointerMove={handleScrub}
       onPointerUp={clearScrub}

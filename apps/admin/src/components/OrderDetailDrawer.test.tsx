@@ -78,6 +78,22 @@ describe("쿠폰/현금 표기 (07 F10-⑤)", () => {
   });
 });
 
+describe("모달/드로어 a11y", () => {
+  it("role=dialog·aria-modal을 노출하고 Escape 키로 닫힌다", () => {
+    const onClose = vi.fn();
+    render(
+      <OrderDetailDrawer order={makeOrder()} events={NO_EVENTS} isLoading={false} onClose={onClose} onMutated={vi.fn()} />,
+    );
+    const drawer = screen.getByTestId("order-drawer");
+    expect(drawer).toHaveAttribute("role", "dialog");
+    expect(drawer).toHaveAttribute("aria-modal", "true");
+    expect(drawer).toHaveAttribute("aria-label", "주문 상세");
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("admin 취소 — 귀책(fault) 선택 (D4)", () => {
   it("ACCEPTED 주문에 fault 3종 라디오와 설명 문구를 노출한다", () => {
     renderDrawer(makeOrder({ status: "ACCEPTED", measuredKg: null, disputeReason: null }));

@@ -36,7 +36,8 @@ export function CallAlertListener() {
         }}
         style={{
           position: "fixed",
-          top: 12,
+          /* 노치/상태바 아래에서 시작하도록 상단 safe-area 반영. */
+          top: "calc(12px + env(safe-area-inset-top, 0px))",
           left: 12,
           right: 12,
           zIndex: 950,

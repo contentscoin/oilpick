@@ -101,9 +101,16 @@ export function HomePage() {
   const [days, setDays] = useState<PriceTicksSinceDays>(30);
   const [scrub, setScrub] = useState<PriceChartPoint | null>(null);
 
-  const { data: ticks, isLoading: priceLoading } = usePriceTicksSince(days);
+  const {
+    data: ticks,
+    isLoading: priceLoading,
+    isError: priceError,
+    refetch: refetchPrice,
+  } = usePriceTicksSince(days);
+  // 초기 로드 실패만 에러 UI로 — 백그라운드 refetch 실패는 캐시된 화면을 유지한다.
+  const priceLoadFailed = priceError && ticks === undefined;
   const { data: activeOrder } = useActiveOrder(userId);
-  const { data: history } = useOrderHistory(userId, 0);
+  const { data: history, isLoading: historyLoading } = useOrderHistory(userId, 0);
   const { data: monthly } = useMonthlyCashReceipt(userId);
   // 06 E7: 미읽음 카운트 — 주문상세 헤더와 공용 훅(리스트 기반 인라인 계산의 공통 추출).
   const unread = useUnreadCount(userId);
@@ -150,8 +157,8 @@ export function HomePage() {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                width: 40,
-                height: 40,
+                width: 44,
+                height: 44,
                 border: "none",
                 background: "none",
                 color: gray[600],
@@ -165,8 +172,8 @@ export function HomePage() {
                   data-testid="notifications-unread-dot"
                   style={{
                     position: "absolute",
-                    top: 7,
-                    right: 8,
+                    top: 9,
+                    right: 10,
                     minWidth: 8,
                     height: 8,
                     borderRadius: radius.pill,
@@ -240,6 +247,34 @@ export function HomePage() {
               data-testid="price-hero-skeleton"
               style={{ height: 200, borderRadius: radius.card, backgroundColor: surfaceDark.skeleton }}
             />
+          ) : priceLoadFailed ? (
+            // 쿼리 실패를 "아직 등록된 시세가 없어요"로 위장하지 않는다 — 에러 분기가 빈 상태보다 먼저다.
+            <div
+              data-testid="query-error"
+              style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 12, margin: "8px 0 4px" }}
+            >
+              <p style={{ margin: 0, fontSize: typeScale.body, color: surfaceDark.textOnDarkMuted }}>
+                시세를 불러오지 못했어요.
+              </p>
+              <button
+                type="button"
+                data-testid="query-error-retry"
+                onClick={() => refetchPrice()}
+                style={{
+                  minHeight: 44,
+                  padding: "0 20px",
+                  borderRadius: radius.pill,
+                  border: "none",
+                  backgroundColor: surfaceDark.pill,
+                  color: surfaceDark.textOnDark,
+                  fontSize: 14,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                다시 시도
+              </button>
+            </div>
           ) : latestClose === 0 && daily.length === 0 ? (
             <p data-testid="price-hero-nodata" style={{ margin: "8px 0 4px", fontSize: typeScale.body, color: surfaceDark.textOnDarkMuted }}>
               아직 등록된 시세가 없어요.
@@ -390,7 +425,13 @@ export function HomePage() {
               전체 보기
             </button>
           </div>
-          {recentOrders.length === 0 ? (
+          {historyLoading ? (
+            // 로딩 중 "없어요" 빈 문구가 먼저 떴다가 데이터로 교체되는 플래시 방지 스켈레톤.
+            <div data-testid="recent-orders-skeleton" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ height: 64, borderRadius: radius.card, backgroundColor: gray[100] }} />
+              <div style={{ height: 64, borderRadius: radius.card, backgroundColor: gray[100] }} />
+            </div>
+          ) : recentOrders.length === 0 ? (
             <p style={{ margin: 0, fontSize: typeScale.label, color: colors.status.wait }}>아직 수거 이력이 없어요.</p>
           ) : (
             <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>

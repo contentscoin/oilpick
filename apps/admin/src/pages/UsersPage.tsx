@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useAdminRiders, useAdminSuppliers, useCouponBalances } from "../hooks/useUsersAdmin";
 import { RiderVerifyCard } from "../components/RiderVerifyCard";
 import { RiderCouponPanel } from "../components/RiderCouponPanel";
+import { QueryError } from "../components/QueryError";
 
 type Tab = "supplier" | "rider";
 
@@ -71,7 +72,9 @@ export function UsersPage() {
 }
 
 function SupplierTable() {
-  const { data: suppliers, isLoading } = useAdminSuppliers();
+  const { data: suppliers, isLoading, isError, refetch } = useAdminSuppliers();
+  // 초기 로드 실패만 에러 UI로 — 백그라운드 refetch 실패는 캐시된 화면을 유지한다(TanStack v5는 error에도 data 보존).
+  const loadFailed = isError && suppliers === undefined;
   return (
     <div className="overflow-x-auto rounded-card bg-white shadow-card">
       <table className="w-full whitespace-nowrap text-left text-sm" data-testid="suppliers-table">
@@ -86,9 +89,11 @@ function SupplierTable() {
           </tr>
         </thead>
         <tbody>
-          {isLoading ? (
+          {loadFailed ? (
+            <QueryError colSpan={6} onRetry={refetch} message="공급업체 목록을 불러오지 못했어요" />
+          ) : isLoading ? (
             <tr>
-              <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
+              <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
                 불러오는 중...
               </td>
             </tr>
@@ -105,7 +110,7 @@ function SupplierTable() {
             ))
           ) : (
             <tr>
-              <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
+              <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
                 등록된 공급업체가 없어요.
               </td>
             </tr>
@@ -117,13 +122,23 @@ function SupplierTable() {
 }
 
 function RiderList({ statusFilter }: { statusFilter: "PENDING" | "ALL" }) {
-  const { data: riders, isLoading, refetch } = useAdminRiders(statusFilter);
+  const { data: riders, isLoading, isError, refetch } = useAdminRiders(statusFilter);
+  // 초기 로드 실패만 에러 UI로 — 백그라운드 refetch 실패는 캐시된 화면을 유지한다(TanStack v5는 error에도 data 보존).
+  const loadFailed = isError && riders === undefined;
   const { data: balances, refetch: refetchBalances } = useCouponBalances();
 
-  if (isLoading) return <p className="text-sm text-gray-400">불러오는 중...</p>;
+  // 빈 상태 분기보다 먼저 — 쿼리 실패가 "0건"으로 위장되지 않게 한다.
+  if (loadFailed) {
+    return (
+      <div className="rounded-card bg-white p-4 shadow-card">
+        <QueryError onRetry={refetch} message="라이더 목록을 불러오지 못했어요" />
+      </div>
+    );
+  }
+  if (isLoading) return <p className="text-sm text-gray-500">불러오는 중...</p>;
   if (!riders || riders.length === 0) {
     return (
-      <div className="rounded-card bg-white p-8 text-center text-sm text-gray-400 shadow-card">
+      <div className="rounded-card bg-white p-8 text-center text-sm text-gray-500 shadow-card">
         해당 조건의 라이더가 없어요.
       </div>
     );

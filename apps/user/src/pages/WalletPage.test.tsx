@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { WalletPage } from "./WalletPage";
@@ -58,5 +58,16 @@ describe("WalletPage (수령 이력)", () => {
     renderPage();
     expect(screen.queryByTestId("receipts-list")).not.toBeInTheDocument();
     expect(screen.getByText("아직 수령 내역이 없어요")).toBeInTheDocument();
+  });
+
+  it("shows an error state (not the empty state) with a retry button when the receipts query fails", () => {
+    const refetch = vi.fn();
+    mockUseCashReceipts.mockReturnValue({ data: undefined, isLoading: false, isError: true, refetch });
+    renderPage();
+    const error = screen.getByTestId("query-error");
+    expect(error).toHaveTextContent("불러오지 못했어요");
+    expect(screen.queryByText("아직 수령 내역이 없어요")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("query-error-retry"));
+    expect(refetch).toHaveBeenCalled();
   });
 });

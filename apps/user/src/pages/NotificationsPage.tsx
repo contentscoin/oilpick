@@ -14,7 +14,9 @@ export function NotificationsPage() {
   const { session } = useSession();
   const userId = session?.user.id;
 
-  const { data: notifications, isLoading } = useNotifications(userId);
+  const { data: notifications, isLoading, isError, refetch } = useNotifications(userId);
+  // 초기 로드 실패만 에러 UI로 — 백그라운드 refetch 실패는 캐시된 화면을 유지한다(TanStack v5는 error에도 data 보존).
+  const loadFailed = isError && notifications === undefined;
   const markRead = useMarkNotificationRead(userId);
 
   async function handleClick(notification: NonNullable<typeof notifications>[number]) {
@@ -30,6 +32,33 @@ export function NotificationsPage() {
 
         {isLoading ? (
           <div data-testid="notifications-skeleton" style={{ borderRadius: 16, height: 200, backgroundColor: gray[100] }} />
+        ) : loadFailed ? (
+          // 쿼리 실패는 빈 상태로 위장하지 않는다 — 에러 분기가 빈 상태 분기보다 먼저다.
+          <div data-testid="query-error">
+            <EmptyState
+              title="불러오지 못했어요"
+              description="네트워크 상태를 확인한 뒤 다시 시도해주세요."
+              action={
+                <button
+                  type="button"
+                  data-testid="query-error-retry"
+                  onClick={() => refetch()}
+                  style={{
+                    minHeight: 44,
+                    padding: "0 20px",
+                    borderRadius: radius.button,
+                    border: `1px solid ${surface.border}`,
+                    backgroundColor: surface.card,
+                    fontSize: 14,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  다시 시도
+                </button>
+              }
+            />
+          </div>
         ) : notifications && notifications.length > 0 ? (
           <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
             {notifications.map((n) => (

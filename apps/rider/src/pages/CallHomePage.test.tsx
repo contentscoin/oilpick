@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { ToastProvider } from "@oilpick/ui";
+import { ToastProvider, colors } from "@oilpick/ui";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CallHomePage } from "./CallHomePage";
 
@@ -91,6 +91,40 @@ describe("CallHomePage — 오늘 실적(07 F6-⑥)", () => {
     expect(screen.getByTestId("today-coupons")).toHaveTextContent("오늘 소진 쿠폰 3장");
     // 구모델 포인트 표기 없음.
     expect(screen.queryByText("오늘 확정 포인트")).not.toBeInTheDocument();
+  });
+
+  it("지급 현금 값은 밝은 배경 위 딥앰버(accent.deep)로 렌더한다(05 대비 폴리시)", () => {
+    renderHome();
+    expect(screen.getByTestId("today-cash")).toHaveStyle({ color: colors.accent.deep });
+  });
+});
+
+describe("CallHomePage — 로딩 스켈레톤(잔액/실적 0 플래시 제거)", () => {
+  it("쿠폰 잔액 로딩 중에는 히어로 대신 스켈레톤을 렌더한다", () => {
+    mockUseCouponBalance.mockReturnValue({ data: undefined, isLoading: true });
+    renderHome();
+    expect(screen.getByTestId("coupon-balance-skeleton")).toBeInTheDocument();
+    expect(screen.queryByTestId("point-balance-card")).not.toBeInTheDocument();
+  });
+
+  it("오늘 실적 로딩 중에는 2카드 대신 스켈레톤을 렌더한다", () => {
+    mockUseTodayStats.mockReturnValue({ data: undefined, isLoading: true });
+    renderHome();
+    expect(screen.getByTestId("today-stats-skeleton")).toBeInTheDocument();
+    expect(screen.queryByTestId("today-cash")).not.toBeInTheDocument();
+  });
+});
+
+describe("CallHomePage — 콜 리스트 쿼리 에러", () => {
+  it("실패 시 '지금은 콜이 없어요' 대신 에러 상태 + 재시도 버튼을 렌더한다", () => {
+    const refetch = vi.fn();
+    mockUseOpenCalls.mockReturnValue({ data: undefined, isLoading: false, isError: true, refetch });
+    renderHome();
+    const error = screen.getByTestId("query-error");
+    expect(error).toHaveTextContent("불러오지 못했어요");
+    expect(screen.queryByText("지금은 콜이 없어요")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("query-error-retry"));
+    expect(refetch).toHaveBeenCalled();
   });
 });
 

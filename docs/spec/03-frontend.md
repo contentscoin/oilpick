@@ -74,7 +74,7 @@ spacing: 4px 그리드. 터치 타깃 최소 48px. radius: 카드 16px, 버튼 1
 > - **U3 홈(`/`)** [F8]: 다크 일별 시세 히어로가 주인공(라벨 "오늘 매입가" + 현재가 40px + PriceChart 민트 라인 + 기간 토글). QtyStepper·예상포인트 섹션 제거(→요청 step1로 일원화). 진행중 주문 카드 / 현금 수령 요약(cash_paid_amount 합·completed_at 기준) / 최근 수거 이력 + 하단 fixed "수거 요청하기".
 > - **U4 시세 상세(`/price`)** [F7·F8]: recharts 폐기 → 홈 히어로와 동일 PriceChart+resampleDaily(종가+캐리포워드)+기간 토글 체계. 이력 테이블 유지.
 > - **U5 요청(`/request`)** [F9]: 3스텝 유지 + sticky 예상 **현금** 수령액 푸터 / 최근 주소 칩 / 통 크기 프리셋 / 희망시간 퀵칩 / 제출 성공 ConfirmSheet. "예상 포인트"→"예상 현금 수령액" 전수 전환.
-> - **U7 주문상세(`/orders/:id`)** [F9]: CONFIRM 버튼 카피 **"무게 OO.Okg 확인 · 현금 ₩N 받았습니다"**(2자 확인=현금 수령 증빙). COMPLETED 히어로 포인트→현금 수령액. OrderTimeline PICKED_UP 스텝 미표시(레거시 조건부).
+> - **U7 주문상세(`/orders/:id`)** [F9]: CONFIRM 버튼 카피 **"무게 OO.Okg 확인 · 현금 ₩N 받았어요"**(2자 확인=현금 수령 증빙, 해요체 — 05 2026-07-10 폴리시). COMPLETED 히어로 포인트→현금 수령액. OrderTimeline PICKED_UP 스텝 미표시(레거시 조건부).
 > - **지갑/출금(`/wallet`, `/wallet/withdraw`)** [F8/F13]: PointBalanceCard·출금 UI 제거 → **"수령 이력"**(주문별 현금 수령 리스트)으로 대체 예정. 탭바 "포인트"→"수령액" 개명.
 
 Realtime: `pickup_orders` 자기 행 UPDATE 구독으로 상태 자동 갱신 (폴링 금지).

@@ -6,6 +6,7 @@ import {
   colors,
   elevation,
   gradient,
+  gray,
   radius,
   surface,
   surfaceDark,
@@ -67,7 +68,7 @@ export function PricePage() {
           data-testid="price-page-back"
           onClick={() => navigate(-1)}
           aria-label="뒤로가기"
-          style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", padding: 0 }}
+          style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 44, height: 44, marginLeft: -12, background: "none", border: "none", fontSize: 20, cursor: "pointer", padding: 0 }}
         >
           &lt;
         </button>
@@ -174,7 +175,14 @@ export function PricePage() {
 
       <section>
         <h2 style={{ fontSize: typeScale.body, margin: "0 0 12px" }}>최근 이력</h2>
-        {historyDesc.length === 0 ? (
+        {isLoading ? (
+          // 로딩 중 "없어요" 빈 문구가 먼저 떴다가 데이터로 교체되는 플래시 방지 스켈레톤 행.
+          <div data-testid="price-history-skeleton" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ height: 40, borderRadius: radius.card, backgroundColor: gray[100] }} />
+            <div style={{ height: 40, borderRadius: radius.card, backgroundColor: gray[100] }} />
+            <div style={{ height: 40, borderRadius: radius.card, backgroundColor: gray[100] }} />
+          </div>
+        ) : historyDesc.length === 0 ? (
           <p style={{ margin: 0, fontSize: typeScale.label, color: colors.status.wait }}>선택한 기간에 등록된 시세가 없어요.</p>
         ) : (
           <div style={{ overflowX: "auto" }}>

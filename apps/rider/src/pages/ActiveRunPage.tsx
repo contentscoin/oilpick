@@ -459,9 +459,10 @@ function ArrivedPanel({
             }}
           >
             <span style={{ fontSize: 13, fontWeight: 600, color: colors.status.wait }}>점주에게 지급할 현금</span>
+            {/* 05 폴리시: 밝은 배경(accent.light) 위 앰버 "텍스트"는 accent.deep(대비 4.5:1). */}
             <span
               className="oilpick-tabular-nums"
-              style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-0.01em", color: colors.accent.DEFAULT }}
+              style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-0.01em", color: colors.accent.deep }}
             >
               {formatKrw(cashPayout)}
             </span>

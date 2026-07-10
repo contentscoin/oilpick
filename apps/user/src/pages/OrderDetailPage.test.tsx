@@ -175,7 +175,8 @@ describe("OrderDetailPage", () => {
     // 14.5kg * 700원/kg = 10,150원
     expect(screen.getByTestId("measure-cash-amount")).toHaveTextContent("10,150원");
     // 07 F9-⑥: CONFIRM 버튼 = 무게+현금 2자 확인 카피.
-    expect(screen.getByTestId("confirm-measure-button")).toHaveTextContent("무게 14.5kg 확인 · 현금 10,150원 받았습니다");
+    // 05 폴리시: UI 카피는 해요체 — "받았습니다" → "받았어요".
+    expect(screen.getByTestId("confirm-measure-button")).toHaveTextContent("무게 14.5kg 확인 · 현금 10,150원 받았어요");
     expect(screen.getByTestId("open-dispute-form")).toBeInTheDocument();
     // 일반 계량(중재 전)은 중재 안내가 없다.
     expect(screen.queryByTestId("arbitration-notice")).not.toBeInTheDocument();
@@ -193,7 +194,8 @@ describe("OrderDetailPage", () => {
     expect(screen.getByTestId("arbitration-notice")).toHaveTextContent("중재 확정 무게 13.0kg");
     expect(screen.getByTestId("measured-kg-value")).toHaveTextContent("13.0kg");
     expect(screen.getByTestId("measure-cash-amount")).toHaveTextContent("9,100원");
-    expect(screen.getByTestId("confirm-measure-button")).toHaveTextContent("무게 13.0kg 확인 · 현금 9,100원 받았습니다");
+    // 05 폴리시: UI 카피는 해요체 — "받았습니다" → "받았어요".
+    expect(screen.getByTestId("confirm-measure-button")).toHaveTextContent("무게 13.0kg 확인 · 현금 9,100원 받았어요");
     // 중재 완료 후에는 재이의신청 불가.
     expect(screen.queryByTestId("open-dispute-form")).not.toBeInTheDocument();
   });

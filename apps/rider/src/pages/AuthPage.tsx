@@ -265,6 +265,7 @@ export function AuthPage() {
               id="biz-number-input"
               data-testid="biz-number-input"
               type="text"
+              inputMode="numeric"
               required
               placeholder="000-00-00000"
               value={bizNumber}
@@ -317,7 +318,8 @@ export function AuthPage() {
             <input
               id="recycler-contact-input"
               data-testid="recycler-contact-input"
-              type="text"
+              type="tel"
+              inputMode="tel"
               required
               placeholder="담당자 전화 또는 사업장 연락처"
               value={recyclerContact}

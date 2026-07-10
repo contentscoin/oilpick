@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { colors, elevation, surface } from "@oilpick/ui";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -69,5 +69,16 @@ describe("NotificationsPage — 알림함(06 E12 미읽음 바)", () => {
     mockUseNotifications.mockReturnValue({ data: [], isLoading: false });
     renderPage();
     expect(screen.getByTestId("empty-state")).toBeInTheDocument();
+  });
+
+  it("쿼리 실패 시 빈 상태 대신 에러 상태 + 재시도 버튼을 렌더한다", () => {
+    const refetch = vi.fn();
+    mockUseNotifications.mockReturnValue({ data: undefined, isLoading: false, isError: true, refetch });
+    renderPage();
+    const error = screen.getByTestId("query-error");
+    expect(error).toHaveTextContent("불러오지 못했어요");
+    expect(screen.queryByText("아직 알림이 없어요")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("query-error-retry"));
+    expect(refetch).toHaveBeenCalled();
   });
 });

@@ -268,6 +268,7 @@ export function AuthPage() {
               id="biz-number-input"
               data-testid="biz-number-input"
               type="text"
+              inputMode="numeric"
               required
               placeholder="000-00-00000"
               value={bizNumber}

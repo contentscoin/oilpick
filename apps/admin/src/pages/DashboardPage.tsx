@@ -1,7 +1,9 @@
 import { MapView, type MapMarker } from "@oilpick/ui";
-import { ORDER_STATUS_LABEL, formatKrw } from "@oilpick/core";
+import { ORDER_STATUS_LABEL, formatKrw, type OrderStatus } from "@oilpick/core";
 import { KAKAO_KEY } from "../lib/env";
 import { useDashboardKpi, useDashboardOrders, useDashboardRiders } from "../hooks/useDashboard";
+import { OrderStatusPill } from "../components/OrderStatusPill";
+import { QueryError } from "../components/QueryError";
 
 const SEOUL_CENTER = { lat: 37.5509, lng: 126.8225 }; // 집하장 인근(seed.sql) 기본 중심.
 
@@ -9,7 +11,7 @@ function KpiCard({ label, value, accent = false }: { label: string; value: strin
   return (
     <div className="rounded-card bg-white p-5 shadow-card">
       <p className="text-sm text-gray-500">{label}</p>
-      <p className={`mt-1 text-3xl font-bold tabular-nums ${accent ? "text-accent" : "text-gray-900"}`}>{value}</p>
+      <p className={`mt-1 text-3xl font-bold tabular-nums ${accent ? "text-accent-deep" : "text-gray-900"}`}>{value}</p>
     </div>
   );
 }
@@ -23,9 +25,25 @@ function KpiCard({ label, value, accent = false }: { label: string; value: strin
  * 있도록 리스트를 항상 병행 표시한다.
  */
 export function DashboardPage() {
-  const { data: orders, isLoading: ordersLoading } = useDashboardOrders();
-  const { data: riders, isLoading: ridersLoading } = useDashboardRiders();
-  const { data: kpi, isLoading: kpiLoading } = useDashboardKpi();
+  const {
+    data: orders,
+    isLoading: ordersLoading,
+    isError: ordersError,
+    refetch: refetchOrders,
+  } = useDashboardOrders();
+  const {
+    data: riders,
+    isLoading: ridersLoading,
+    isError: ridersError,
+    refetch: refetchRiders,
+  } = useDashboardRiders();
+  // 초기 로드 실패만 에러 UI로 — 15s 폴링/Realtime refetch의 일시 실패가 보이던 리스트(및 지도 핀과의
+  // 일관성)를 지우지 않게 한다. TanStack v5는 error 상태에서도 data를 보존한다.
+  const ordersLoadFailed = ordersError && orders === undefined;
+  const ridersLoadFailed = ridersError && riders === undefined;
+  const { data: kpi, isLoading: kpiLoading, isError: kpiError, refetch: refetchKpi } = useDashboardKpi();
+  // KPI도 동일 — 실패를 "0건/0원"으로 위장하지 않는다(운영자가 장애를 실적 0으로 오독하는 화면).
+  const kpiLoadFailed = kpiError && kpi === undefined;
 
   const orderMarkers: MapMarker[] = (orders ?? []).map((o) => ({
     lat: o.lat,
@@ -42,6 +60,11 @@ export function DashboardPage() {
       </div>
 
       {/* 07 F10-④ KPI 교체: "오늘 발행 포인트" 제거(D1), 쿠폰 판매액/소진 쿠폰/현금 거래액 추가. */}
+      {kpiLoadFailed ? (
+        <div className="rounded-card bg-white p-5 shadow-card">
+          <QueryError onRetry={refetchKpi} message="오늘 지표를 불러오지 못했어요" />
+        </div>
+      ) : (
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
         <KpiCard label="오늘 주문 수" value={kpiLoading ? "-" : `${kpi?.orderCount ?? 0}건`} />
         <KpiCard label="오늘 수거 kg" value={kpiLoading ? "-" : `${(kpi?.collectedKg ?? 0).toFixed(1)}kg`} />
@@ -52,8 +75,9 @@ export function DashboardPage() {
         />
         <KpiCard label="오늘 소진 쿠폰" value={kpiLoading ? "-" : `${kpi?.consumedCoupons ?? 0}장`} />
         <KpiCard label="활성 라이더" value={kpiLoading ? "-" : `${kpi?.activeRiderCount ?? 0}명`} />
-        <KpiCard label="오늘 현금 거래액" value={kpiLoading ? "-" : formatKrw(kpi?.cashPaidAmount ?? 0)} />
+        <KpiCard label="오늘 현금 거래액" value={kpiLoading ? "-" : formatKrw(kpi?.cashPaidAmount ?? 0)} accent />
       </div>
+      )}
 
       <div className="rounded-card bg-white p-5 shadow-card">
         <h2 className="mb-3 text-lg font-semibold text-gray-900">실시간 지도</h2>
@@ -71,8 +95,10 @@ export function DashboardPage() {
           <h2 className="mb-3 text-lg font-semibold text-gray-900">
             진행 중인 주문 ({orders?.length ?? 0}건)
           </h2>
-          {ordersLoading ? (
-            <p className="text-sm text-gray-400">불러오는 중...</p>
+          {ordersLoadFailed ? (
+            <QueryError onRetry={refetchOrders} message="진행 중인 주문을 불러오지 못했어요" />
+          ) : ordersLoading ? (
+            <p className="text-sm text-gray-500">불러오는 중...</p>
           ) : orders && orders.length > 0 ? (
             <ul className="flex flex-col gap-2" data-testid="dashboard-order-list">
               {orders.map((o) => (
@@ -84,14 +110,12 @@ export function DashboardPage() {
                     <p className="font-medium text-gray-800">{o.pickupAddress}</p>
                     <p className="text-xs text-gray-500">{o.requestedKg}kg 예상</p>
                   </div>
-                  <span className="rounded-pill bg-primary-light px-2 py-1 text-xs font-semibold text-primary">
-                    {ORDER_STATUS_LABEL[o.status as keyof typeof ORDER_STATUS_LABEL] ?? o.status}
-                  </span>
+                  <OrderStatusPill status={o.status as OrderStatus} />
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-gray-400">진행 중인 주문이 없어요.</p>
+            <p className="text-sm text-gray-500">진행 중인 주문이 없어요.</p>
           )}
         </div>
 
@@ -99,8 +123,10 @@ export function DashboardPage() {
           <h2 className="mb-3 text-lg font-semibold text-gray-900">
             온라인 라이더 ({riders?.length ?? 0}명)
           </h2>
-          {ridersLoading ? (
-            <p className="text-sm text-gray-400">불러오는 중...</p>
+          {ridersLoadFailed ? (
+            <QueryError onRetry={refetchRiders} message="온라인 라이더를 불러오지 못했어요" />
+          ) : ridersLoading ? (
+            <p className="text-sm text-gray-500">불러오는 중...</p>
           ) : riders && riders.length > 0 ? (
             <ul className="flex flex-col gap-2" data-testid="dashboard-rider-list">
               {riders.map((r) => (
@@ -110,7 +136,7 @@ export function DashboardPage() {
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-gray-400">온라인 라이더가 없어요.</p>
+            <p className="text-sm text-gray-500">온라인 라이더가 없어요.</p>
           )}
         </div>
       </div>

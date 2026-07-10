@@ -1,5 +1,6 @@
-import type { ReactNode } from "react";
-import { radius } from "../tokens";
+import { useEffect, useState, type ReactNode } from "react";
+import { motion, radius, surface } from "../tokens";
+import { usePrefersReducedMotion } from "../hooks/usePrefersReducedMotion";
 
 /** 03-frontend.md "packages/ui 컴포넌트" — BottomSheet. */
 export interface BottomSheetProps {
@@ -10,8 +11,31 @@ export interface BottomSheetProps {
   className?: string;
 }
 
+/**
+ * 05-design-upgrade.md 2026-07-10 폴리시: 시트 어포던스 — 백드롭 페이드 + 시트 슬라이드업.
+ * open 직후 한 프레임 뒤에 enter 상태로 전환해 CSS transition을 태운다(mount 시점엔
+ * translateY(100%)/opacity 0). prefers-reduced-motion이면 즉시 표시(트랜지션 생략).
+ * 닫힘은 기존 그대로 즉시 unmount — 상태 정리를 지연시키지 않는다(호출부 계약 불변).
+ */
 export function BottomSheet({ open, onClose, title, children, className }: BottomSheetProps) {
+  const reduce = usePrefersReducedMotion();
+  const [entered, setEntered] = useState(false);
+
+  useEffect(() => {
+    if (!open) {
+      setEntered(false);
+      return;
+    }
+    if (reduce) {
+      setEntered(true);
+      return;
+    }
+    const raf = requestAnimationFrame(() => setEntered(true));
+    return () => cancelAnimationFrame(raf);
+  }, [open, reduce]);
+
   if (!open) return null;
+  const shown = entered || reduce;
   return (
     <div
       data-testid="bottom-sheet-backdrop"
@@ -24,6 +48,8 @@ export function BottomSheet({ open, onClose, title, children, className }: Botto
         display: "flex",
         alignItems: "flex-end",
         zIndex: 50,
+        opacity: shown ? 1 : 0,
+        transition: reduce ? undefined : `opacity ${motion.base} ${motion.ease}`,
       }}
     >
       <div
@@ -35,12 +61,15 @@ export function BottomSheet({ open, onClose, title, children, className }: Botto
         onClick={(e) => e.stopPropagation()}
         style={{
           width: "100%",
-          backgroundColor: "#fff",
+          backgroundColor: surface.card,
           borderTopLeftRadius: radius.card,
           borderTopRightRadius: radius.card,
           padding: 20,
+          paddingBottom: "calc(20px + env(safe-area-inset-bottom, 0px))",
           maxHeight: "80vh",
           overflowY: "auto",
+          transform: shown ? "translateY(0)" : "translateY(100%)",
+          transition: reduce ? undefined : `transform ${motion.base} ${motion.ease}`,
         }}
       >
         <div

@@ -10,6 +10,7 @@ import {
 import { COUPON_ENTRY_LABEL, sumCouponSales } from "../lib/couponSales";
 import { downloadCsv, toCsv } from "../lib/csv";
 import { invokeEdgeFunction } from "../lib/edgeFunction";
+import { QueryError } from "../components/QueryError";
 import type { CouponRefundOutput } from "@oilpick/core";
 
 const PURCHASE_STATUS_LABEL: Record<string, string> = {
@@ -47,8 +48,11 @@ export function SettlementPage() {
 
 /** ⓐ 쿠폰 매출 대시 — 판매(CHARGE)와 환불(귀책 REFUND / PG 환불 ADJUST) 구분 병기(07 §1-4). */
 function CouponSalesSection() {
-  const { data: rows, isLoading } = useCouponSalesDaily(14);
-  const totals = sumCouponSales(rows ?? []);
+  const { data: rows, isLoading, isError, refetch } = useCouponSalesDaily(14);
+  // 초기 로드 실패만 에러 UI로 — 백그라운드 refetch 실패는 캐시된 화면을 유지한다(TanStack v5는 error에도 data 보존).
+  const loadFailed = isError && rows === undefined;
+  // 로딩/실패 중엔 0으로 계산해 점프하지 않도록 데이터가 있을 때만 합산한다("-" 표시).
+  const totals = rows ? sumCouponSales(rows) : null;
 
   function handleCsv() {
     const csv = toCsv(
@@ -73,33 +77,46 @@ function CouponSalesSection() {
       </div>
 
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <SummaryStat label="판매액 합계" value={formatKrw(totals.salesAmount)} accent testId="sales-total-amount" />
-        <SummaryStat label="판매 장수" value={`${totals.chargedQty.toLocaleString("ko-KR")}장`} testId="sales-total-qty" />
-        <SummaryStat label="귀책 환급" value={`${totals.refundQty.toLocaleString("ko-KR")}장`} testId="sales-total-refund" />
-        <SummaryStat label="PG 환불" value={`${totals.pgRefundQty.toLocaleString("ko-KR")}장`} testId="sales-total-pg-refund" />
+        <SummaryStat label="판매액 합계" value={totals ? formatKrw(totals.salesAmount) : "-"} accent testId="sales-total-amount" />
+        <SummaryStat label="판매 장수" value={totals ? `${totals.chargedQty.toLocaleString("ko-KR")}장` : "-"} testId="sales-total-qty" />
+        <SummaryStat label="귀책 환급" value={totals ? `${totals.refundQty.toLocaleString("ko-KR")}장` : "-"} testId="sales-total-refund" />
+        <SummaryStat label="PG 환불" value={totals ? `${totals.pgRefundQty.toLocaleString("ko-KR")}장` : "-"} testId="sales-total-pg-refund" />
       </div>
 
-      {isLoading ? (
-        <p className="text-sm text-gray-400">불러오는 중...</p>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full whitespace-nowrap text-left text-sm" data-testid="coupon-sales-table">
-            <thead>
-              <tr className="border-b border-gray-100 text-gray-500">
-                <th className="py-2 font-medium">날짜</th>
-                <th className="py-2 font-medium">판매 장수</th>
-                <th className="py-2 font-medium">판매액</th>
-                <th className="py-2 font-medium">귀책 환급</th>
-                <th className="py-2 font-medium">PG 환불</th>
-                <th className="py-2 font-medium">수동 조정</th>
+      {/* 로딩 중에도 thead를 유지해 레이아웃 시프트를 없앤다 — 로딩/에러/빈 상태는 tbody 행으로. */}
+      <div className="overflow-x-auto">
+        <table className="w-full whitespace-nowrap text-left text-sm" data-testid="coupon-sales-table">
+          <thead>
+            <tr className="border-b border-gray-100 text-gray-500">
+              <th className="py-2 font-medium">날짜</th>
+              <th className="py-2 font-medium">판매 장수</th>
+              <th className="py-2 font-medium">판매액</th>
+              <th className="py-2 font-medium">귀책 환급</th>
+              <th className="py-2 font-medium">PG 환불</th>
+              <th className="py-2 font-medium">수동 조정</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loadFailed ? (
+              <QueryError colSpan={6} onRetry={refetch} message="쿠폰 매출을 불러오지 못했어요" />
+            ) : isLoading ? (
+              <tr>
+                <td colSpan={6} className="py-6 text-center text-gray-500">
+                  불러오는 중...
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {(rows ?? []).map((r) => (
+            ) : (rows ?? []).length === 0 ? (
+              <tr>
+                <td colSpan={6} className="py-6 text-center text-gray-500">
+                  최근 14일 매출 데이터가 없어요.
+                </td>
+              </tr>
+            ) : (
+              (rows ?? []).map((r) => (
                 <tr key={r.day} className="border-b border-gray-50">
                   <td className="py-2 text-gray-700">{r.day}</td>
                   <td className="py-2 tabular-nums text-gray-800">{r.chargedQty}장</td>
-                  <td className="py-2 font-medium tabular-nums text-accent">{formatKrw(r.salesAmount)}</td>
+                  <td className="py-2 font-medium tabular-nums text-accent-deep">{formatKrw(r.salesAmount)}</td>
                   <td className="py-2 tabular-nums text-gray-700">{r.refundQty}장</td>
                   <td className="py-2 tabular-nums text-gray-700">{r.pgRefundQty}장</td>
                   <td className="py-2 tabular-nums text-gray-500">
@@ -107,70 +124,72 @@ function CouponSalesSection() {
                     {r.manualAdjustQty}장
                   </td>
                 </tr>
-              ))}
-              {(rows ?? []).length === 0 && (
-                <tr>
-                  <td colSpan={6} className="py-6 text-center text-gray-400">
-                    최근 14일 매출 데이터가 없어요.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }
 
 /** ⓑ 수거 활동 추이 — 일별 완료 건수/kg/현금 거래액(completed_at 기준). 매출과 상관 확인용. */
 function PickupStatsSection() {
-  const { data: rows, isLoading } = usePickupStatsDaily(14);
+  const { data: rows, isLoading, isError, refetch } = usePickupStatsDaily(14);
+  // 초기 로드 실패만 에러 UI로 — 백그라운드 refetch 실패는 캐시된 화면을 유지한다(TanStack v5는 error에도 data 보존).
+  const loadFailed = isError && rows === undefined;
 
   return (
     <section className="rounded-card bg-white p-6 shadow-card">
       <h2 className="mb-1 text-lg font-semibold text-gray-900">수거 활동 추이 (최근 14일)</h2>
-      <p className="mb-4 text-xs text-gray-400">쿠폰 매출과의 상관을 확인해요 — 수거가 늘면 쿠폰 소진·재구매가 따라와요.</p>
-      {isLoading ? (
-        <p className="text-sm text-gray-400">불러오는 중...</p>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full whitespace-nowrap text-left text-sm" data-testid="pickup-stats-table">
-            <thead>
-              <tr className="border-b border-gray-100 text-gray-500">
-                <th className="py-2 font-medium">날짜</th>
-                <th className="py-2 font-medium">완료 건수</th>
-                <th className="py-2 font-medium">수거 kg</th>
-                <th className="py-2 font-medium">현금 거래액</th>
+      <p className="mb-4 text-xs text-gray-500">쿠폰 매출과의 상관을 확인해요 — 수거가 늘면 쿠폰 소진·재구매가 따라와요.</p>
+      <div className="overflow-x-auto">
+        <table className="w-full whitespace-nowrap text-left text-sm" data-testid="pickup-stats-table">
+          <thead>
+            <tr className="border-b border-gray-100 text-gray-500">
+              <th className="py-2 font-medium">날짜</th>
+              <th className="py-2 font-medium">완료 건수</th>
+              <th className="py-2 font-medium">수거 kg</th>
+              <th className="py-2 font-medium">현금 거래액</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loadFailed ? (
+              <QueryError colSpan={4} onRetry={refetch} message="수거 활동 추이를 불러오지 못했어요" />
+            ) : isLoading ? (
+              <tr>
+                <td colSpan={4} className="py-6 text-center text-gray-500">
+                  불러오는 중...
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {(rows ?? []).map((r) => (
+            ) : (rows ?? []).length === 0 ? (
+              <tr>
+                <td colSpan={4} className="py-6 text-center text-gray-500">
+                  최근 14일 수거 완료 데이터가 없어요.
+                </td>
+              </tr>
+            ) : (
+              (rows ?? []).map((r) => (
                 <tr key={r.day} className="border-b border-gray-50">
                   <td className="py-2 text-gray-700">{r.day}</td>
                   <td className="py-2 tabular-nums text-gray-800">{r.completedCount}건</td>
                   <td className="py-2 tabular-nums text-gray-800">{formatKg(r.totalKg)}</td>
-                  <td className="py-2 font-medium tabular-nums text-primary">{formatKrw(r.totalCash)}</td>
+                  <td className="py-2 font-medium tabular-nums text-accent-deep">{formatKrw(r.totalCash)}</td>
                 </tr>
-              ))}
-              {(rows ?? []).length === 0 && (
-                <tr>
-                  <td colSpan={4} className="py-6 text-center text-gray-400">
-                    최근 14일 수거 완료 데이터가 없어요.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }
 
 /** ⓒ 쿠폰 원장 감사 — coupon_ledger 최근 100건(append-only, entry_type 라벨). */
 function CouponLedgerSection() {
-  const { data: ledger, isLoading } = useCouponLedgerAudit(100);
+  const { data: ledger, isLoading, isError, refetch } = useCouponLedgerAudit(100);
+  // 초기 로드 실패만 에러 UI로 — 백그라운드 refetch 실패는 캐시된 화면을 유지한다(TanStack v5는 error에도 data 보존).
+  const loadFailed = isError && ledger === undefined;
 
   function handleCsv() {
     const csv = toCsv(
@@ -202,22 +221,34 @@ function CouponLedgerSection() {
           CSV
         </button>
       </div>
-      {isLoading ? (
-        <p className="text-sm text-gray-400">불러오는 중...</p>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full whitespace-nowrap text-left text-sm" data-testid="coupon-ledger-audit-table">
-            <thead>
-              <tr className="border-b border-gray-100 text-gray-500">
-                <th className="py-2 font-medium">일시</th>
-                <th className="py-2 font-medium">라이더</th>
-                <th className="py-2 font-medium">유형</th>
-                <th className="py-2 font-medium">수량</th>
-                <th className="py-2 font-medium">메모</th>
+      <div className="overflow-x-auto">
+        <table className="w-full whitespace-nowrap text-left text-sm" data-testid="coupon-ledger-audit-table">
+          <thead>
+            <tr className="border-b border-gray-100 text-gray-500">
+              <th className="py-2 font-medium">일시</th>
+              <th className="py-2 font-medium">라이더</th>
+              <th className="py-2 font-medium">유형</th>
+              <th className="py-2 font-medium">수량</th>
+              <th className="py-2 font-medium">메모</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loadFailed ? (
+              <QueryError colSpan={5} onRetry={refetch} message="쿠폰 원장을 불러오지 못했어요" />
+            ) : isLoading ? (
+              <tr>
+                <td colSpan={5} className="py-6 text-center text-gray-500">
+                  불러오는 중...
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {(ledger ?? []).map((row) => (
+            ) : (ledger ?? []).length === 0 ? (
+              <tr>
+                <td colSpan={5} className="py-6 text-center text-gray-500">
+                  쿠폰 원장 기록이 없어요.
+                </td>
+              </tr>
+            ) : (
+              (ledger ?? []).map((row) => (
                 <tr key={row.id} className="border-b border-gray-50">
                   <td className="py-2 text-gray-500">{new Date(row.createdAt).toLocaleString("ko-KR")}</td>
                   <td className="py-2 text-gray-800">{row.riderName}</td>
@@ -235,18 +266,11 @@ function CouponLedgerSection() {
                   </td>
                   <td className="py-2 text-gray-500">{row.memo ?? "-"}</td>
                 </tr>
-              ))}
-              {(ledger ?? []).length === 0 && (
-                <tr>
-                  <td colSpan={5} className="py-6 text-center text-gray-400">
-                    쿠폰 원장 기록이 없어요.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }
@@ -254,11 +278,17 @@ function CouponLedgerSection() {
 /** ⓓ 결제 목록 — status 필터(EXPIRED 대사 포함) + PAID 건 [환불](coupon-refund). */
 function PurchasesSection() {
   const [statusFilter, setStatusFilter] = useState("ALL");
-  const { data: purchases, isLoading, refetch } = useCouponPurchases(statusFilter);
+  const { data: purchases, isLoading, isError, refetch } = useCouponPurchases(statusFilter);
+  // 초기 로드 실패만 에러 UI로 — 백그라운드 refetch 실패는 캐시된 화면을 유지한다(TanStack v5는 error에도 data 보존).
+  const loadFailed = isError && purchases === undefined;
 
   return (
     <section className="rounded-card bg-white p-6 shadow-card">
-      <h2 className="mb-4 text-lg font-semibold text-gray-900">쿠폰 결제 목록</h2>
+      <div className="mb-4 flex items-baseline gap-2">
+        <h2 className="text-lg font-semibold text-gray-900">쿠폰 결제 목록</h2>
+        {/* 목록은 useCouponPurchases limit(200) — 환불 대상 탐색 시 상한을 명시한다. */}
+        <span className="text-xs text-gray-500">최근 200건 기준</span>
+      </div>
       <div className="mb-4 flex flex-wrap gap-2">
         {["ALL", "PENDING", "PAID", "FAILED", "EXPIRED", "REFUNDED"].map((s) => (
           <button
@@ -276,14 +306,16 @@ function PurchasesSection() {
       </div>
 
       {statusFilter === "EXPIRED" && (
-        <p className="mb-3 rounded-card bg-accent-light px-3 py-2 text-xs text-accent" data-testid="expired-reconcile-note">
+        <p className="mb-3 rounded-card bg-accent-light px-3 py-2 text-xs text-accent-deep" data-testid="expired-reconcile-note">
           만료(EXPIRED) 건은 결제 승인 후 확정이 유실됐을 수 있어요 — 토스 결제 조회에서 승인 여부를 확인한 뒤 수동
           처리하세요(orphan 결제 대사).
         </p>
       )}
 
-      {isLoading ? (
-        <p className="text-sm text-gray-400">불러오는 중...</p>
+      {loadFailed ? (
+        <QueryError onRetry={refetch} message="결제 목록을 불러오지 못했어요" />
+      ) : isLoading ? (
+        <p className="text-sm text-gray-500">불러오는 중...</p>
       ) : purchases && purchases.length > 0 ? (
         <div className="flex flex-col gap-3" data-testid="purchase-list">
           {purchases.map((p) => (
@@ -291,7 +323,7 @@ function PurchasesSection() {
           ))}
         </div>
       ) : (
-        <p className="text-sm text-gray-400">해당 상태의 결제 건이 없어요.</p>
+        <p className="text-sm text-gray-500">해당 상태의 결제 건이 없어요.</p>
       )}
     </section>
   );
@@ -344,7 +376,7 @@ function PurchaseRow({ purchase, onProcessed }: { purchase: CouponPurchaseRow; o
       : purchase.status === "REFUNDED"
         ? "bg-status-danger/10 text-status-danger"
         : purchase.status === "EXPIRED"
-          ? "bg-accent-light text-accent"
+          ? "bg-accent-light text-accent-deep"
           : "bg-gray-100 text-gray-600";
 
   return (
@@ -356,7 +388,7 @@ function PurchaseRow({ purchase, onProcessed }: { purchase: CouponPurchaseRow; o
         <div>
           <p className="font-semibold text-gray-900">
             {purchase.riderName} ·{" "}
-            <span className="tabular-nums text-accent">
+            <span className="tabular-nums text-accent-deep">
               {purchase.qty}장 / {formatKrw(purchase.amount)}
             </span>
           </p>
@@ -446,7 +478,7 @@ function SummaryStat({
   return (
     <div className="rounded-card border border-gray-100 p-3">
       <p className="text-xs text-gray-500">{label}</p>
-      <p className={`mt-0.5 text-xl font-bold tabular-nums ${accent ? "text-accent" : "text-gray-900"}`} data-testid={testId}>
+      <p className={`mt-0.5 text-xl font-bold tabular-nums ${accent ? "text-accent-deep" : "text-gray-900"}`} data-testid={testId}>
         {value}
       </p>
     </div>

@@ -33,10 +33,17 @@ export function CallHomePage() {
   const { showToast } = useToast();
 
   const { data: rider } = useRiderProfile(userId);
-  const { data: stats } = useTodayStats(userId);
-  const { data: couponBalance } = useCouponBalance(userId);
+  const { data: stats, isLoading: statsLoading } = useTodayStats(userId);
+  const { data: couponBalance, isLoading: couponLoading } = useCouponBalance(userId);
   const position = useGeolocation(true);
-  const { data: calls, isLoading } = useOpenCalls(Boolean(rider) && rider?.verifyStatus === "APPROVED");
+  const {
+    data: calls,
+    isLoading,
+    isError: callsError,
+    refetch: refetchCalls,
+  } = useOpenCalls(Boolean(rider) && rider?.verifyStatus === "APPROVED");
+  // 초기 로드 실패만 에러 UI로 — 백그라운드 refetch 실패는 캐시된 화면을 유지한다.
+  const callsLoadFailed = callsError && calls === undefined;
 
   const sortedCalls = position
     ? [...(calls ?? [])].sort(
@@ -104,62 +111,78 @@ export function CallHomePage() {
       </div>
 
       {/* 07 F5-①: 쿠폰 잔액 히어로(v_coupon_balance + Realtime). [충전하기]→결제 화면, 카드 탭→쿠폰 내역. */}
-      <PointBalanceCard
-        available={couponBalance ?? 0}
-        label="보유 수거쿠폰"
-        formatValue={(n) => `${n}장`}
-        onClick={() => navigate("/coupons")}
-        action={
-          <PointHeroAction
-            data-testid="coupon-charge-button"
-            onClick={(e) => {
-              e.stopPropagation();
-              navigate("/coupons/purchase");
-            }}
-          >
-            충전하기
-          </PointHeroAction>
-        }
-      />
+      {couponLoading ? (
+        // 로딩 중 잔액 0장이 먼저 떴다가 실제 값으로 교체되는 플래시 방지 스켈레톤.
+        <div data-testid="coupon-balance-skeleton" style={{ height: 160, borderRadius: radius.hero, backgroundColor: gray[100] }} />
+      ) : (
+        <PointBalanceCard
+          available={couponBalance ?? 0}
+          label="보유 수거쿠폰"
+          formatValue={(n) => `${n}장`}
+          onClick={() => navigate("/coupons")}
+          action={
+            <PointHeroAction
+              data-testid="coupon-charge-button"
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate("/coupons/purchase");
+              }}
+            >
+              충전하기
+            </PointHeroAction>
+          }
+        />
+      )}
 
       {/* 07 F6-⑥ "오늘 실적": 신모델 현금 매입 기준(수거 kg / 지급 현금 / 소진 쿠폰, completed_at 기준). */}
       <section data-testid="today-stats" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <div style={{ display: "flex", gap: 12 }}>
-          <div
-            style={{
-              flex: 1,
-              borderRadius: radius.card,
-              padding: 16,
-              backgroundColor: surface.card,
-              border: `1px solid ${surface.border}`,
-              boxShadow: elevation.card,
-            }}
-          >
-            <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: colors.status.wait }}>오늘 수거량</p>
-            <p data-testid="today-collected-kg" className="oilpick-tabular-nums" style={{ margin: "6px 0 0", fontSize: 24, fontWeight: 800, letterSpacing: "-0.01em", color: colors.primary.DEFAULT }}>
-              {formatKg(stats?.collectedKg ?? 0)}
-            </p>
-            <p style={{ margin: "4px 0 0", fontSize: 12, color: colors.status.wait }}>{stats?.completedCount ?? 0}건</p>
+        {statsLoading ? (
+          // 로딩 중 0kg/0원이 먼저 떴다가 실제 값으로 교체되는 플래시 방지 스켈레톤.
+          <div data-testid="today-stats-skeleton" style={{ display: "flex", gap: 12 }}>
+            <div style={{ flex: 1, height: 92, borderRadius: radius.card, backgroundColor: gray[100] }} />
+            <div style={{ flex: 1, height: 92, borderRadius: radius.card, backgroundColor: gray[100] }} />
           </div>
-          <div
-            style={{
-              flex: 1,
-              borderRadius: radius.card,
-              padding: 16,
-              backgroundColor: surface.card,
-              border: `1px solid ${surface.border}`,
-              boxShadow: elevation.card,
-            }}
-          >
-            <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: colors.status.wait }}>오늘 지급 현금</p>
-            <p data-testid="today-cash" className="oilpick-tabular-nums" style={{ margin: "6px 0 0", fontSize: 24, fontWeight: 800, letterSpacing: "-0.01em", color: colors.accent.DEFAULT }}>
-              {formatKrw(stats?.cashPaid ?? 0)}
+        ) : (
+          <>
+            <div style={{ display: "flex", gap: 12 }}>
+              <div
+                style={{
+                  flex: 1,
+                  borderRadius: radius.card,
+                  padding: 16,
+                  backgroundColor: surface.card,
+                  border: `1px solid ${surface.border}`,
+                  boxShadow: elevation.card,
+                }}
+              >
+                <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: colors.status.wait }}>오늘 수거량</p>
+                <p data-testid="today-collected-kg" className="oilpick-tabular-nums" style={{ margin: "6px 0 0", fontSize: 24, fontWeight: 800, letterSpacing: "-0.01em", color: colors.primary.DEFAULT }}>
+                  {formatKg(stats?.collectedKg ?? 0)}
+                </p>
+                <p style={{ margin: "4px 0 0", fontSize: 12, color: colors.status.wait }}>{stats?.completedCount ?? 0}건</p>
+              </div>
+              <div
+                style={{
+                  flex: 1,
+                  borderRadius: radius.card,
+                  padding: 16,
+                  backgroundColor: surface.card,
+                  border: `1px solid ${surface.border}`,
+                  boxShadow: elevation.card,
+                }}
+              >
+                <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: colors.status.wait }}>오늘 지급 현금</p>
+                {/* 05 폴리시: 밝은 배경 위 앰버 "텍스트"는 accent.deep(대비 4.5:1) — 배경 앰버일 때만 흰 텍스트. */}
+                <p data-testid="today-cash" className="oilpick-tabular-nums" style={{ margin: "6px 0 0", fontSize: 24, fontWeight: 800, letterSpacing: "-0.01em", color: colors.accent.deep }}>
+                  {formatKrw(stats?.cashPaid ?? 0)}
+                </p>
+              </div>
+            </div>
+            <p data-testid="today-coupons" style={{ margin: 0, fontSize: 13, color: colors.status.wait, textAlign: "center" }}>
+              오늘 소진 쿠폰 {stats?.consumedCoupons ?? 0}장
             </p>
-          </div>
-        </div>
-        <p data-testid="today-coupons" style={{ margin: 0, fontSize: 13, color: colors.status.wait, textAlign: "center" }}>
-          오늘 소진 쿠폰 {stats?.consumedCoupons ?? 0}장
-        </p>
+          </>
+        )}
       </section>
 
       {!rider?.isOnline && (
@@ -173,10 +196,39 @@ export function CallHomePage() {
         {isLoading && (
           <div data-testid="open-calls-skeleton" style={{ height: 80, borderRadius: radius.card, backgroundColor: gray[100] }} />
         )}
-        {!isLoading && sortedCalls.length === 0 && (
+        {/* 쿼리 실패는 "콜이 없어요"로 위장하지 않는다 — 에러 분기가 빈 상태 분기보다 먼저다. */}
+        {!isLoading && callsLoadFailed && (
+          <div data-testid="query-error">
+            <EmptyState
+              title="불러오지 못했어요"
+              description="네트워크 상태를 확인한 뒤 다시 시도해주세요."
+              action={
+                <button
+                  type="button"
+                  data-testid="query-error-retry"
+                  onClick={() => refetchCalls()}
+                  style={{
+                    minHeight: 44,
+                    padding: "0 20px",
+                    borderRadius: radius.button,
+                    border: `1px solid ${surface.border}`,
+                    backgroundColor: surface.card,
+                    fontSize: 14,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  다시 시도
+                </button>
+              }
+            />
+          </div>
+        )}
+        {!isLoading && !callsLoadFailed && sortedCalls.length === 0 && (
           <EmptyState title="지금은 콜이 없어요" description="새 콜이 들어오면 알려드릴게요." />
         )}
         {!isLoading &&
+          !callsLoadFailed &&
           sortedCalls.map((call) => (
             <CallCard
               key={call.id}

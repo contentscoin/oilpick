@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ORDER_STATUS_LABEL, formatKg, formatKrw, formatRelativeTime, type OrderFault } from "@oilpick/core";
 import type { AdminOrderDetail, AdminOrderEvent } from "../hooks/useOrdersAdmin";
+import { useEscapeClose, useInitialFocus } from "../hooks/useEscapeClose";
 import { invokeEdgeFunction } from "../lib/edgeFunction";
 
 interface OrderDetailDrawerProps {
@@ -51,6 +52,8 @@ export function OrderDetailDrawer({ order, events, isLoading, onClose, onMutated
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  useEscapeClose(onClose);
+  const dialogRef = useInitialFocus<HTMLDivElement>();
 
   async function handleResolveDispute(e: React.FormEvent) {
     e.preventDefault();
@@ -138,60 +141,65 @@ export function OrderDetailDrawer({ order, events, isLoading, onClose, onMutated
   return (
     <div className="fixed inset-0 z-40 flex justify-end bg-black/30" onClick={onClose} data-testid="order-drawer-backdrop">
       <div
+        ref={dialogRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-label="주문 상세"
         className="h-full w-full max-w-lg overflow-y-auto bg-surface-app p-6 shadow-raised"
         onClick={(e) => e.stopPropagation()}
         data-testid="order-drawer"
       >
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-bold text-gray-900">주문 상세</h2>
-          <button type="button" onClick={onClose} className="text-sm text-gray-400 hover:text-gray-700" data-testid="order-drawer-close">
+          <button type="button" onClick={onClose} className="text-sm text-gray-500 hover:text-gray-700" data-testid="order-drawer-close">
             닫기
           </button>
         </div>
 
         {isLoading || !order ? (
-          <p className="text-sm text-gray-400">불러오는 중...</p>
+          <p className="text-sm text-gray-500">불러오는 중...</p>
         ) : (
           <div className="flex flex-col gap-4">
             <section className="rounded-card bg-white p-4 shadow-card">
-              <p className="text-xs font-medium text-gray-400">상태</p>
+              <p className="text-xs font-medium text-gray-500">상태</p>
               <p className="mt-0.5 text-lg font-bold text-gray-900">{ORDER_STATUS_LABEL[order.status]}</p>
             </section>
 
             <section className="grid grid-cols-2 gap-3 rounded-card bg-white p-4 text-sm shadow-card">
               <div>
-                <p className="text-xs text-gray-400">공급업체</p>
+                <p className="text-xs text-gray-500">공급업체</p>
                 <p className="font-medium text-gray-800">{order.supplierName}</p>
               </div>
               <div>
-                <p className="text-xs text-gray-400">라이더</p>
+                <p className="text-xs text-gray-500">라이더</p>
                 <p className="font-medium text-gray-800">{order.riderName ?? "미배정"}</p>
               </div>
               <div>
-                <p className="text-xs text-gray-400">예상 kg</p>
+                <p className="text-xs text-gray-500">예상 kg</p>
                 <p className="font-medium tabular-nums text-gray-800">{formatKg(order.requestedKg)}</p>
               </div>
               <div>
-                <p className="text-xs text-gray-400">계량 kg</p>
+                <p className="text-xs text-gray-500">계량 kg</p>
                 <p className="font-medium tabular-nums text-gray-800">
                   {order.measuredKg !== null ? formatKg(order.measuredKg) : "-"}
                 </p>
               </div>
               <div>
-                <p className="text-xs text-gray-400">확정 kg</p>
+                <p className="text-xs text-gray-500">확정 kg</p>
                 <p className="font-medium tabular-nums text-gray-800">
                   {order.finalKg !== null ? formatKg(order.finalKg) : "-"}
                 </p>
               </div>
               {/* 07 F10-⑤: 포인트 → 쿠폰/현금 표기. coupon_cost null = 레거시 주문(쿠폰 미소진). */}
               <div>
-                <p className="text-xs text-gray-400">소진 쿠폰</p>
+                <p className="text-xs text-gray-500">소진 쿠폰</p>
                 <p className="font-medium tabular-nums text-gray-800" data-testid="order-coupon-cost">
                   {order.couponCost !== null ? `${order.couponCost}장` : "- (레거시)"}
                 </p>
               </div>
               <div>
-                <p className="text-xs text-gray-400">쿠폰 환급</p>
+                <p className="text-xs text-gray-500">쿠폰 환급</p>
                 <p className="font-medium text-gray-800" data-testid="order-coupon-refunded">
                   {order.refunded ? (
                     <span className="rounded-pill bg-primary-light px-2 py-0.5 text-xs font-semibold text-primary">
@@ -203,20 +211,20 @@ export function OrderDetailDrawer({ order, events, isLoading, onClose, onMutated
                 </p>
               </div>
               <div>
-                <p className="text-xs text-gray-400">현금 지급액</p>
-                <p className="font-bold tabular-nums text-accent" data-testid="order-cash-paid">
+                <p className="text-xs text-gray-500">현금 지급액</p>
+                <p className="font-bold tabular-nums text-accent-deep" data-testid="order-cash-paid">
                   {order.cashPaidAmount !== null ? formatKrw(order.cashPaidAmount) : "-"}
                 </p>
               </div>
               <div className="col-span-2 border-t border-gray-50 pt-3">
-                <p className="text-xs text-gray-400">수거 주소</p>
+                <p className="text-xs text-gray-500">수거 주소</p>
                 <p className="text-sm text-gray-700">{order.pickupAddress}</p>
               </div>
             </section>
 
             {order.disputeReason && (
               <section className="rounded-card bg-accent-light p-4 shadow-card">
-                <p className="text-xs font-medium text-accent">이의신청 사유</p>
+                <p className="text-xs font-medium text-accent-deep">이의신청 사유</p>
                 <p className="text-sm text-gray-800">{order.disputeReason}</p>
               </section>
             )}
@@ -229,7 +237,7 @@ export function OrderDetailDrawer({ order, events, isLoading, onClose, onMutated
 
             {order.photoUrls.length > 0 && (
               <section className="rounded-card bg-white p-4 shadow-card">
-                <p className="mb-2 text-xs font-medium text-gray-400">계량 사진</p>
+                <p className="mb-2 text-xs font-medium text-gray-500">계량 사진</p>
                 <div className="flex flex-wrap gap-2">
                   {order.photoUrls.map((url) => (
                     <a key={url} href={url} target="_blank" rel="noreferrer" className="block">
@@ -245,7 +253,7 @@ export function OrderDetailDrawer({ order, events, isLoading, onClose, onMutated
             )}
 
             <section className="rounded-card bg-white p-4 shadow-card">
-              <p className="mb-3 text-xs font-medium text-gray-400">이벤트 타임라인</p>
+              <p className="mb-3 text-xs font-medium text-gray-500">이벤트 타임라인</p>
               <ol className="flex flex-col" data-testid="order-event-timeline">
                 {events.map((ev, i) => (
                   <li key={ev.id} className="relative flex gap-3 pb-4 last:pb-0">
@@ -258,7 +266,7 @@ export function OrderDetailDrawer({ order, events, isLoading, onClose, onMutated
                         {ev.fromStatus ? ORDER_STATUS_LABEL[ev.fromStatus as keyof typeof ORDER_STATUS_LABEL] : "생성"} →{" "}
                         {ORDER_STATUS_LABEL[ev.toStatus as keyof typeof ORDER_STATUS_LABEL]}
                       </p>
-                      <p className="text-xs text-gray-400">
+                      <p className="text-xs text-gray-500">
                         {ev.actorId ? `actor: ${ev.actorId.slice(0, 8)}` : "시스템"} · {formatRelativeTime(ev.createdAt)}
                       </p>
                     </div>
@@ -302,7 +310,7 @@ export function OrderDetailDrawer({ order, events, isLoading, onClose, onMutated
 
             {canForceComplete && (
               <form onSubmit={handleForceComplete} className="rounded-card border border-accent/30 bg-white p-4 shadow-card">
-                <p className="mb-1 text-sm font-semibold text-accent">강제 완결 (FORCE_COMPLETE)</p>
+                <p className="mb-1 text-sm font-semibold text-accent-deep">강제 완결 (FORCE_COMPLETE)</p>
                 <p className="mb-2 text-xs text-gray-500">
                   점주가 수령 확인을 거부·방치하는 교착을 해소해요. 제출/중재된 무게 기준으로 현금 지급액이 기록되고
                   즉시 완료 처리돼요. 사유는 필수예요.

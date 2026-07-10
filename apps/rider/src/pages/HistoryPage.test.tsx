@@ -88,6 +88,17 @@ describe("HistoryPage — 운행 이력(06 E9)", () => {
     expect(screen.getByText("운행 이력이 없어요")).toBeInTheDocument();
   });
 
+  it("쿼리 실패 시 빈 상태 대신 에러 상태 + 재시도 버튼을 렌더한다", () => {
+    const refetch = vi.fn();
+    mockUseRunHistory.mockReturnValue({ data: undefined, isLoading: false, isError: true, refetch });
+    render(<HistoryPage />);
+    const error = screen.getByTestId("query-error");
+    expect(error).toHaveTextContent("불러오지 못했어요");
+    expect(screen.queryByText("운행 이력이 없어요")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("query-error-retry"));
+    expect(refetch).toHaveBeenCalled();
+  });
+
   it("첫 페이지에서 이전은 비활성, 다음 클릭 시 다음 페이지를 조회한다", () => {
     mockUseRunHistory.mockReturnValue({
       data: { items: [completedItem], hasNextPage: true },

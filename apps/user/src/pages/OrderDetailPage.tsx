@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { BigButton, ConfirmSheet, DriverCard, ErrorScreen, InfoStatCard, MapView, OrderTimeline, StatusHeadline, colors, elevation, gray, radius, surface, touchTarget, useToast } from "@oilpick/ui";
+import { BigButton, ConfirmSheet, DriverCard, ErrorScreen, InfoStatCard, MapView, OrderTimeline, StatusHeadline, colors, elevation, gradient, gray, radius, surface, touchTarget, useToast } from "@oilpick/ui";
 import { estimateCash, formatKg, formatKrw, formatPoint, formatTimeOfDay, type OrderStatus } from "@oilpick/core";
 import { KAKAO_KEY } from "../lib/env";
 import { invokeEdgeFunction } from "../lib/edgeFunction";
@@ -171,7 +171,7 @@ export function OrderDetailPage() {
           data-testid="order-detail-back"
           aria-label="뒤로가기"
           onClick={() => navigate("/")}
-          style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", padding: 0, color: gray[900], lineHeight: 1 }}
+          style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 44, height: 44, marginLeft: -12, background: "none", border: "none", fontSize: 20, cursor: "pointer", padding: 0, color: gray[900], lineHeight: 1 }}
         >
           &lt;
         </button>
@@ -187,8 +187,8 @@ export function OrderDetailPage() {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            width: 32,
-            height: 32,
+            width: 44,
+            height: 44,
             color: gray[900],
             textDecoration: "none",
           }}
@@ -200,8 +200,8 @@ export function OrderDetailPage() {
               data-testid="order-detail-unread-dot"
               style={{
                 position: "absolute",
-                top: 3,
-                right: 4,
+                top: 9,
+                right: 10,
                 minWidth: 8,
                 height: 8,
                 borderRadius: radius.pill,
@@ -332,7 +332,7 @@ export function OrderDetailPage() {
           </div>
           {/* 07 F9-⑥: CONFIRM = "무게 확인 + 현금 수령 확인" 2자 확인(현금 수령 증빙). */}
           <BigButton data-testid="confirm-measure-button" loading={confirming} onClick={handleConfirmMeasure}>
-            무게 {formatKg(confirmKg)} 확인 · 현금 {formatKrw(confirmCash)} 받았습니다
+            무게 {formatKg(confirmKg)} 확인 · 현금 {formatKrw(confirmCash)} 받았어요
           </BigButton>
           {!isArbitrated && (
             <button
@@ -395,16 +395,15 @@ export function OrderDetailPage() {
             gap: 6,
             padding: "28px 20px",
             borderRadius: radius.hero,
-            backgroundColor: colors.primary.light,
-            border: `1px solid ${surface.border}`,
-            boxShadow: elevation.card,
+            background: gradient.brand,
+            boxShadow: elevation.raised,
           }}
         >
-          <p style={{ margin: 0, fontSize: 15, fontWeight: 600, color: colors.status.wait }}>받은 현금</p>
+          <p style={{ margin: 0, fontSize: 15, fontWeight: 600, color: "rgba(255,255,255,0.75)" }}>받은 현금</p>
           <p
             data-testid="completed-cash-amount"
             className="oilpick-tabular-nums"
-            style={{ margin: 0, fontSize: 40, fontWeight: 800, letterSpacing: "-0.02em", color: colors.primary.dark }}
+            style={{ margin: 0, fontSize: 40, fontWeight: 800, letterSpacing: "-0.02em", color: "#FFFFFF" }}
           >
             {formatKrw(order.cashPaidAmount ?? 0)}
           </p>
@@ -431,7 +430,7 @@ export function OrderDetailPage() {
           <p
             data-testid="completed-supplier-point"
             className="oilpick-tabular-nums"
-            style={{ margin: 0, fontSize: 40, fontWeight: 800, letterSpacing: "-0.02em", color: colors.accent.DEFAULT }}
+            style={{ margin: 0, fontSize: 40, fontWeight: 800, letterSpacing: "-0.02em", color: colors.accent.deep }}
           >
             {formatPoint(order.supplierPoint ?? 0)}
           </p>

@@ -8,7 +8,9 @@ import {
   type CsStatus,
 } from "@oilpick/core";
 import { useCsTickets, type CsTicketRow } from "../hooks/useCsAdmin";
+import { useEscapeClose, useInitialFocus } from "../hooks/useEscapeClose";
 import { invokeEdgeFunction } from "../lib/edgeFunction";
+import { QueryError } from "../components/QueryError";
 
 const STATUS_FILTERS: Array<{ value: string; label: string }> = [
   { value: "ALL", label: "전체" },
@@ -31,7 +33,9 @@ const ROLE_LABEL: Record<CsTicketRow["role"], string> = {
 export function CsPage() {
   const [statusFilter, setStatusFilter] = useState("OPEN");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const { data: tickets, isLoading } = useCsTickets(statusFilter);
+  const { data: tickets, isLoading, isError, refetch } = useCsTickets(statusFilter);
+  // 초기 로드 실패만 에러 UI로 — 백그라운드 refetch 실패는 캐시된 화면을 유지한다(TanStack v5는 error에도 data 보존).
+  const loadFailed = isError && tickets === undefined;
 
   const selected = (tickets ?? []).find((t) => t.id === selectedId) ?? null;
 
@@ -73,9 +77,11 @@ export function CsPage() {
             </tr>
           </thead>
           <tbody>
-            {isLoading ? (
+            {loadFailed ? (
+              <QueryError colSpan={6} onRetry={refetch} message="문의 목록을 불러오지 못했어요" />
+            ) : isLoading ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
+                <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
                   불러오는 중...
                 </td>
               </tr>
@@ -90,7 +96,7 @@ export function CsPage() {
                   </td>
                   <td className="px-4 py-3 text-gray-800">
                     {t.authorName}
-                    <span className="ml-1 text-xs text-gray-400">({ROLE_LABEL[t.role]})</span>
+                    <span className="ml-1 text-xs text-gray-500">({ROLE_LABEL[t.role]})</span>
                   </td>
                   <td className="max-w-xs truncate px-4 py-3 text-gray-700">{t.title}</td>
                   <td className="px-4 py-3 text-gray-500">{formatRelativeTime(t.createdAt)}</td>
@@ -108,13 +114,15 @@ export function CsPage() {
               ))
             ) : (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
+                <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
                   해당 상태의 문의가 없어요.
                 </td>
               </tr>
             )}
           </tbody>
         </table>
+        {/* 목록은 useCsTickets limit(200) — 상한을 명시해 "전체"로 오독하지 않게 한다. */}
+        <p className="border-t border-gray-50 px-4 py-2 text-xs text-gray-500">최근 200건 기준</p>
       </div>
 
       {selected && <CsTicketDrawer ticket={selected} onClose={() => setSelectedId(null)} />}
@@ -128,7 +136,7 @@ function CsStatusPill({ status }: { status: CsStatus }) {
       ? "bg-primary-light text-primary"
       : status === "IN_PROGRESS"
         ? "bg-status-active/10 text-status-active"
-        : "bg-accent-light text-accent";
+        : "bg-accent-light text-accent-deep";
   return <span className={`rounded-pill px-2.5 py-1 text-xs font-semibold ${color}`}>{CS_STATUS_LABEL[status]}</span>;
 }
 
@@ -148,6 +156,8 @@ function CategoryPill({ category }: { category: CsTicketRow["category"] }) {
 function CsTicketDrawer({ ticket, onClose }: { ticket: CsTicketRow; onClose: () => void }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  useEscapeClose(onClose);
+  const dialogRef = useInitialFocus<HTMLDivElement>();
   const [reply, setReply] = useState(ticket.adminReply ?? "");
   const [status, setStatus] = useState<"IN_PROGRESS" | "RESOLVED">(
     ticket.status === "RESOLVED" ? "RESOLVED" : "IN_PROGRESS",
@@ -187,13 +197,18 @@ function CsTicketDrawer({ ticket, onClose }: { ticket: CsTicketRow; onClose: () 
       data-testid="cs-drawer-backdrop"
     >
       <div
+        ref={dialogRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-label="문의 상세"
         className="h-full w-full max-w-lg overflow-y-auto bg-surface-app p-6 shadow-raised"
         onClick={(e) => e.stopPropagation()}
         data-testid="cs-drawer"
       >
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-bold text-gray-900">문의 상세</h2>
-          <button type="button" onClick={onClose} className="text-sm text-gray-400 hover:text-gray-700" data-testid="cs-drawer-close">
+          <button type="button" onClick={onClose} className="text-sm text-gray-500 hover:text-gray-700" data-testid="cs-drawer-close">
             닫기
           </button>
         </div>
@@ -203,7 +218,7 @@ function CsTicketDrawer({ ticket, onClose }: { ticket: CsTicketRow; onClose: () 
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <CsStatusPill status={ticket.status} />
               <CategoryPill category={ticket.category} />
-              <span className="text-xs text-gray-400">
+              <span className="text-xs text-gray-500">
                 {ticket.authorName} ({ROLE_LABEL[ticket.role]}) · {formatRelativeTime(ticket.createdAt)}
               </span>
             </div>
@@ -241,7 +256,7 @@ function CsTicketDrawer({ ticket, onClose }: { ticket: CsTicketRow; onClose: () 
               data-testid="cs-coupon-refund-link"
             >
               <span className="text-sm font-medium text-gray-800">쿠폰 환불은 매출·정산에서 처리</span>
-              <span className="text-sm text-accent">환불 처리 &gt;</span>
+              <span className="text-sm text-accent-deep">환불 처리 &gt;</span>
             </button>
           )}
 

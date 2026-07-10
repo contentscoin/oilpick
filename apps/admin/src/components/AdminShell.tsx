@@ -37,7 +37,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
           </span>
           <div>
             <p className="text-lg font-bold leading-tight text-primary">OilPick</p>
-            <p className="text-xs text-gray-400">관리자</p>
+            <p className="text-xs text-gray-500">관리자</p>
           </div>
         </div>
         <nav className="flex flex-1 flex-col gap-1 px-3">

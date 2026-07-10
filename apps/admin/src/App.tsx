@@ -29,6 +29,9 @@ const NotifyPage = lazy(() =>
   import("./pages/NotifyPage").then((m) => ({ default: m.NotifyPage })),
 );
 const CsPage = lazy(() => import("./pages/CsPage").then((m) => ({ default: m.CsPage })));
+const NotFoundPage = lazy(() =>
+  import("./pages/NotFoundPage").then((m) => ({ default: m.NotFoundPage })),
+);
 
 /**
  * 03-frontend.md apps/admin 라우팅. "admin 로그인: 이메일/비밀번호. role≠admin이면 접근 차단"
@@ -101,6 +104,15 @@ export function App() {
             element={
               <Protected>
                 <NotifyPage />
+              </Protected>
+            }
+          />
+          {/* 미지정 URL이 빈 화면이 되지 않게 catch-all — 셸 안에서 안내 + 대시보드 복귀 링크. */}
+          <Route
+            path="*"
+            element={
+              <Protected>
+                <NotFoundPage />
               </Protected>
             }
           />

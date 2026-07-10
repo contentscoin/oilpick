@@ -117,6 +117,22 @@ describe("OrdersPage", () => {
     expect(screen.getByText("조건에 맞는 주문이 없어요.")).toBeInTheDocument();
   });
 
+  it("쿼리 실패 시 빈 상태 대신 에러 안내 + 다시 시도(refetch)를 표시한다", () => {
+    const refetch = vi.fn();
+    mockUseAdminOrders.mockReturnValue({ data: undefined, isLoading: false, isError: true, refetch });
+    renderPage();
+    expect(screen.getByText("주문 목록을 불러오지 못했어요")).toBeInTheDocument();
+    expect(screen.queryByText("조건에 맞는 주문이 없어요.")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("query-error-retry"));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("테이블 하단에 200건 상한 캡션을 표시한다", () => {
+    mockUseAdminOrders.mockReturnValue({ data: [], isLoading: false });
+    renderPage();
+    expect(screen.getByText("최근 200건 기준")).toBeInTheDocument();
+  });
+
   it("CSV 내보내기 버튼을 노출한다 (07 F10-⑥)", () => {
     mockUseAdminOrders.mockReturnValue({ data: [order()], isLoading: false });
     renderPage();

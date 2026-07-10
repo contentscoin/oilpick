@@ -20,7 +20,8 @@ describe("InfoStatCard", () => {
 
   it("accents the value when accent is true", () => {
     render(<InfoStatCard stats={stats} />);
-    expect(screen.getByText("10,500P")).toHaveStyle({ color: colors.accent.DEFAULT });
+    // 05 2026-07-10 폴리시: 밝은 배경 위 앰버 텍스트는 accent.deep(대비 4.5:1).
+    expect(screen.getByText("10,500P")).toHaveStyle({ color: colors.accent.deep });
   });
 
   it("renders the footnote when provided", () => {

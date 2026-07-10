@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { BigButton, ErrorScreen, MapView, colors, elevation, gray, radius, surface, useToast } from "@oilpick/ui";
+import { BigButton, ErrorScreen, MapView, colors, elevation, gradient, gray, radius, surface, useToast } from "@oilpick/ui";
 import { INSUFFICIENT_COUPON, estimateCash, formatKg, formatKrw } from "@oilpick/core";
 import { KAKAO_KEY } from "../lib/env";
 import { invokeEdgeFunction } from "../lib/edgeFunction";
@@ -91,7 +91,7 @@ export function CallDetailPage() {
           data-testid="call-detail-back"
           aria-label="뒤로가기"
           onClick={() => navigate("/")}
-          style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", padding: 0, color: gray[900], lineHeight: 1 }}
+          style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 44, height: 44, marginLeft: -12, background: "none", border: "none", fontSize: 20, cursor: "pointer", padding: 0, color: gray[900], lineHeight: 1 }}
         >
           &lt;
         </button>
@@ -99,7 +99,7 @@ export function CallDetailPage() {
           콜 상세
         </h1>
         {/* 좌측 back과 시각적 균형을 맞추기 위한 스페이서. */}
-        <span aria-hidden style={{ width: 20 }} />
+        <span aria-hidden style={{ width: 32 }} />
       </div>
 
       <MapView
@@ -157,16 +157,15 @@ export function CallDetailPage() {
           alignItems: "center",
           padding: "28px 20px",
           borderRadius: radius.hero,
-          backgroundColor: colors.accent.light,
-          border: `1px solid ${surface.border}`,
-          boxShadow: elevation.card,
+          background: gradient.point,
+          boxShadow: elevation.raised,
         }}
       >
-        <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: colors.status.wait }}>예상 매입 지급액</p>
-        <p className="oilpick-tabular-nums" style={{ margin: 0, fontSize: 40, fontWeight: 800, letterSpacing: "-0.02em", color: colors.accent.DEFAULT }}>
+        <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "rgba(255,255,255,0.85)" }}>예상 매입 지급액</p>
+        <p className="oilpick-tabular-nums" style={{ margin: 0, fontSize: 40, fontWeight: 800, letterSpacing: "-0.02em", color: "#FFFFFF" }}>
           {formatKrw(estimateCash(call.requestedKg, call.snapshotPricePerKg))}
         </p>
-        <p style={{ margin: 0, fontSize: 12, color: colors.status.wait }}>현장 계량 기준으로 확정 · 점주에게 직접 지급</p>
+        <p style={{ margin: 0, fontSize: 12, color: "rgba(255,255,255,0.85)" }}>현장 계량 기준으로 확정 · 점주에게 직접 지급</p>
       </section>
 
       {/* 07 F5-⑤: 수락 게이트. 잔액 < coupon_cost(사전 체크) 또는 409 반환 시 충전 유도 CTA. */}

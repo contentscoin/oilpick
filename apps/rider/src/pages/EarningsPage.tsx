@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { BigButton, colors, elevation, gray, radius, surface } from "@oilpick/ui";
+import { BigButton, colors, elevation, gradient, gray, radius, surface } from "@oilpick/ui";
 import { formatKg, formatKrw } from "@oilpick/core";
 import { useSession } from "../hooks/useSession";
 import { useMonthlyPickupStats } from "../hooks/useTodayStats";
@@ -50,13 +50,12 @@ export function EarningsPage() {
               gap: 4,
               padding: "24px 20px",
               borderRadius: radius.hero,
-              backgroundColor: colors.accent.light,
-              border: `1px solid ${surface.border}`,
-              boxShadow: elevation.card,
+              background: gradient.point,
+              boxShadow: elevation.raised,
             }}
           >
-            <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: colors.status.wait }}>이번 달 지급한 현금</p>
-            <p className="oilpick-tabular-nums" style={{ margin: 0, fontSize: 32, fontWeight: 800, letterSpacing: "-0.02em", color: colors.accent.DEFAULT }}>
+            <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.8)" }}>이번 달 지급한 현금</p>
+            <p className="oilpick-tabular-nums" style={{ margin: 0, fontSize: 32, fontWeight: 800, letterSpacing: "-0.02em", color: "#FFFFFF" }}>
               {formatKrw(stats?.cash ?? 0)}
             </p>
           </section>

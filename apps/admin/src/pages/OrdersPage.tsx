@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { ORDER_STATUS_LABEL, formatKg, type OrderStatus } from "@oilpick/core";
+import { ORDER_STATUS_LABEL, formatKg } from "@oilpick/core";
 import { useAdminOrderDetail, useAdminOrderEvents, useAdminOrders } from "../hooks/useOrdersAdmin";
 import { OrderDetailDrawer } from "../components/OrderDetailDrawer";
+import { OrderStatusPill } from "../components/OrderStatusPill";
+import { QueryError } from "../components/QueryError";
 import { isArrivedStale } from "../lib/arrivedStale";
 import { downloadCsv, toCsv } from "../lib/csv";
 
@@ -31,7 +33,9 @@ export function OrdersPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
-  const { data: orders, isLoading } = useAdminOrders(statusFilter, dateFrom, dateTo);
+  const { data: orders, isLoading, isError, refetch } = useAdminOrders(statusFilter, dateFrom, dateTo);
+  // 초기 로드 실패만 에러 UI로 — 백그라운드 refetch 실패는 캐시된 화면을 유지한다(TanStack v5는 error에도 data 보존).
+  const loadFailed = isError && orders === undefined;
 
   // 06 E10-①: 텍스트 검색은 클라이언트 필터(소문자 includes) — 상호/차량번호는 fetchNameMaps가
   // 클라이언트에서 join한 값이라 서버 ilike로는 검색할 수 없다(DoD: RLS/뷰 변경 없음).
@@ -150,9 +154,11 @@ export function OrdersPage() {
             </tr>
           </thead>
           <tbody>
-            {isLoading ? (
+            {loadFailed ? (
+              <QueryError colSpan={7} onRetry={refetch} message="주문 목록을 불러오지 못했어요" />
+            ) : isLoading ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
+                <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
                   불러오는 중...
                 </td>
               </tr>
@@ -169,7 +175,7 @@ export function OrdersPage() {
                 >
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <StatusPill status={o.status} />
+                      <OrderStatusPill status={o.status} />
                       {stale && (
                         <span
                           className="rounded-pill bg-status-danger/10 px-2 py-0.5 text-xs font-semibold text-status-danger"
@@ -211,13 +217,15 @@ export function OrdersPage() {
               })
             ) : (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
+                <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
                   조건에 맞는 주문이 없어요.
                 </td>
               </tr>
             )}
           </tbody>
         </table>
+        {/* 목록은 useAdminOrders limit(200) — 상한을 명시해 "전체"로 오독하지 않게 한다. */}
+        <p className="border-t border-gray-50 px-4 py-2 text-xs text-gray-500">최근 200건 기준</p>
       </div>
 
       {selectedOrderId && (
@@ -225,20 +233,6 @@ export function OrdersPage() {
       )}
     </div>
   );
-}
-
-function StatusPill({ status }: { status: OrderStatus }) {
-  const color =
-    status === "COMPLETED" || status === "DELIVERED"
-      ? "bg-primary-light text-primary"
-      : status === "CANCELLED"
-        ? "bg-status-danger/10 text-status-danger"
-        : status === "DISPUTED"
-          ? "bg-accent-light text-accent"
-          : status === "ACCEPTED" || status === "ARRIVED" || status === "PICKED_UP"
-            ? "bg-status-active/10 text-status-active"
-            : "bg-gray-100 text-gray-600";
-  return <span className={`rounded-pill px-2.5 py-1 text-xs font-semibold ${color}`}>{ORDER_STATUS_LABEL[status]}</span>;
 }
 
 function OrderDetailDrawerContainer({ orderId, onClose }: { orderId: string; onClose: () => void }) {
