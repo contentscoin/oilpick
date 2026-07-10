@@ -10,6 +10,10 @@
 전제: Supabase 대시보드에서 프로젝트 생성 완료 → **Project Ref**(예: `abcd1234...`), **Project URL**
 (`https://<ref>.supabase.co`), **anon(publishable) key**, **service_role key** 확보.
 
+> **원샷 실행**: 아래 1장(링크→마이그레이션→함수→PG_PROVIDER)은 `bash scripts/deploy-cutover.sh`가
+> 순서대로 실행한다(프로젝트 ref 기본값 dbvgxuevhmyoprafarnh, `PROJECT_REF` env로 재정의).
+> 수동 단계(초기 데이터·Vercel·구모델 함수 삭제)는 스크립트가 끝에서 다시 안내한다.
+
 ```bash
 # CLI 로그인 & 링크
 supabase login
@@ -114,6 +118,8 @@ supabase secrets set KOEM_API_KEY="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
   - `VITE_SUPABASE_URL` = `https://<ref>.supabase.co`
   - `VITE_SUPABASE_ANON_KEY` = anon(publishable) key
   - `VITE_KAKAO_KEY` = 카카오 JS 앱 키(선택 — 없으면 MapView는 일러스트 프리뷰, 주소검색 수동입력 폴백)
+  - **rider 프로젝트에만**: `VITE_PG_PROVIDER` = `demo` (서버 secrets `PG_PROVIDER`와 반드시 같은 값 —
+    없으면 결제 화면이 "고객센터 충전 안내"로 폴백. 코엠 전환 시 `koem`으로 교체)
 
 ### 도메인/서브도메인 연결
 1. Vercel(아무 프로젝트나) → Settings → Domains에 apex 도메인 `oilpick.kr` 추가 → DNS 안내대로
