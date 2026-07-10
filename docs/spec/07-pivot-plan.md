@@ -41,10 +41,11 @@
 > (원 경고문: 이견 시 법률 검토 완료 전까지 F11 착수 금지 — 승인으로 해소.)
 
 ### 프로덕션 전제 (마이그레이션 단순화 근거)
-현재 프로덕션은 Supabase(dbvgxuevhmyoprafarnh)만 존재 — 구모델 DB·데모 계정 상태이고 **Vercel 앱
-3종은 미배포**(CEO 확인 2026-07-09. 종전 "Vercel 3앱 존재" 기록은 오기). **데모 계정만 존재,
+현재 프로덕션: Supabase(dbvgxuevhmyoprafarnh) + Vercel 3앱(구버전) — **데모 계정만 존재,
 실사용자 0명** (실 SMS 미연동, 테스트 OTP 6개 번호). 따라서 기존 포인트 잔액은 지급 채무가
-아니며 **일몰 기간 없이 클린 컷오버** 가능. 앱은 컷오버 시 Vercel 첫 배포(DEPLOY.md §2).
+아니며 **일몰 기간 없이 클린 컷오버** 가능. 컷오버 실행 기록(2026-07-10): Supabase 마이그레이션
+27개·함수 15개·PG_PROVIDER=demo 배포 완료(CEO 터미널, deploy-cutover 절차), Vercel은 기존
+프로젝트 위에 신버전 덮어쓰기(rider에 VITE_PG_PROVIDER=demo 추가 후 재배포 — DEPLOY.md §2).
 point_ledger 테이블·과거 데이터는 append-only 회계 기록으로 보존(삭제 금지), 신규 발생만 중지한다.
 DELIVERED/EARN 등 **enum 값은 절대 삭제하지 않는다**(Postgres enum 삭제는 파괴적, 기존 행이 참조).
 
