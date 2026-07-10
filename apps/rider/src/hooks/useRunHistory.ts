@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { OrderStatus } from "@oilpick/core";
 import { supabase } from "../lib/supabaseClient";
+import { queryKeys } from "../lib/queryClient";
 
 export interface RunHistoryItem {
   id: string;
@@ -27,8 +28,7 @@ export const RUN_HISTORY_STATUSES: OrderStatus[] = ["COMPLETED", "CANCELLED"];
  */
 export function useRunHistory(riderId: string | undefined, page: number) {
   return useQuery({
-    // queryKey 컨벤션(lib/queryClient.ts ["orders", ...])을 따르는 페이지 포함 키.
-    queryKey: ["orders", "runHistory", riderId ?? "", page] as const,
+    queryKey: queryKeys.runHistory(riderId ?? "", page),
     enabled: Boolean(riderId),
     queryFn: async (): Promise<{ items: RunHistoryItem[]; hasNextPage: boolean }> => {
       if (!riderId) return { items: [], hasNextPage: false };
