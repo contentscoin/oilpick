@@ -1,20 +1,24 @@
 # OilPick
 
 폐식용유(廢食用油) 수거 매칭 플랫폼. 음식점(공급자)이 폐식용유 수거를 요청하면 인근 라이더가
-콜을 수락해 현장에서 계량·수거하고, 집하장에 배송 완료하면 공급자에게 매각대금 포인트를,
-라이더에게 수거비 포인트를 지급한다. 포인트는 출금(현금 이체)으로 정산한다.
+콜을 수락해 현장에서 계량 후 시세에 맞춰 **현금을 직접 지급**하고 기름을 매입한다(수거한 기름은
+허가 재활용업체에 인계). 라이더는 콜 배정을 받기 위해 **수거쿠폰**(2,000원/장, 1장=1통≈15kg)을
+사전 구매·소진한다 — 쿠폰 판매가 플랫폼 수익원이다(07 수거쿠폰 피벗. 구모델의 포인트 적립·출금·
+집하장 배송은 폐기·레거시 보존).
 
 - **공급자 앱**(apps/user), **라이더 앱**(apps/rider): Vite + React 18 + TypeScript + Capacitor 6
 - **관리자 웹**(apps/admin): Vite + React + shadcn/ui + Tailwind
 - **백엔드**: Supabase (Postgres + PostGIS + Realtime + Edge Functions + Storage)
 
 > 모든 설계 결정은 `docs/spec/`에 확정되어 있다. 스펙에 없는 설계 판단을 새로 하지 말 것.
-> - `docs/spec/00-domain.md` — 도메인 규칙, 상태머신, 포인트 원장 규칙
+> - `docs/spec/00-domain.md` — 도메인 규칙, 상태머신, 쿠폰 원장 규칙(포인트는 레거시)
 > - `docs/spec/01-db-schema.sql` — DB 전체 스키마 + RLS (단일 진실)
 > - `docs/spec/02-api.md` — Edge Functions 명세
 > - `docs/spec/03-frontend.md` — 모노레포 구조, 라우팅, 화면 스펙, 디자인 토큰
 > - `docs/spec/04-tasks.md` — 작업 순서와 완료 기준, 그리고 "질문 목록"(환경 제약/미검증 항목)
 > - `docs/spec/qa-checklist.md` — 역할×플로우×예외 QA 매트릭스 + 자체 점검 결과
+> - `docs/spec/07-pivot-plan.md` — 수거쿠폰 피벗(신모델)의 단일 진실 — 결정 기록·태스크·진행
+> - `DEPLOY.md` — 프로덕션 배포(Supabase+Vercel). Supabase 단계는 `scripts/deploy-cutover.sh` 원샷
 
 ---
 
@@ -35,7 +39,7 @@ oilpick/
 │   ├── migrations/   # 순번 마이그레이션 (20260704000001_init.sql ~)
 │   ├── functions/    # Edge Functions (Deno) + _shared/
 │   ├── config.toml   # 로컬 스택 설정 (auth/sms test_otp 포함)
-│   └── seed.sql      # admin 계정 · 집하장 1개 · 초기 시세 tick
+│   └── seed.sql      # admin·데모 계정, 시세·쿠폰 단가 tick, 쿠폰 선충전(로컬 전용)
 ├── docs/spec/        # 스펙 문서 (위 참조)
 ├── package.json      # pnpm workspace 루트
 └── turbo.json        # Turborepo 파이프라인
@@ -135,26 +139,31 @@ pnpm lint    # 전 패키지 eslint
 pnpm build   # 전 패키지 tsc + vite build
 ```
 
-**커밋 전 3개 모두 통과 필수.** 단위 테스트 커버리지: 포인트 원장 불변식, 주문 상태머신
-전이 테이블, 매칭/추정 로직, Edge Function 시나리오, 앱별 훅/화면. 특정 패키지만 돌리려면
+**커밋 전 3개 모두 통과 필수.** 단위 테스트 커버리지: 쿠폰 원장 무결성(+레거시 포인트 회귀),
+주문 상태머신 전이, 매칭/추정, 결제(PG 어댑터)·Edge Function 시나리오, 앱별 훅/화면. DB 계층은
+pgTAP(`pnpm test:db` — 로컬 스택 필요, CI에서도 실행). 특정 패키지만 돌리려면
 `pnpm --filter @oilpick/<name> test`.
 
 ---
 
 ## Edge Functions
 
-`supabase/functions/`에 Deno 함수로 존재한다(총 12개):
+`supabase/functions/`에 Deno 함수로 존재한다(총 15개):
 
 ```
 order-create   order-accept   order-transition   order-expire   notify-broadcast
-withdraw-request   withdraw-process   price-set   point-adjust   rider-verify   rider-location
+coupon-purchase-intent   coupon-purchase-confirm   coupon-purchase-return   coupon-refund
+coupon-adjust   coupon-price-set   price-set   cs-reply   rider-verify   rider-location
 ```
+
+(구모델 withdraw-request/withdraw-process/point-adjust는 F13에서 삭제 — 프로덕션 undeploy는
+배포 체크리스트 ⓖ.) 결제는 PG 어댑터(`_shared/pg.ts`) 경유 — `PG_PROVIDER`=toss/koem/demo.
 
 - **로컬 실행**: `supabase functions serve` (curl 시나리오는 함수별 주석/02-api.md 참조).
 - **배포**: `supabase functions deploy <name>` (또는 전체 `supabase functions deploy`).
 - **secrets**: FCM 발송에 `FCM_SERVICE_ACCOUNT`가 필요하다. 미설정 시 `_shared/push.ts`는
-  로그만 남기고 스킵하되 `notifications` 테이블 기록은 항상 수행한다(핵심 로직/포인트 지급은
-  절대 막지 않음). 실 발송 활성화: `supabase secrets set FCM_SERVICE_ACCOUNT=@key.json`.
+  로그만 남기고 스킵하되 `notifications` 테이블 기록은 항상 수행한다(상태 전이·원장 등 핵심
+  로직은 절대 막지 않음). 실 발송 활성화: `supabase secrets set FCM_SERVICE_ACCOUNT=@key.json`.
 
 > **주의(packages/core vendoring)**: Edge Function(Deno)은 `packages/core/src`의 확장자 없는
 > 상대 import를 해석하지 못한다. `supabase/functions/_shared/vendor/build.sh`(esbuild)로
@@ -162,11 +171,12 @@ withdraw-request   withdraw-process   price-set   point-adjust   rider-verify   
 > 재실행**해 vendor 산출물을 갱신해야 한다.
 
 ### 절대 규칙 (요약 — 상세는 CLAUDE.md)
-1. 포인트는 클라이언트에서 절대 쓰지 않는다. `point_ledger` insert는 Edge Function에만.
-   잔액은 뷰 `v_point_balance`로만 조회(`security_invoker=true`로 RLS 위임).
+1. 포인트·쿠폰 원장은 클라이언트에서 절대 쓰지 않는다. `coupon_ledger` insert는 Edge Function/
+   service_role RPC에만(point_ledger는 레거시 — 신규 insert 경로 0). 잔액은 뷰
+   `v_coupon_balance`/`v_point_balance`로만 조회(`security_invoker=true`로 RLS 위임).
 2. 주문 상태 전이는 Edge Function `order-transition`(RPC `fn_transition_order`)으로만.
-3. 모든 테이블 RLS 필수. service_role 키는 Edge Function에서만.
-4. 금액/포인트는 정수(원, P). 무게는 kg 소수 1자리. 시세·수거비는 주문 생성 시점 스냅샷.
+3. 모든 테이블 RLS 필수. service_role·PG 시크릿 키는 Edge Function에서만.
+4. 금액/포인트는 정수(원, P). 무게는 kg 소수 1자리. 시세·쿠폰 비용은 주문 생성 시점 스냅샷.
 
 ---
 
@@ -202,16 +212,16 @@ npx cap open ios                 # Xcode 열기 (또는 android → Android Stud
 
 ---
 
-## 배포 절차 (개요)
+## 배포 절차 (개요 — 상세·순서는 `DEPLOY.md`)
 
-1. **DB**: `supabase link --project-ref <ref>` 후 `supabase db push`로 마이그레이션 적용.
-   `seed.sql`은 로컬 전용 — 프로덕션 admin/집하장은 운영 절차로 별도 생성.
-2. **Edge Functions**: `supabase functions deploy` + `supabase secrets set`(FCM 등).
-3. **웹(admin)**: `pnpm --filter @oilpick/admin build` → 정적 호스팅(Vercel/Netlify 등).
-   프로덕션 `.env`에 운영 `VITE_SUPABASE_URL`/`ANON_KEY`/`KAKAO_KEY` 주입.
-4. **모바일(user/rider)**: 프로덕션 `.env`로 `pnpm build` → `npx cap sync` → Xcode/Android
+1. **DB + Edge Functions + 시크릿**: `supabase login` 후 `bash scripts/deploy-cutover.sh` 원샷
+   (링크 → `db push` → `functions deploy` → `PG_PROVIDER=demo`). `seed.sql`은 로컬 전용 —
+   프로덕션 초기 데이터(admin·쿠폰 단가 tick)는 DEPLOY.md §1-1의 SQL로 별도 생성.
+2. **웹(3앱)**: Vercel에 같은 repo를 Root Directory만 달리해 3회 import(DEPLOY.md §2).
+   rider 프로젝트에는 `VITE_PG_PROVIDER=demo`(서버 `PG_PROVIDER`와 짝) 필수.
+3. **모바일(user/rider)**: 프로덕션 `.env`로 `pnpm build` → `npx cap sync` → Xcode/Android
    Studio에서 서명·아카이브 → App Store / Play Console 제출.
-5. **런칭 전 필수 확인**(이 개발 환경에서 미검증): 실기기 FCM 푸시 수신, 딥링크 탭 이동,
+4. **런칭 전 필수 확인**(이 개발 환경에서 미검증): 실기기 FCM 푸시 수신, 딥링크 탭 이동,
    카카오맵 실렌더, 카메라 QR 스캔, 부하 상 일부 E2E — 상세는 `docs/spec/qa-checklist.md`.
 
 ---
