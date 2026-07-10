@@ -415,21 +415,10 @@ import_map = "./functions/import_map.json"
 verify_jwt = true
 import_map = "./functions/import_map.json"
 
-# T5: withdraw-request/withdraw-process/price-set/point-adjust/rider-verify/rider-location.
-# verify_jwt는 기본값(true) 유지 — 02-api.md 공통 규칙.
-[functions.withdraw-request]
-verify_jwt = true
-import_map = "./functions/import_map.json"
-
-[functions.withdraw-process]
-verify_jwt = true
-import_map = "./functions/import_map.json"
-
+# T5: price-set/rider-verify/rider-location. (withdraw-request/withdraw-process/point-adjust는
+# F13 레거시 일몰로 함수 디렉터리와 함께 엔트리 삭제 — 엔트리만 남기면 supabase functions deploy가
+# "Entrypoint path does not exist" 400으로 실패한다. 실측: 2026-07-10 프로덕션 배포에서 확인.)
 [functions.price-set]
-verify_jwt = true
-import_map = "./functions/import_map.json"
-
-[functions.point-adjust]
 verify_jwt = true
 import_map = "./functions/import_map.json"
 
