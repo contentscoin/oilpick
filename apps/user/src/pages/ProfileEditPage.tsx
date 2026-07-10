@@ -1,7 +1,7 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BigButton, colors, gray, inputClassName, inputStyle, radius, surface } from "@oilpick/ui";
+import { BigButton, colors, gray, inputClassName, inputStyle, radius, surface, useToast } from "@oilpick/ui";
 import { supplierProfileUpdateSchema } from "@oilpick/core";
 import { useSession } from "../hooks/useSession";
 import { supabase } from "../lib/supabaseClient";
@@ -65,6 +65,8 @@ export function ProfileEditPage() {
   const { session } = useSession();
   const userId = session?.user.id;
   const { data: current, isLoading } = useSupplierProfileFull(userId);
+  // 06 E6: 저장 성공/실패 피드백 토스트. 제출 전 검증(zod/세션)은 인라인 에러를 유지한다.
+  const { showToast } = useToast();
 
   const [displayName, setDisplayName] = useState("");
   const [storeName, setStoreName] = useState("");
@@ -110,7 +112,7 @@ export function ProfileEditPage() {
       .eq("id", userId);
     if (profileError) {
       setSaving(false);
-      setError(profileError.message);
+      showToast(profileError.message, { variant: "error" });
       return;
     }
 
@@ -124,13 +126,14 @@ export function ProfileEditPage() {
       .eq("id", userId);
     setSaving(false);
     if (supplierError) {
-      setError(supplierError.message);
+      showToast(supplierError.message, { variant: "error" });
       return;
     }
 
     // MyPage/홈이 즉시 새 정보를 반영하도록 관련 쿼리 무효화.
     await queryClient.invalidateQueries({ queryKey: queryKeys.profile(userId) });
     await queryClient.invalidateQueries({ queryKey: ["supplier-profile-full", userId] });
+    showToast("프로필을 저장했어요", { variant: "success" });
     navigate("/my", { replace: true });
   }
 

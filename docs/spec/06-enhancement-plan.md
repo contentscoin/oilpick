@@ -30,6 +30,8 @@
 - [x] 결과(2026-07-09, **user 측 완료 / rider 측 잔여**): packages/ui `ErrorScreen` 신설(+테스트),
   OrderDetailPage not-found에 [홈으로]/[수거 이력] 탈출, 캐치올(`*`) NotFoundRoute + 테스트. rider 콜/운행
   상세 not-found 점검은 07-pivot-plan.md F6(운행 플로우 개편)과 함께 처리.
+- [x] rider 측 완결 확인(2026-07-09 2차): CallDetailPage가 ErrorScreen("콜을 찾을 수 없어요"+[콜 목록으로])
+  적용됨(F6에서 처리) — 잔여 없음.
 
 ### E3. 【R】 콜 도착 포그라운드 알림 — 라이더 핵심 결함
 - 문제: 새 콜이 와도 화면 갱신뿐, 소리/배너 없음. `push.ts:47` "Phase 1: foreground 배너/카운트 UI 없음".
@@ -39,6 +41,14 @@
   ② 배너 탭 → `/calls/:id` 이동. ③ push.ts foreground 리스너에도 동일 배너 연결.
 - DoD: 온라인 상태에서 open_calls insert 시 배너+사운드 발화(vitest로 훅 로직 검증, 사운드는 mute 옵션).
   오프라인이면 미발화.
+- [x] 결과(2026-07-09): `useCallAlert` 훅(세션+APPROVED+온라인 게이트, pickup_orders INSERT 전용 Realtime
+  채널 + FCM foreground `oilpick:call-alert` CustomEvent 수신, 동일 orderId 4초 dedupe, mute 주입 가능) +
+  `CallAlertListener` 슬라이드다운 배너(App 루트 마운트, 탭→`/calls/:id`, 4초 자동소멸) + Web Audio 2음
+  알림음(`alertSound.ts`) + `navigator.vibrate`. push.ts foreground는 서버 FCM data.type="NEW_CALL"
+  (order-create·order-expire 재브로드캐스트에 부착)로만 콜 푸시를 분류해 동일 배너로 재발행 —
+  link 기반 분류는 완료/취소 푸시(동일 /orders/:id)를 오발화시켜 금지(callAlertPush.ts, 리뷰 확정 결함 수정).
+  useRiderProfile Realtime 토픽을 인스턴스별로 유일화(루트 리스너와 페이지 동시 마운트 시 채널 공유로
+  구독이 죽는 supabase-js 동작 회피 — 리뷰 확정 결함 수정). 훅 테스트 9건 + 분류기 테스트 3건.
 
 ### E4. 【U】 프로필 수정 화면 (`/my/edit`)
 - 문제: 가입 후 상호/담당자명/주소를 바꿀 방법이 없음(MyPage는 조회만).
@@ -67,12 +77,19 @@
 - 작업: packages/ui `Toast`를 전역 프로바이더(`ToastProvider` + `useToast`)로 승격, 양 앱 mutation
   성공/실패에 일괄 적용. 표준 문구는 한국어(예: "요청을 취소했어요").
 - DoD: 주요 mutation 8곳+ 적용, 프로바이더 단위 테스트.
+- [x] 결과(2026-07-09): packages/ui `ToastProvider`+`useToast` 신설(큐·최대 3개·자동소멸 2.6s/재시도 6s,
+  테스트 5건), 양 앱 App 루트 래핑(offsetBottom 76). 적용 8곳 — user: 취소·계량확인·이의신청(OrderDetail),
+  프로필 저장(ProfileEdit) / rider: 콜 수락(CallDetail, 원시 Toast 이관), 도착·계량제출(ActiveRun),
+  온오프 토글(CallHome — 기존 무피드백, onRetry 포함). 표준 한국어 카피 + 페이지 테스트 갱신.
 
 ### E7. 【U】 알림 미읽음 배지
 - 문제: 벨 아이콘에 미읽음 표시가 없어 알림 도착을 알 수 없음.
 - 작업: `useUnreadCount`(notifications where read_at is null, Realtime 구독) → 벨에 빨간 도트/숫자.
   홈·주문상세 헤더 공통. 탭바 알림 진입점이 없으므로 벨은 유지.
 - DoD: 미읽음 n>0이면 배지, 알림함 진입 후 읽음 처리 시 사라짐. 훅 테스트.
+- [x] 결과(2026-07-09): `useUnreadCount` 훅 신설(useNotifications 쿼리·기존 INSERT Realtime·읽음 invalidate
+  흐름에 편승 — 별도 count 쿼리 없음), HomePage 인라인 계산을 훅으로 교체(도트 testid 불변),
+  OrderDetailPage 헤더 벨에 동일 도트 이식(`order-detail-unread-dot`). 훅 테스트 3건 + 페이지 테스트.
 
 ### E8. 【R】 출금 상태 추적 + 운행 지원 보강
 > **[07 판정]** E8-①(출금현황 카드) **[폐기 — 07 D1/상태머신 변경]**(라이더 수거비·출금 소멸, F6-⑤가 대체), E8-②(QR 재스캔) **[폐기 — 07 D1/상태머신 변경]**(DELIVER 단계 소멸). ③④는 유지.
@@ -82,11 +99,20 @@
   (user 앱 DriverCard 패턴 역방향; supplier phone은 배정 라이더에게 이미 RLS 허용된 범위 확인 후,
   없으면 조회 정책 추가 필요 — 20260704000010 마이그레이션 패턴 참고).
 - DoD: 4개 각각 렌더/동작 테스트. 전화 버튼은 RLS로 supplier phone 조회 가능 확인 포함.
+- [x] 결과(2026-07-09, ③④만 — ①②는 07 판정 폐기): ③ ActiveRunPage 순차 업로드에 "사진 N/M 업로드 중"
+  진행 표시(`upload-progress`). ④ 마이그레이션 20260709000011 — `fn_is_assigned_supplier_of_caller` +
+  profiles select 정책 `p_profiles_read_assigned_supplier`(20260704000010 대칭 미러), 01 스키마 동기,
+  pgTAP 03에 배정/미배정 read assert 2건(CI 검증). useActiveRun에 supplierPhone/Name 조회,
+  [사장님께 전화] tel: 버튼(`call-supplier-button`, phone 없으면 미렌더).
 
 ### E9. 【R】 운행 히스토리 페이지 (`/history` placeholder 제거)
 - 작업: 완료/취소된 배정 주문 목록(날짜·주소·kg·수거비) + 월 합계 헤더. 페이지네이션은
   user OrdersHistoryPage 패턴 재사용.
 - DoD: COMPLETED 주문이 목록에 표시. EmptyState. 테스트.
+- [x] 결과(2026-07-09): placeholder 제거(PlaceholderPage 삭제) → HistoryPage 신설(RiderShell 라우트).
+  `useRunHistory`(rider_id + COMPLETED/CANCELLED, PAGE_SIZE 10 페이지네이션 — user 패턴 미러,
+  snapshot_rider_fee 미조회를 테스트로 강제) + 이번 달 합계(useMonthlyPickupStats 재사용: 건수·kg·현금).
+  표기는 현금 지급/쿠폰 N장/final_kg만(07 D1). MyPage에 "운행 이력" 진입 링크. 테스트 7건.
 
 ### E10. 【A】 운영 확장 기능 1차 — 검색/기간필터/CSV
 > **[07 판정]** E10-②(출금큐·원장 필터) **[대체 — 07 F10-③]**(대상을 쿠폰 매출·충전 이력으로). ①③④는 유지(CSV는 F10-⑥이 흡수).
@@ -97,6 +123,10 @@
   ④ PricePage: tick 등록 실수 대비 — 최신 tick "즉시 정정"(신규 tick 재등록 유도 배너)로 처리,
   과거 tick 수정은 스냅샷 원칙(절대규칙 5)상 금지 명시.
 - DoD: 검색/필터 동작 + CSV 다운로드 파일 검증 테스트. RLS/뷰 변경 없음(클라이언트 필터 + 쿼리 파라미터).
+- [x] 결과(2026-07-09, ①④ — ③CSV는 F10-⑥이 선반영·②는 07 대체): ① OrdersPage 텍스트 검색(주소/상호/
+  차량번호 클라이언트 필터, `orders-search-input`) + 날짜 범위(서버 .gte/.lt — limit 200 밖 과거 조회 가능,
+  useAdminOrders 시그니처 확장) + CSV가 필터 결과 기준 export. ④ PricePage 시세·쿠폰 두 섹션에
+  `TickCorrectionNotice` 상시 배너("새 tick 재등록" 유도 + 과거 tick 수정 금지 명시). 테스트 4건 신규.
 
 ### E11. 【U】 홈 히어로 격상 + 시세 스파크라인
 > **[폐기 — 07 F7/F8로 승격 흡수]** 앰버 예상포인트 히어로는 구모델 전제 — 그대로 만들면 100% 재작업.
@@ -110,6 +140,10 @@
   히어로(그린 그라디언트 배경 + 흰 카드 + QR 중앙)로. MyPage: 섹션 카드화 + 준비중 항목은 회색
   비활성 명시. NotificationsPage: 미읽음 좌측 그린 바 + 상대시간.
 - DoD: 3페이지 스냅샷 테스트 갱신, 디자인 토큰 외 하드코딩 색상 금지.
+- [x] 결과(2026-07-09): BadgePage — gradient.brand 명함형 히어로 + 흰 QR 카드 elevation.card, 하드코딩
+  #fff/rgba/radius를 surfaceDark·radius 토큰으로 치환. MyPage — 섹션 카드화(surface+elevation) + 운행 이력
+  진입(E9). NotificationsPage — 미읽음 좌측 4px 그린 바 + elevation + 스켈레톤 radius 토큰화.
+  3페이지 테스트 11건 신설(스냅샷 대신 testid 단언 — 리포 관례).
 
 ---
 

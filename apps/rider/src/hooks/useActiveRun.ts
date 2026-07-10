@@ -23,6 +23,10 @@ export interface ActiveRun {
   cashPaidAmount: number | null;
   completedAt: string | null;
   createdAt: string;
+  /** 06 E8-④ [사장님께 전화]: 배정 주문 supplier의 전화/상호. RLS 정책
+   * p_profiles_read_assigned_supplier(20260709000011)가 없거나 조회 실패 시 null(버튼 미렌더). */
+  supplierPhone: string | null;
+  supplierName: string | null;
 }
 
 const RUN_COLUMNS =
@@ -57,7 +61,7 @@ function mapRow(row: {
   cash_paid_amount: number | null;
   completed_at: string | null;
   created_at: string;
-}): ActiveRun {
+}): Omit<ActiveRun, "supplierPhone" | "supplierName"> {
   return {
     id: row.id,
     status: row.status,
@@ -106,7 +110,24 @@ export function useActiveRun(riderId: string | undefined) {
         const completedMs = run.completedAt ? new Date(run.completedAt).getTime() : 0;
         if (!completedMs || Date.now() - completedMs > COMPLETED_SUMMARY_WINDOW_MS) return null;
       }
-      return run;
+
+      // 06 E8-④: [사장님께 전화]용 supplier 전화/상호. profiles 조인 대신 2쿼리
+      // (apps/user useAssignedRiderCard.ts의 역방향 — RLS p_profiles_read_assigned_supplier,
+      // 20260709000011). 전화 버튼은 부가 기능이므로 조회 실패는 운행 화면을 깨지 않고
+      // null(버튼 미렌더)로 강등한다.
+      let supplierPhone: string | null = null;
+      let supplierName: string | null = null;
+      const { data: supplier, error: supplierError } = await supabase
+        .from("profiles")
+        .select("display_name, phone")
+        .eq("id", run.supplierId)
+        .maybeSingle();
+      if (!supplierError && supplier) {
+        supplierPhone = supplier.phone ?? null;
+        supplierName = supplier.display_name ?? null;
+      }
+
+      return { ...run, supplierPhone, supplierName };
     },
   });
 

@@ -1,20 +1,23 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { ToastProvider } from "@oilpick/ui";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OrderStatus } from "@oilpick/core";
 import { ActiveRunPage } from "./ActiveRunPage";
 import type { ActiveRun } from "../hooks/useActiveRun";
 
-const { mockUseSession, mockUseActiveRun } = vi.hoisted(() => ({
+const { mockUseSession, mockUseActiveRun, mockInvoke, mockStorageFrom } = vi.hoisted(() => ({
   mockUseSession: vi.fn(),
   mockUseActiveRun: vi.fn(),
+  mockInvoke: vi.fn(),
+  mockStorageFrom: vi.fn(),
 }));
 vi.mock("../hooks/useSession", () => ({ useSession: mockUseSession }));
 vi.mock("../hooks/useActiveRun", () => ({ useActiveRun: mockUseActiveRun }));
 vi.mock("../hooks/useRiderLocationPusher", () => ({ useRiderLocationPusher: vi.fn() }));
 vi.mock("../lib/native/scanner", () => ({ isScannerAvailable: () => false, scanQrCode: vi.fn() }));
-vi.mock("../lib/edgeFunction", () => ({ invokeEdgeFunction: vi.fn() }));
-vi.mock("../lib/supabaseClient", () => ({ supabase: { storage: { from: vi.fn() } } }));
+vi.mock("../lib/edgeFunction", () => ({ invokeEdgeFunction: mockInvoke }));
+vi.mock("../lib/supabaseClient", () => ({ supabase: { storage: { from: mockStorageFrom } } }));
 vi.mock("../lib/env", () => ({ KAKAO_KEY: "test-key" }));
 
 function makeRun(overrides: Partial<ActiveRun> = {}): ActiveRun {
@@ -34,25 +37,32 @@ function makeRun(overrides: Partial<ActiveRun> = {}): ActiveRun {
     cashPaidAmount: null,
     completedAt: null,
     createdAt: "2026-07-09T00:00:00Z",
+    supplierPhone: null,
+    supplierName: null,
     ...overrides,
   };
 }
 
 function renderRun(run: ActiveRun | null) {
   mockUseActiveRun.mockReturnValue({ data: run, isLoading: false });
+  // 패널들이 useToast를 쓰므로 실제 앱(App.tsx)과 동일하게 ToastProvider로 감싼다(E6).
   return render(
-    <MemoryRouter initialEntries={["/active"]}>
-      <Routes>
-        <Route path="/active" element={<ActiveRunPage />} />
-        <Route path="/" element={<div>콜 홈</div>} />
-      </Routes>
-    </MemoryRouter>,
+    <ToastProvider>
+      <MemoryRouter initialEntries={["/active"]}>
+        <Routes>
+          <Route path="/active" element={<ActiveRunPage />} />
+          <Route path="/" element={<div>콜 홈</div>} />
+        </Routes>
+      </MemoryRouter>
+    </ToastProvider>,
   );
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
   mockUseSession.mockReturnValue({ session: { user: { id: "rider-1" } }, loading: false });
+  // jsdom에는 URL.createObjectURL이 없다 — PhotoUploader 미리보기용 스텁.
+  URL.createObjectURL = vi.fn((file: File | Blob) => `blob:${file instanceof File ? file.name : "blob"}`);
 });
 
 describe("ActiveRunPage — ARRIVED 현금 매입(07 F6-①)", () => {
@@ -133,5 +143,115 @@ describe("ActiveRunPage — 활성 주문 없음", () => {
   it("EmptyState + 콜 홈으로", () => {
     renderRun(null);
     expect(screen.getByTestId("active-run-go-home")).toBeInTheDocument();
+  });
+});
+
+describe("ActiveRunPage — 액션 피드백 토스트(06 E6)", () => {
+  it("도착(ARRIVE) 성공: '도착을 알렸어요' 토스트", async () => {
+    mockInvoke.mockResolvedValue({ ok: true, data: {} });
+    renderRun(makeRun({ status: "ACCEPTED" }));
+    fireEvent.click(screen.getByTestId("arrive-button"));
+    await waitFor(() => expect(screen.getByTestId("toast")).toHaveTextContent("도착을 알렸어요"));
+  });
+
+  it("도착(ARRIVE) 실패: 에러 토스트", async () => {
+    mockInvoke.mockResolvedValue({ ok: false, message: "전이할 수 없는 상태예요." });
+    renderRun(makeRun({ status: "ACCEPTED" }));
+    fireEvent.click(screen.getByTestId("arrive-button"));
+    await waitFor(() =>
+      expect(screen.getByTestId("toast")).toHaveTextContent("전이할 수 없는 상태예요."),
+    );
+  });
+});
+
+describe("ActiveRunPage — 계량 제출: 업로드 진행 + 토스트(06 E6/E8-③)", () => {
+  function fillMeasureForm() {
+    fireEvent.change(screen.getByTestId("measured-kg-input"), { target: { value: "40" } });
+    const files = [
+      new File(["a"], "a.jpg", { type: "image/jpeg" }),
+      new File(["b"], "b.jpg", { type: "image/jpeg" }),
+    ];
+    fireEvent.change(screen.getByTestId("photo-uploader-input"), { target: { files } });
+  }
+
+  it("순차 업로드 중 '사진 N/M 업로드 중' 표시 후 성공 토스트", async () => {
+    // 업로드 promise를 수동 resolve해 진행 카운트 전환을 관찰한다.
+    const resolvers: Array<() => void> = [];
+    mockStorageFrom.mockReturnValue({
+      upload: vi.fn(
+        () => new Promise<{ error: null }>((res) => resolvers.push(() => res({ error: null }))),
+      ),
+      createSignedUrl: vi.fn(() =>
+        Promise.resolve({ data: { signedUrl: "https://signed.example/p.jpg" }, error: null }),
+      ),
+    });
+    mockInvoke.mockResolvedValue({ ok: true, data: {} });
+
+    renderRun(makeRun({ status: "ARRIVED" }));
+    fillMeasureForm();
+    fireEvent.click(screen.getByTestId("submit-measure-button"));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("upload-progress")).toHaveTextContent("사진 1/2 업로드 중"),
+    );
+    resolvers[0]?.();
+    await waitFor(() =>
+      expect(screen.getByTestId("upload-progress")).toHaveTextContent("사진 2/2 업로드 중"),
+    );
+    resolvers[1]?.();
+    await waitFor(() =>
+      expect(screen.getByTestId("toast")).toHaveTextContent(
+        "계량을 제출했어요 — 사장님 확인을 기다려요",
+      ),
+    );
+    expect(screen.queryByTestId("upload-progress")).not.toBeInTheDocument();
+  });
+
+  it("업로드 실패: 에러 토스트(인라인 검증 에러와 별개)", async () => {
+    mockStorageFrom.mockReturnValue({
+      upload: vi.fn(() => Promise.resolve({ error: new Error("스토리지 업로드 실패") })),
+      createSignedUrl: vi.fn(),
+    });
+    renderRun(makeRun({ status: "ARRIVED" }));
+    fillMeasureForm();
+    fireEvent.click(screen.getByTestId("submit-measure-button"));
+    await waitFor(() =>
+      expect(screen.getByTestId("toast")).toHaveTextContent("스토리지 업로드 실패"),
+    );
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+});
+
+describe("ActiveRunPage — 사장님께 전화(06 E8-④)", () => {
+  it("ACCEPTED + supplierPhone 있으면 tel: 버튼 렌더", () => {
+    renderRun(
+      makeRun({ status: "ACCEPTED", supplierPhone: "01012345678", supplierName: "왕돈까스" }),
+    );
+    const button = screen.getByTestId("call-supplier-button");
+    expect(button).toHaveAttribute("href", "tel:01012345678");
+    expect(button).toHaveTextContent("사장님께 전화");
+    expect(button).toHaveAttribute("aria-label", "왕돈까스 사장님께 전화");
+  });
+
+  it("ARRIVED에서도 렌더, phone 없으면(null) 미렌더", () => {
+    const { unmount } = renderRun(makeRun({ status: "ARRIVED", supplierPhone: "01012345678" }));
+    expect(screen.getByTestId("call-supplier-button")).toBeInTheDocument();
+    unmount();
+
+    renderRun(makeRun({ status: "ARRIVED", supplierPhone: null }));
+    expect(screen.queryByTestId("call-supplier-button")).not.toBeInTheDocument();
+  });
+
+  it("COMPLETED에서는 미렌더(현장 소통 단계 아님)", () => {
+    renderRun(
+      makeRun({
+        status: "COMPLETED",
+        finalKg: 40,
+        cashPaidAmount: 64000,
+        completedAt: "2026-07-09T00:00:00Z",
+        supplierPhone: "01012345678",
+      }),
+    );
+    expect(screen.queryByTestId("call-supplier-button")).not.toBeInTheDocument();
   });
 });

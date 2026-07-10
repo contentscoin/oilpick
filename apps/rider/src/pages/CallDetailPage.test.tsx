@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { ToastProvider } from "@oilpick/ui";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { INSUFFICIENT_COUPON } from "@oilpick/core";
 import { CallDetailPage } from "./CallDetailPage";
@@ -31,15 +32,18 @@ function makeCall(overrides: Record<string, unknown> = {}) {
 }
 
 function renderDetail() {
+  // 페이지가 useToast를 쓰므로 실제 앱(App.tsx)과 동일하게 ToastProvider로 감싼다(E6).
   return render(
-    <MemoryRouter initialEntries={["/calls/o1"]}>
-      <Routes>
-        <Route path="/calls/:id" element={<CallDetailPage />} />
-        <Route path="/coupons/purchase" element={<div>쿠폰 충전 화면</div>} />
-        <Route path="/active" element={<div>운행 화면</div>} />
-        <Route path="/" element={<div>콜 홈</div>} />
-      </Routes>
-    </MemoryRouter>,
+    <ToastProvider>
+      <MemoryRouter initialEntries={["/calls/o1"]}>
+        <Routes>
+          <Route path="/calls/:id" element={<CallDetailPage />} />
+          <Route path="/coupons/purchase" element={<div>쿠폰 충전 화면</div>} />
+          <Route path="/active" element={<div>운행 화면</div>} />
+          <Route path="/" element={<div>콜 홈</div>} />
+        </Routes>
+      </MemoryRouter>
+    </ToastProvider>,
   );
 }
 
@@ -94,11 +98,12 @@ describe("CallDetailPage — 수락 게이트(07 F5-⑤)", () => {
     expect(screen.getByTestId("toast")).toHaveTextContent("수거쿠폰이 부족해요. 충전 후 수락할 수 있어요.");
   });
 
-  it("성공 시 운행 화면으로 이동", async () => {
+  it("성공 시 '콜을 수락했어요' 토스트 + 운행 화면으로 이동(06 E6)", async () => {
     mockInvoke.mockResolvedValue({ ok: true, data: { orderId: "o1", status: "ACCEPTED" } });
     renderDetail();
     fireEvent.click(screen.getByTestId("call-accept-button"));
     await waitFor(() => expect(screen.getByText("운행 화면")).toBeInTheDocument());
+    expect(screen.getByTestId("toast")).toHaveTextContent("콜을 수락했어요");
   });
 });
 

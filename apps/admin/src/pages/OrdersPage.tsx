@@ -22,11 +22,25 @@ const STATUS_FILTERS: Array<{ value: string; label: string }> = [
  * 03-frontend.md apps/admin "/orders": "테이블(상태 필터) → 상세 드로어(이벤트 타임라인, 사진).
  * DISPUTED 건: RESOLVE_DISPUTE 폼(finalKg 입력). CANCEL 버튼".
  * 07 F10-⑤·⑥: 드로어에 쿠폰/현금/귀책 취소/FORCE_COMPLETE(OrderDetailDrawer 참조), 주문 CSV 내보내기.
+ * 06 E10-①: 텍스트 검색(주소/공급업체 상호/라이더 차량번호) + created_at 날짜 범위 필터.
  */
 export function OrdersPage() {
   const [statusFilter, setStatusFilter] = useState("ALL");
+  // 06 E10-①: 날짜 범위(YYYY-MM-DD, 빈 문자열=미적용)는 서버 쿼리로 필터(useAdminOrders 참조).
+  const [searchText, setSearchText] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
-  const { data: orders, isLoading } = useAdminOrders(statusFilter);
+  const { data: orders, isLoading } = useAdminOrders(statusFilter, dateFrom, dateTo);
+
+  // 06 E10-①: 텍스트 검색은 클라이언트 필터(소문자 includes) — 상호/차량번호는 fetchNameMaps가
+  // 클라이언트에서 join한 값이라 서버 ilike로는 검색할 수 없다(DoD: RLS/뷰 변경 없음).
+  const keyword = searchText.trim().toLowerCase();
+  const filteredOrders = (orders ?? []).filter(
+    (o) =>
+      !keyword ||
+      [o.pickupAddress, o.supplierName, o.riderName ?? ""].some((v) => v.toLowerCase().includes(keyword)),
+  );
 
   // 07 F12 ②: CS 페이지의 "연결 주문 드로어 열기"가 /orders?order=<id>로 진입하면 해당 드로어를 연다.
   const [searchParams, setSearchParams] = useSearchParams();
@@ -39,10 +53,11 @@ export function OrdersPage() {
     }
   }, [searchParams, setSearchParams]);
 
+  // 06 E10-①: 검색/상태/날짜 필터가 반영된 목록(filteredOrders) 기준으로 내보낸다.
   function handleCsv() {
     const csv = toCsv(
       ["주문ID", "상태", "공급업체", "라이더", "예상kg", "계량kg", "확정kg", "주소", "생성일"],
-      (orders ?? []).map((o) => [
+      filteredOrders.map((o) => [
         o.id,
         ORDER_STATUS_LABEL[o.status] ?? o.status,
         o.supplierName,
@@ -92,6 +107,35 @@ export function OrdersPage() {
         ))}
       </div>
 
+      {/* 06 E10-①: 텍스트 검색 + created_at 날짜 범위 */}
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          type="search"
+          value={searchText}
+          onChange={(e) => setSearchText(e.target.value)}
+          placeholder="주소·공급업체·라이더 차량번호 검색"
+          className="h-9 w-72 rounded-button border border-gray-200 bg-white px-3 text-sm text-gray-800 outline-none focus:border-primary"
+          data-testid="orders-search-input"
+        />
+        <input
+          type="date"
+          value={dateFrom}
+          onChange={(e) => setDateFrom(e.target.value)}
+          aria-label="시작일"
+          className="h-9 rounded-button border border-gray-200 bg-white px-3 text-sm text-gray-600 outline-none focus:border-primary"
+          data-testid="orders-date-from"
+        />
+        <span className="text-sm text-gray-400">~</span>
+        <input
+          type="date"
+          value={dateTo}
+          onChange={(e) => setDateTo(e.target.value)}
+          aria-label="종료일"
+          className="h-9 rounded-button border border-gray-200 bg-white px-3 text-sm text-gray-600 outline-none focus:border-primary"
+          data-testid="orders-date-to"
+        />
+      </div>
+
       <div className="overflow-x-auto rounded-card bg-white shadow-card">
         <table className="w-full whitespace-nowrap text-left text-sm" data-testid="orders-table">
           <thead>
@@ -112,8 +156,8 @@ export function OrdersPage() {
                   불러오는 중...
                 </td>
               </tr>
-            ) : orders && orders.length > 0 ? (
-              orders.map((o) => {
+            ) : filteredOrders.length > 0 ? (
+              filteredOrders.map((o) => {
                 const stale = isArrivedStale(o.status, o.arrivedAt);
                 return (
                 <tr
@@ -168,7 +212,7 @@ export function OrdersPage() {
             ) : (
               <tr>
                 <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
-                  해당 상태의 주문이 없어요.
+                  조건에 맞는 주문이 없어요.
                 </td>
               </tr>
             )}

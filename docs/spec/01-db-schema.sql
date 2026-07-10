@@ -406,6 +406,19 @@ create policy p_profiles_read_assigned_rider on profiles for select using (
   fn_is_assigned_rider_of_caller(profiles.id)
 );
 
+-- [06 E8-④] rider가 자신이 배정된 주문의 supplier profiles 행을 read ([사장님께 전화] tel: 버튼용,
+-- 20260709000011_profiles_read_assigned_supplier.sql에서 추가 — 위 fn_is_assigned_rider_of_caller의
+-- 대칭 복제, 방향만 반대). security definer로 pickup_orders 조회를 감싸는 이유는 위와 동일(정책 순환 차단).
+create or replace function fn_is_assigned_supplier_of_caller(p_supplier_id uuid) returns boolean as
+$$ select exists (
+  select 1 from pickup_orders o where o.supplier_id = p_supplier_id and o.rider_id = auth.uid()
+) $$
+language sql security definer stable set search_path = public;
+
+create policy p_profiles_read_assigned_supplier on profiles for select using (
+  fn_is_assigned_supplier_of_caller(profiles.id)
+);
+
 -- supplier/rider_profiles: 본인 R/W, admin 전체. 단 rider verify_status는 클라이언트 update 금지(컬럼 분리 함수로만)
 create policy p_sup_self on supplier_profiles for all using (id = (select auth.uid()) or is_admin());
 create policy p_rider_self on rider_profiles for all using (id = (select auth.uid()) or is_admin());

@@ -75,6 +75,7 @@ async function sendFcmMessage(
   title: string,
   body: string,
   link?: string,
+  type?: string,
 ): Promise<{ ok: true } | { ok: false; unregistered: boolean }> {
   const res = await fetch(
     `https://fcm.googleapis.com/v1/projects/${serviceAccount.project_id}/messages:send`,
@@ -88,7 +89,7 @@ async function sendFcmMessage(
         message: {
           token,
           notification: { title, body },
-          data: link ? { link } : undefined,
+          data: link || type ? { ...(link ? { link } : {}), ...(type ? { type } : {}) } : undefined,
         },
       }),
     },
@@ -108,6 +109,8 @@ async function sendFcmMessage(
  * userIds에게 푸시 발송 + notifications 테이블 기록.
  * FCM 발송이 실패하거나 서비스 계정 시크릿이 없어도 예외를 던지지 않는다 —
  * 핵심 로직(상태 전이/포인트 지급)을 막지 않기 위해 반드시 catch해서 로그만 남긴다.
+ * type은 클라이언트 foreground 분류용 FCM data 필드(06 E3 — "NEW_CALL"만 콜 배너 발화.
+ * link만으로는 신규 콜과 완료/취소 푸시를 구분할 수 없다 — 모두 /orders/:id).
  */
 export async function sendPush(
   admin: SupabaseClient,
@@ -115,6 +118,7 @@ export async function sendPush(
   title: string,
   body: string,
   link?: string,
+  type?: string,
 ): Promise<void> {
   if (userIds.length === 0) return;
 
@@ -164,6 +168,7 @@ export async function sendPush(
           title,
           body,
           link,
+          type,
         );
         if (!result.ok && result.unregistered) {
           staleTokenUserIds.push(p.id);

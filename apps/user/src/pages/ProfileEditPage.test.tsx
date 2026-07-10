@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ToastProvider } from "@oilpick/ui";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ProfileEditPage } from "./ProfileEditPage";
 
@@ -22,14 +23,18 @@ const CURRENT = {
 
 function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  // 페이지가 useToast를 쓰므로 실제 앱(App.tsx)과 동일하게 ToastProvider로 감싼다(E6) —
+  // 라우트 밖에 두어 /my 이동 후에도 토스트가 남아 있는 실제 동작을 재현한다.
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={["/my/edit"]}>
-        <Routes>
-          <Route path="/my/edit" element={<ProfileEditPage />} />
-          <Route path="/my" element={<div data-testid="my-page">MY_PAGE</div>} />
-        </Routes>
-      </MemoryRouter>
+      <ToastProvider>
+        <MemoryRouter initialEntries={["/my/edit"]}>
+          <Routes>
+            <Route path="/my/edit" element={<ProfileEditPage />} />
+            <Route path="/my" element={<div data-testid="my-page">MY_PAGE</div>} />
+          </Routes>
+        </MemoryRouter>
+      </ToastProvider>
     </QueryClientProvider>,
   );
 }
@@ -103,5 +108,18 @@ describe("ProfileEditPage", () => {
       expect.objectContaining({ store_name: CURRENT.storeName, address: CURRENT.address }),
     );
     expect(await screen.findByTestId("my-page")).toBeInTheDocument();
+    // E6: 저장 성공 토스트 — /my 이동 후에도 표시된다.
+    expect(screen.getByTestId("toast")).toHaveTextContent("프로필을 저장했어요");
+  });
+
+  it("shows an error toast and stays on the page when the save fails (E6)", async () => {
+    mockUpdate.mockReturnValue({ eq: () => Promise.resolve({ error: { message: "저장에 실패했어요" } }) });
+    renderPage();
+    const nameInput = await screen.findByTestId("edit-display-name-input");
+    fireEvent.change(nameInput, { target: { value: "새담당자" } });
+    fireEvent.submit(nameInput.closest("form")!);
+
+    expect(await screen.findByTestId("toast")).toHaveTextContent("저장에 실패했어요");
+    expect(screen.queryByTestId("my-page")).not.toBeInTheDocument();
   });
 });

@@ -132,6 +132,30 @@ describe("HomePage", () => {
     expect(screen.queryByText("예상 지급 포인트")).not.toBeInTheDocument();
   });
 
+  // useNotifications 모킹은 HomePage → useUnreadCount(실구현) → useNotifications로 이어지는
+  // 경로에 그대로 적용된다(E7 공통 훅 추출 후에도 도트 렌더가 유지되는지 검증).
+  it("shows the unread dot on the bell when there are unread notifications (E7)", () => {
+    mockUseNotifications.mockReturnValue({
+      data: [
+        { id: 1, title: "제목", body: "본문", link: null, readAt: null, createdAt: "2026-07-08T00:00:00Z" },
+      ],
+    });
+    renderHome();
+    expect(screen.getByTestId("notifications-unread-dot")).toBeInTheDocument();
+    expect(screen.getByTestId("notifications-link")).toHaveAttribute("aria-label", "알림 1건");
+  });
+
+  it("hides the unread dot when every notification is read (E7)", () => {
+    mockUseNotifications.mockReturnValue({
+      data: [
+        { id: 1, title: "제목", body: "본문", link: null, readAt: "2026-07-08T01:00:00Z", createdAt: "2026-07-08T00:00:00Z" },
+      ],
+    });
+    renderHome();
+    expect(screen.queryByTestId("notifications-unread-dot")).not.toBeInTheDocument();
+    expect(screen.getByTestId("notifications-link")).toHaveAttribute("aria-label", "알림");
+  });
+
   it("shows the pinned active order card when there is an in-progress order", () => {
     mockUseActiveOrder.mockReturnValue({
       data: { id: "order-1", status: "ACCEPTED", requestedKg: 30, snapshotPricePerKg: 700, createdAt: "2026-07-01T00:00:00Z" },

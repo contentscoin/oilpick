@@ -49,12 +49,20 @@ export interface AdminOrderRow {
   arrivedAt: string | null;
 }
 
-/** 03-frontend.md apps/admin "/orders": "테이블(상태 필터)". statusFilter가 "ALL"이면 전체. */
-export function useAdminOrders(statusFilter: string) {
+/**
+ * 03-frontend.md apps/admin "/orders": "테이블(상태 필터)". statusFilter가 "ALL"이면 전체.
+ * 06 E10-①: created_at 날짜 범위(dateFrom/dateTo, YYYY-MM-DD, 빈 문자열=미적용)는 서버 쿼리
+ * 파라미터(.gte/.lt)로 필터한다 — limit(200) 때문에 클라이언트 필터로는 기간 밖의 과거 주문에
+ * 닿을 수 없다(RLS/뷰 변경 없음). 경계는 브라우저 로컬 자정 기준 — 목록의 toLocaleString
+ * 표시와 같은 타임존으로 맞춘다(created_at은 timestamptz).
+ */
+export function useAdminOrders(statusFilter: string, dateFrom = "", dateTo = "") {
   const queryClient = useQueryClient();
 
   const query = useQuery({
-    queryKey: queryKeys.orders(statusFilter),
+    // 날짜 범위는 statusFilter와 같은 방식으로 queryKey에 포함한다. queryKeys.orders 프리픽스를
+    // 유지해 Realtime invalidate(["admin", "orders"]) 대상에 남긴다.
+    queryKey: [...queryKeys.orders(statusFilter), dateFrom, dateTo],
     queryFn: async (): Promise<AdminOrderRow[]> => {
       let q = supabase
         .from("pickup_orders")
@@ -63,6 +71,13 @@ export function useAdminOrders(statusFilter: string) {
         .limit(200);
       if (statusFilter !== "ALL") {
         q = q.eq("status", statusFilter);
+      }
+      // 시작일 로컬 자정 이상 ~ 종료일 다음날 로컬 자정 미만(종료일 포함).
+      if (dateFrom) {
+        q = q.gte("created_at", new Date(`${dateFrom}T00:00:00`).toISOString());
+      }
+      if (dateTo) {
+        q = q.lt("created_at", new Date(new Date(`${dateTo}T00:00:00`).getTime() + 24 * 60 * 60 * 1000).toISOString());
       }
       const [{ data, error }, { supplierNames, riderNames }] = await Promise.all([q, fetchNameMaps()]);
       if (error) throw error;

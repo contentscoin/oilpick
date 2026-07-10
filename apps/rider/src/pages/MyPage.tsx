@@ -1,16 +1,33 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
-import { colors, radius, surface } from "@oilpick/ui";
+import { colors, elevation, radius, surface } from "@oilpick/ui";
 import { useSession } from "../hooks/useSession";
 import { useRiderProfile } from "../hooks/useRiderProfile";
 import { supabase } from "../lib/supabaseClient";
 
 const NOTIFY_PREF_KEY = "oilpick:notify-enabled";
 
+/** 메뉴 카드 안 공통 행 스타일(터치 타깃 48px, 행 사이 구분선). */
+const menuRowStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  minHeight: 48,
+  padding: "0 4px",
+  background: "none",
+  border: "none",
+  borderBottom: `1px solid ${surface.border}`,
+  fontSize: 15,
+};
+
 /**
  * R12 마이. apps/user/src/pages/MyPage.tsx와 동일 구성(매장정보 대신 라이더 정보,
  * 알림설정 로컬 토글, 약관/고객센터 placeholder) — 03-frontend.md 작업 지시:
  * "/notifications, /my: apps/user와 동일 패턴".
+ *
+ * 06 E12 — 섹션 카드화(surface.card + surface.border + elevation.card). 준비중 항목은
+ * 회색 비활성 유지. 06 E9 — "/history" 진입점이 탭바에 없어(F6-⑤ 탭 구성 유지) 여기에
+ * "운행 이력" 링크 항목을 추가한다.
  */
 export function MyPage() {
   const navigate = useNavigate();
@@ -40,7 +57,7 @@ export function MyPage() {
 
       <section
         data-testid="rider-info-card"
-        style={{ borderRadius: radius.card, padding: 16, backgroundColor: surface.card, border: `1px solid ${surface.border}` }}
+        style={{ borderRadius: radius.card, padding: 16, backgroundColor: surface.card, border: `1px solid ${surface.border}`, boxShadow: elevation.card }}
       >
         <p style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>{profile?.displayName ?? ""}</p>
         <p style={{ margin: "4px 0 0", fontSize: 13, color: colors.status.wait }}>{profile?.vehicleNumber ?? ""}</p>
@@ -54,23 +71,34 @@ export function MyPage() {
         </button>
       </section>
 
-      <section style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <section
+        data-testid="menu-card"
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 4,
+          borderRadius: radius.card,
+          padding: "4px 12px",
+          backgroundColor: surface.card,
+          border: `1px solid ${surface.border}`,
+          boxShadow: elevation.card,
+        }}
+      >
+        {/* 06 E9 — 운행 이력 진입점(탭바에 없음 — F6-⑤ 탭 구성 유지라 여기서 진입). */}
+        <button
+          type="button"
+          data-testid="history-link"
+          onClick={() => navigate("/history")}
+          style={{ ...menuRowStyle, cursor: "pointer", color: "inherit" }}
+        >
+          <span>운행 이력</span>
+          <span style={{ color: colors.status.wait }}>&gt;</span>
+        </button>
         <button
           type="button"
           data-testid="notify-toggle"
           onClick={toggleNotify}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            minHeight: 48,
-            padding: "0 4px",
-            background: "none",
-            border: "none",
-            borderBottom: `1px solid ${surface.border}`,
-            cursor: "pointer",
-            fontSize: 15,
-          }}
+          style={{ ...menuRowStyle, cursor: "pointer" }}
         >
           <span>알림 받기</span>
           <span style={{ fontWeight: 700, color: notifyEnabled ? colors.primary.DEFAULT : colors.status.wait }}>
@@ -79,7 +107,7 @@ export function MyPage() {
         </button>
         <div
           data-testid="terms-placeholder"
-          style={{ display: "flex", alignItems: "center", minHeight: 48, padding: "0 4px", borderBottom: `1px solid ${surface.border}`, fontSize: 15, color: colors.status.wait }}
+          style={{ ...menuRowStyle, justifyContent: "flex-start", color: colors.status.wait }}
         >
           이용약관 · 개인정보처리방침 (준비 중)
         </div>
@@ -87,7 +115,7 @@ export function MyPage() {
           type="button"
           data-testid="support-link"
           onClick={() => navigate("/support")}
-          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", minHeight: 48, padding: "0 4px", background: "none", border: "none", cursor: "pointer", fontSize: 15, color: "inherit" }}
+          style={{ ...menuRowStyle, borderBottom: "none", cursor: "pointer", color: "inherit" }}
         >
           <span>고객센터</span>
           <span style={{ color: colors.status.wait }}>&gt;</span>

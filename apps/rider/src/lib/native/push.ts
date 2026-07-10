@@ -8,7 +8,9 @@ import { Capacitor } from "@capacitor/core";
 import { PushNotifications } from "@capacitor/push-notifications";
 import type { NavigateFn } from "./deeplink";
 import { routeToDeepLink } from "./deeplink";
+import { toCallAlertDetail } from "./callAlertPush";
 import { supabase } from "../supabaseClient";
+import { CALL_ALERT_EVENT } from "../../hooks/useCallAlert";
 
 /** 등록 토큰을 로그인 라이더의 profiles.fcm_token에 저장(본인 row update, RLS 허용 범위). */
 async function saveFcmToken(token: string): Promise<void> {
@@ -41,10 +43,18 @@ export async function initPush(navigate: NavigateFn): Promise<void> {
     console.error("푸시 등록 실패", err);
   });
 
-  // foreground 수신: 리스너만 등록해 둔다(iOS foreground 알림 이벤트 유실 방지).
-  // Phase 1은 알림함(notifications) + Realtime로 화면을 갱신하므로 별도 배너 UI는 없다.
-  await PushNotifications.addListener("pushNotificationReceived", () => {
-    /* Phase 1: foreground 배너/카운트 UI 없음 — Realtime 구독이 화면을 갱신한다. */
+  // foreground 수신(06 E3): 서버가 data.type="NEW_CALL"을 단 신규 콜 푸시만 커스텀 이벤트로
+  // 재발행한다 → CallAlertListener(useCallAlert)가 Realtime 경로와 동일한 배너를 띄운다.
+  // 완료/취소/중재 푸시는 link가 같아(/orders/:id) 분류는 반드시 type으로만(callAlertPush.ts).
+  // 같은 콜을 Realtime과 이중 수신해도 useCallAlert가 orderId 기준으로 dedupe한다.
+  await PushNotifications.addListener("pushNotificationReceived", (notification) => {
+    const detail = toCallAlertDetail({
+      title: notification.title ?? undefined,
+      body: notification.body ?? undefined,
+      data: notification.data as Record<string, unknown> | undefined,
+    });
+    if (!detail) return;
+    window.dispatchEvent(new CustomEvent(CALL_ALERT_EVENT, { detail }));
   });
 
   await PushNotifications.addListener("pushNotificationActionPerformed", (action) => {
