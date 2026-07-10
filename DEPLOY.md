@@ -99,6 +99,10 @@ supabase secrets set KOEM_API_KEY="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
 ## 2. Vercel (앱 배포 — 하나의 repo, 서브도메인 접속포인트)
 
+> **상태(2026-07-10)**: 프로젝트 3개(oilpick-admin/user/rider, 팀 jakes-projects) 운영 중 +
+> `contentscoin/oilpick` **Git 연동 완료** — main에 커밋이 병합되면 3개 앱이 자동 재배포된다.
+> 아래 "import" 절차는 신규 구축용 기록. 이 커밋 자체가 연동 후 첫 자동 배포 트리거(검증용).
+
 **구조**: 코드베이스(repo)는 하나. 접속포인트만 서브도메인으로 나눈다 —
 `admin.oilpick.kr`(관리자), `app.oilpick.kr`(공급업체=user), `rider.oilpick.kr`(라이더).
 같은 repo(contentscoin/oilpick)를 Vercel에 **앱 수만큼 import**해 각 프로젝트의 Root Directory만
