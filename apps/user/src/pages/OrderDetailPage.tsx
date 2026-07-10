@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { BigButton, ConfirmSheet, DriverCard, ErrorScreen, InfoStatCard, MapView, OrderTimeline, StatusHeadline, colors, elevation, gray, radius, surface, touchTarget } from "@oilpick/ui";
+import { BigButton, ConfirmSheet, DriverCard, ErrorScreen, InfoStatCard, MapView, OrderTimeline, StatusHeadline, colors, elevation, gray, radius, surface, touchTarget, useToast } from "@oilpick/ui";
 import { estimateCash, formatKg, formatKrw, formatPoint, formatTimeOfDay, type OrderStatus } from "@oilpick/core";
 import { KAKAO_KEY } from "../lib/env";
 import { invokeEdgeFunction } from "../lib/edgeFunction";
 import { useOrder } from "../hooks/useOrder";
 import { useAssignedRiderCard } from "../hooks/useAssignedRiderCard";
+import { useSession } from "../hooks/useSession";
+import { useUnreadCount } from "../hooks/useUnreadCount";
 
 /**
  * U6~U9 "/orders/:id" 상태별 단일 화면. 03-frontend.md(07 F9 개정):
@@ -23,6 +25,11 @@ export function OrderDetailPage() {
   const navigate = useNavigate();
   const { data: order, isLoading } = useOrder(id);
   const { data: rider } = useAssignedRiderCard(order?.riderId);
+  const { session } = useSession();
+  // 06 E7: 헤더 벨 미읽음 배지 — 홈과 동일한 useUnreadCount로 공통화.
+  const unread = useUnreadCount(session?.user.id);
+  // 06 E6: mutation 성공/실패 피드백은 전역 토스트로 통일(인라인 에러 텍스트 대체).
+  const { showToast } = useToast();
 
   const [cancelling, setCancelling] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
@@ -30,7 +37,6 @@ export function OrderDetailPage() {
   const [disputing, setDisputing] = useState(false);
   const [disputeReason, setDisputeReason] = useState("");
   const [showDisputeForm, setShowDisputeForm] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
 
   if (isLoading) {
     return (
@@ -63,7 +69,6 @@ export function OrderDetailPage() {
 
   async function handleCancel() {
     if (!id) return;
-    setActionError(null);
     setCancelling(true);
     const result = await invokeEdgeFunction("order-transition", {
       orderId: id,
@@ -72,12 +77,15 @@ export function OrderDetailPage() {
     });
     setCancelling(false);
     setShowCancelConfirm(false);
-    if (!result.ok) setActionError(result.message);
+    if (result.ok) {
+      showToast("요청을 취소했어요", { variant: "success" });
+    } else {
+      showToast(result.message, { variant: "error" });
+    }
   }
 
   async function handleConfirmMeasure() {
     if (!id) return;
-    setActionError(null);
     setConfirming(true);
     const result = await invokeEdgeFunction("order-transition", {
       orderId: id,
@@ -85,12 +93,15 @@ export function OrderDetailPage() {
       payload: {},
     });
     setConfirming(false);
-    if (!result.ok) setActionError(result.message);
+    if (result.ok) {
+      showToast("무게를 확인했어요 — 현금 수령 확인 완료", { variant: "success" });
+    } else {
+      showToast(result.message, { variant: "error" });
+    }
   }
 
   async function handleDispute() {
     if (!id || !disputeReason.trim()) return;
-    setActionError(null);
     setDisputing(true);
     const result = await invokeEdgeFunction("order-transition", {
       orderId: id,
@@ -99,10 +110,12 @@ export function OrderDetailPage() {
     });
     setDisputing(false);
     if (!result.ok) {
-      setActionError(result.message);
+      // 실패 시 폼을 닫지 않는다 — 입력한 사유를 유지한 채 재시도할 수 있어야 한다.
+      showToast(result.message, { variant: "error" });
       return;
     }
     setShowDisputeForm(false);
+    showToast("이의신청을 접수했어요", { variant: "success" });
   }
 
   // 07 F9: 계량 제출(measuredKg) 또는 중재 확정(finalKg)이 있으면 확인 패널을 노출한다.
@@ -168,8 +181,9 @@ export function OrderDetailPage() {
         <Link
           to="/notifications"
           data-testid="order-detail-notifications"
-          aria-label="알림"
+          aria-label={unread > 0 ? `알림 ${unread}건` : "알림"}
           style={{
+            position: "relative",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -180,18 +194,28 @@ export function OrderDetailPage() {
           }}
         >
           <BellIcon />
+          {/* 06 E7: 미읽음 도트 — 홈 헤더(notifications-unread-dot)와 동일 스타일. */}
+          {unread > 0 && (
+            <span
+              data-testid="order-detail-unread-dot"
+              style={{
+                position: "absolute",
+                top: 3,
+                right: 4,
+                minWidth: 8,
+                height: 8,
+                borderRadius: radius.pill,
+                backgroundColor: colors.up,
+                border: `1.5px solid ${surface.app}`,
+              }}
+            />
+          )}
         </Link>
       </div>
 
       {/* 05-design-upgrade.md "## U7 주문상세 — 목업 확정": 상태 헤드라인(near-black 제목 + 우측 pill
           + 라이더명 보조문구). */}
       <StatusHeadline status={order.status} subtitle={headlineSubtitle} />
-
-      {actionError && (
-        <p role="alert" data-testid="order-action-error" style={{ color: colors.status.danger, fontSize: 14, margin: 0 }}>
-          {actionError}
-        </p>
-      )}
 
       {order.status === "REQUESTED" && (
         <section data-testid="order-requested-panel" style={{ display: "flex", flexDirection: "column", gap: 20, alignItems: "center" }}>

@@ -124,6 +124,7 @@ async function rebroadcast(
       "신규 콜 도착",
       `근처(${radiusKm}km)에 새 수거 요청이 있어요.`,
       `/orders/${orderId}`,
+      "NEW_CALL", // 재브로드캐스트도 신규 콜 — rider foreground 콜 배너 분류(06 E3)
     );
   }
 }

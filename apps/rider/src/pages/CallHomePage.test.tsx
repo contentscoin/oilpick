@@ -1,5 +1,6 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { ToastProvider } from "@oilpick/ui";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CallHomePage } from "./CallHomePage";
 
@@ -10,6 +11,7 @@ const {
   mockUseCouponBalance,
   mockUseTodayStats,
   mockUseGeolocation,
+  mockFrom,
 } = vi.hoisted(() => ({
   mockUseSession: vi.fn(),
   mockUseRiderProfile: vi.fn(),
@@ -17,6 +19,7 @@ const {
   mockUseCouponBalance: vi.fn(),
   mockUseTodayStats: vi.fn(),
   mockUseGeolocation: vi.fn(),
+  mockFrom: vi.fn(),
 }));
 vi.mock("../hooks/useSession", () => ({ useSession: mockUseSession }));
 vi.mock("../hooks/useRiderProfile", () => ({ useRiderProfile: mockUseRiderProfile }));
@@ -24,17 +27,27 @@ vi.mock("../hooks/useOpenCalls", () => ({ useOpenCalls: mockUseOpenCalls }));
 vi.mock("../hooks/useCoupons", () => ({ useCouponBalance: mockUseCouponBalance }));
 vi.mock("../hooks/useTodayStats", () => ({ useTodayStats: mockUseTodayStats }));
 vi.mock("../hooks/useGeolocation", () => ({ useGeolocation: mockUseGeolocation }));
-vi.mock("../lib/supabaseClient", () => ({ supabase: { from: vi.fn() } }));
+vi.mock("../lib/supabaseClient", () => ({ supabase: { from: mockFrom } }));
+
+/** rider_profiles update 체인(from→update→eq) 목. */
+function mockUpdateResult(error: unknown) {
+  mockFrom.mockReturnValue({
+    update: () => ({ eq: () => Promise.resolve({ error }) }),
+  });
+}
 
 function renderHome() {
+  // 페이지가 useToast를 쓰므로 실제 앱(App.tsx)과 동일하게 ToastProvider로 감싼다(E6).
   return render(
-    <MemoryRouter initialEntries={["/"]}>
-      <Routes>
-        <Route path="/" element={<CallHomePage />} />
-        <Route path="/coupons" element={<div>쿠폰 내역 화면</div>} />
-        <Route path="/coupons/purchase" element={<div>쿠폰 충전 화면</div>} />
-      </Routes>
-    </MemoryRouter>,
+    <ToastProvider>
+      <MemoryRouter initialEntries={["/"]}>
+        <Routes>
+          <Route path="/" element={<CallHomePage />} />
+          <Route path="/coupons" element={<div>쿠폰 내역 화면</div>} />
+          <Route path="/coupons/purchase" element={<div>쿠폰 충전 화면</div>} />
+        </Routes>
+      </MemoryRouter>
+    </ToastProvider>,
   );
 }
 
@@ -78,5 +91,39 @@ describe("CallHomePage — 오늘 실적(07 F6-⑥)", () => {
     expect(screen.getByTestId("today-coupons")).toHaveTextContent("오늘 소진 쿠폰 3장");
     // 구모델 포인트 표기 없음.
     expect(screen.queryByText("오늘 확정 포인트")).not.toBeInTheDocument();
+  });
+});
+
+describe("CallHomePage — 온·오프라인 토글 피드백(06 E6)", () => {
+  it("오프라인→온라인 성공: '온라인 전환됐어요' 토스트", async () => {
+    mockUseRiderProfile.mockReturnValue({ data: { isOnline: false, verifyStatus: "APPROVED" } });
+    mockUpdateResult(null);
+    renderHome();
+    fireEvent.click(screen.getByTestId("online-toggle"));
+    await waitFor(() => expect(screen.getByTestId("toast")).toHaveTextContent("온라인 전환됐어요"));
+  });
+
+  it("온라인→오프라인 성공: '오프라인으로 전환했어요' 토스트", async () => {
+    mockUpdateResult(null);
+    renderHome();
+    fireEvent.click(screen.getByTestId("online-toggle"));
+    await waitFor(() =>
+      expect(screen.getByTestId("toast")).toHaveTextContent("오프라인으로 전환했어요"),
+    );
+  });
+
+  it("실패: 에러 토스트 + [재시도]로 다시 시도", async () => {
+    mockUpdateResult({ message: "network" });
+    renderHome();
+    fireEvent.click(screen.getByTestId("online-toggle"));
+    await waitFor(() =>
+      expect(screen.getByTestId("toast")).toHaveTextContent("온라인 상태 변경에 실패했어요"),
+    );
+    // 재시도 버튼 → update 재호출 성공 → 성공 토스트.
+    mockUpdateResult(null);
+    fireEvent.click(screen.getByTestId("toast-retry"));
+    await waitFor(() =>
+      expect(screen.getByTestId("toast")).toHaveTextContent("오프라인으로 전환했어요"),
+    );
   });
 });

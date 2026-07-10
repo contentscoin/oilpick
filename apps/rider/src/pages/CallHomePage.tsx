@@ -9,6 +9,7 @@ import {
   gray,
   radius,
   surface,
+  useToast,
 } from "@oilpick/ui";
 import { estimateCash, formatKg, formatKrw } from "@oilpick/core";
 import { useSession } from "../hooks/useSession";
@@ -28,6 +29,8 @@ export function CallHomePage() {
   const navigate = useNavigate();
   const { session } = useSession();
   const userId = session?.user.id;
+  // 06 E6: 온·오프라인 토글 성공/실패 피드백 토스트(기존엔 실패 시 console.error뿐).
+  const { showToast } = useToast();
 
   const { data: rider } = useRiderProfile(userId);
   const { data: stats } = useTodayStats(userId);
@@ -47,11 +50,20 @@ export function CallHomePage() {
     if (!userId || !rider) return;
     // CLAUDE.md 절대 규칙 2/3 관련 없음: is_online은 상태전이(pickup_orders)가 아니라
     // 라이더 자신의 온오프 토글이고, RLS p_rider_self가 본인 행 update를 허용한다.
+    const goingOnline = !rider.isOnline;
     const { error } = await supabase
       .from("rider_profiles")
-      .update({ is_online: !rider.isOnline })
+      .update({ is_online: goingOnline })
       .eq("id", userId);
-    if (error) console.error("온라인 상태 변경 실패", error);
+    if (error) {
+      // E6: 실패는 에러 토스트 + 재시도(같은 방향으로 다시 시도).
+      showToast("온라인 상태 변경에 실패했어요", {
+        variant: "error",
+        onRetry: () => void handleToggleOnline(),
+      });
+      return;
+    }
+    showToast(goingOnline ? "온라인 전환됐어요" : "오프라인으로 전환했어요", { variant: "success" });
   }
 
   return (

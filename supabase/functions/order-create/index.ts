@@ -132,6 +132,7 @@ async function broadcastCall(
   const riderIds = (riders ?? []).map((r: { rider_id: string }) => r.rider_id);
   if (riderIds.length === 0) return 0;
 
-  await sendPush(admin, riderIds, "신규 콜 도착", "근처에 새 수거 요청이 있어요.", `/orders/${orderId}`);
+  // type="NEW_CALL": rider 앱 foreground 콜 배너(06 E3)의 분류 신호 — 완료/취소 푸시와 구분.
+  await sendPush(admin, riderIds, "신규 콜 도착", "근처에 새 수거 요청이 있어요.", `/orders/${orderId}`, "NEW_CALL");
   return riderIds.length;
 }

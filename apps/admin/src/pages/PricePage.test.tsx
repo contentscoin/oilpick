@@ -9,6 +9,7 @@ import type { CouponPriceTickRow, PriceTickRow } from "../hooks/usePriceAdmin";
  * - price-set 페이로드에 riderFee 미포함(개정 zod 계약 준수)
  * - 쿠폰 단가 섹션: 현재 단가 카드 + coupon-price-set 등록 폼 + 이력 테이블
  * - 이력 테이블의 과거 rider_fee는 레거시 열로 유지(null="-")
+ * - 06 E10-④: 두 섹션 공통 정정 안내 배너(과거 tick 수정 금지 — 신규 tick 재등록 유도)
  */
 
 const { mockInvoke, mockPriceHistory, mockCouponHistory } = vi.hoisted(() => ({
@@ -126,5 +127,15 @@ describe("PricePage 쿠폰 단가 섹션 (07 F10-①)", () => {
     fireEvent.submit(screen.getByTestId("coupon-price-submit"));
     expect(await screen.findByText("쿠폰 단가는 양의 정수로 입력해주세요.")).toBeInTheDocument();
     expect(mockInvoke).not.toHaveBeenCalled();
+  });
+});
+
+describe("PricePage 정정 안내 배너 (06 E10-④)", () => {
+  it("시세·쿠폰 단가 두 섹션에 상시 배너를 렌더한다", () => {
+    setup();
+    expect(screen.getByTestId("tick-correction-notice-oil")).toBeInTheDocument();
+    expect(screen.getByTestId("tick-correction-notice-coupon")).toBeInTheDocument();
+    // 과거 tick 수정 금지(스냅샷 원칙) + 신규 tick 재등록 유도 문구가 두 섹션 모두에 노출.
+    expect(screen.getAllByText(/과거 tick은 수정할 수 없어요/)).toHaveLength(2);
   });
 });

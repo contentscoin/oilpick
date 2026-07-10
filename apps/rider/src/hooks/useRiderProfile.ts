@@ -3,6 +3,9 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../lib/supabaseClient";
 import { queryKeys } from "../lib/queryClient";
 
+/** Realtime 채널 토픽 유일화용 시퀀스(훅 인스턴스 동시 마운트 시 토픽 충돌 방지 — 아래 주석). */
+let riderProfileChannelSeq = 0;
+
 export type VerifyStatus = "PENDING" | "APPROVED" | "REJECTED";
 
 export interface RiderProfile {
@@ -56,8 +59,12 @@ export function useRiderProfile(userId: string | undefined) {
 
   useEffect(() => {
     if (!userId) return;
+    // 토픽에 인스턴스 시퀀스를 붙인다 — supabase-js는 동일 토픽이면 기존 채널 인스턴스를
+    // 재사용하므로, 루트 CallAlertListener(06 E3)와 페이지가 이 훅을 "동시에" 마운트하면
+    // 나중 바인딩은 join id가 없어 영원히 발화하지 않고, 페이지 unmount의 removeChannel이
+    // 공유 채널을 죽여 루트 구독까지 끊긴다(적대적 리뷰 확정 결함). 고유 토픽이면 무해.
     const channel = supabase
-      .channel(`rider_profiles_self_${userId}`)
+      .channel(`rider_profiles_self_${userId}_${++riderProfileChannelSeq}`)
       .on(
         "postgres_changes",
         {

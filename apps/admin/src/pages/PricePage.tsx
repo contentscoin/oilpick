@@ -20,6 +20,7 @@ import type { CouponPriceSetOutput, PriceSetOutput } from "@oilpick/core";
  *   rider_fee 표시는 레거시 열로 유지).
  * - 쿠폰 단가 섹션 추가: 현재 단가 카드 + coupon-price-set 폼 + 최근 이력(기존 tick UI 패턴 재사용).
  * 두 tick 모두 Edge Function만 경유(절대 규칙 2/3 원칙 — 정정 불가·신규 tick만).
+ * 06 E10-④: 두 섹션 공통 정정 안내 배너(TickCorrectionNotice) — 신규 tick 재등록 유도.
  */
 export function PricePage() {
   return (
@@ -32,6 +33,22 @@ export function PricePage() {
       <OilPriceSection />
       <CouponPriceSection />
     </div>
+  );
+}
+
+/**
+ * 06 E10-④: tick 등록 실수 정정 안내(상시 노출). 과거 tick 수정은 스냅샷 원칙(절대 규칙 5 —
+ * 주문 생성 시점 시세 고정, 이후 변동 무영향)상 금지 — 정정은 새 tick 재등록으로만 한다.
+ * 시세/쿠폰 단가 두 섹션이 공유하며 testid는 섹션별 접미사로 구분한다.
+ */
+function TickCorrectionNotice({ testId }: { testId: string }) {
+  return (
+    <p
+      className="rounded-card border border-accent/30 bg-accent-light px-4 py-3 text-sm text-gray-700"
+      data-testid={testId}
+    >
+      잘못 등록했다면 새 tick을 다시 등록하세요 — 과거 tick은 수정할 수 없어요(주문 생성 시점 스냅샷 원칙).
+    </p>
   );
 }
 
@@ -76,6 +93,8 @@ function OilPriceSection() {
 
   return (
     <>
+      <TickCorrectionNotice testId="tick-correction-notice-oil" />
+
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div className="rounded-card bg-white p-6 shadow-card">
           <p className="text-sm text-gray-500">현재 매입가</p>
@@ -199,6 +218,8 @@ function CouponPriceSection() {
 
   return (
     <>
+      <TickCorrectionNotice testId="tick-correction-notice-coupon" />
+
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div className="rounded-card bg-white p-6 shadow-card">
           <p className="text-sm text-gray-500">현재 쿠폰 단가</p>

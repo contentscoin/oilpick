@@ -13,18 +13,36 @@ vi.mock("../lib/supabaseClient", () => ({
   supabase: { from: mockFrom, channel: mockChannel, removeChannel: mockRemoveChannel },
 }));
 
-/** from→select→eq→in→order→limit→maybeSingle 체인 목. */
-function mockRow(row: unknown) {
-  mockFrom.mockReturnValue({
-    select: () => ({
-      eq: () => ({
-        in: () => ({
-          order: () => ({
-            limit: () => ({ maybeSingle: () => Promise.resolve({ data: row, error: null }) }),
+/**
+ * 테이블별 체인 목: pickup_orders(select→eq→in→order→limit→maybeSingle) +
+ * profiles(select→eq→maybeSingle — E8-④ supplier 전화 2쿼리).
+ */
+function mockRow(
+  row: unknown,
+  supplier: { data: unknown; error: unknown } = {
+    data: { display_name: "왕돈까스", phone: "01012345678" },
+    error: null,
+  },
+) {
+  mockFrom.mockImplementation((table: string) => {
+    if (table === "profiles") {
+      return {
+        select: () => ({
+          eq: () => ({ maybeSingle: () => Promise.resolve(supplier) }),
+        }),
+      };
+    }
+    return {
+      select: () => ({
+        eq: () => ({
+          in: () => ({
+            order: () => ({
+              limit: () => ({ maybeSingle: () => Promise.resolve({ data: row, error: null }) }),
+            }),
           }),
         }),
       }),
-    }),
+    };
   });
 }
 
@@ -82,5 +100,24 @@ describe("useActiveRun — COMPLETED 완료 직후 창(07 F6-④)", () => {
     const { result } = renderHook(() => useActiveRun("rider-1"), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data?.status).toBe("ARRIVED");
+  });
+});
+
+describe("useActiveRun — supplier 전화/상호(06 E8-④)", () => {
+  it("profiles 2쿼리로 supplierPhone/supplierName을 채운다", async () => {
+    mockRow(baseRow());
+    const { result } = renderHook(() => useActiveRun("rider-1"), { wrapper: makeWrapper() });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.supplierPhone).toBe("01012345678");
+    expect(result.current.data?.supplierName).toBe("왕돈까스");
+  });
+
+  it("profiles 조회 실패(RLS 미허용 등)여도 운행은 유지하고 전화만 null", async () => {
+    mockRow(baseRow(), { data: null, error: { message: "permission denied" } });
+    const { result } = renderHook(() => useActiveRun("rider-1"), { wrapper: makeWrapper() });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.status).toBe("ARRIVED");
+    expect(result.current.data?.supplierPhone).toBeNull();
+    expect(result.current.data?.supplierName).toBeNull();
   });
 });

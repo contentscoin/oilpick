@@ -1,17 +1,22 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { ToastProvider } from "@oilpick/ui";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { OrderDetailPage } from "./OrderDetailPage";
 
-const { mockUseOrder, mockUseAssignedRiderCard, mockInvokeEdgeFunction } = vi.hoisted(() => ({
+const { mockUseOrder, mockUseAssignedRiderCard, mockInvokeEdgeFunction, mockUseSession, mockUseUnreadCount } = vi.hoisted(() => ({
   mockUseOrder: vi.fn(),
   mockUseAssignedRiderCard: vi.fn(),
   mockInvokeEdgeFunction: vi.fn(),
+  mockUseSession: vi.fn(),
+  mockUseUnreadCount: vi.fn(),
 }));
 
 vi.mock("../hooks/useOrder", () => ({ useOrder: mockUseOrder }));
 vi.mock("../hooks/useAssignedRiderCard", () => ({ useAssignedRiderCard: mockUseAssignedRiderCard }));
 vi.mock("../lib/edgeFunction", () => ({ invokeEdgeFunction: mockInvokeEdgeFunction }));
+vi.mock("../hooks/useSession", () => ({ useSession: mockUseSession }));
+vi.mock("../hooks/useUnreadCount", () => ({ useUnreadCount: mockUseUnreadCount }));
 
 const BASE_ORDER = {
   id: "order-1",
@@ -40,14 +45,17 @@ const BASE_ORDER = {
 };
 
 function renderPage() {
+  // 페이지가 useToast를 쓰므로 실제 앱(App.tsx)과 동일하게 ToastProvider로 감싼다(E6).
   return render(
-    <MemoryRouter initialEntries={["/orders/order-1"]}>
-      <Routes>
-        <Route path="/orders/:id" element={<OrderDetailPage />} />
-        <Route path="/" element={<div>HOME_PAGE</div>} />
-        <Route path="/notifications" element={<div>NOTIFICATIONS_PAGE</div>} />
-      </Routes>
-    </MemoryRouter>,
+    <ToastProvider>
+      <MemoryRouter initialEntries={["/orders/order-1"]}>
+        <Routes>
+          <Route path="/orders/:id" element={<OrderDetailPage />} />
+          <Route path="/" element={<div>HOME_PAGE</div>} />
+          <Route path="/notifications" element={<div>NOTIFICATIONS_PAGE</div>} />
+        </Routes>
+      </MemoryRouter>
+    </ToastProvider>,
   );
 }
 
@@ -55,6 +63,8 @@ describe("OrderDetailPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockUseAssignedRiderCard.mockReturnValue({ data: null });
+    mockUseSession.mockReturnValue({ session: { user: { id: "supplier-1" } }, loading: false });
+    mockUseUnreadCount.mockReturnValue(0);
   });
 
   it("shows the radius pulse and cancel button when REQUESTED", () => {
@@ -83,6 +93,18 @@ describe("OrderDetailPage", () => {
         expect.objectContaining({ orderId: "order-1", action: "CANCEL" }),
       ),
     );
+    // E6: 성공 피드백 토스트.
+    expect(await screen.findByTestId("toast")).toHaveTextContent("요청을 취소했어요");
+  });
+
+  it("shows an error toast when CANCEL fails (E6)", async () => {
+    mockUseOrder.mockReturnValue({ data: { ...BASE_ORDER, status: "REQUESTED" }, isLoading: false });
+    mockInvokeEdgeFunction.mockResolvedValue({ ok: false, message: "이미 라이더가 배정됐어요." });
+    renderPage();
+
+    fireEvent.click(screen.getByTestId("order-cancel-button"));
+    fireEvent.click(screen.getByTestId("confirm-sheet-confirm"));
+    expect(await screen.findByTestId("toast")).toHaveTextContent("이미 라이더가 배정됐어요.");
   });
 
   it("renders the mockup header with title and notifications bell", () => {
@@ -90,6 +112,16 @@ describe("OrderDetailPage", () => {
     renderPage();
     expect(screen.getByRole("heading", { name: "수거 상세" })).toBeInTheDocument();
     expect(screen.getByTestId("order-detail-notifications")).toHaveAttribute("href", "/notifications");
+    // 미읽음 0건이면 도트가 없다(E7).
+    expect(screen.queryByTestId("order-detail-unread-dot")).not.toBeInTheDocument();
+  });
+
+  it("shows the unread dot on the header bell when there are unread notifications (E7)", () => {
+    mockUseOrder.mockReturnValue({ data: { ...BASE_ORDER, status: "REQUESTED" }, isLoading: false });
+    mockUseUnreadCount.mockReturnValue(2);
+    renderPage();
+    expect(screen.getByTestId("order-detail-unread-dot")).toBeInTheDocument();
+    expect(screen.getByTestId("order-detail-notifications")).toHaveAttribute("aria-label", "알림 2건");
   });
 
   it("shows the rider card, info stat card, and a single call CTA once a rider is assigned (ACCEPTED)", () => {
@@ -187,6 +219,20 @@ describe("OrderDetailPage", () => {
         expect.objectContaining({ orderId: "order-1", action: "CONFIRM_MEASURE" }),
       ),
     );
+    // E6: 무게+현금 2자 확인 완료 토스트.
+    expect(await screen.findByTestId("toast")).toHaveTextContent("무게를 확인했어요 — 현금 수령 확인 완료");
+  });
+
+  it("shows an error toast when CONFIRM_MEASURE fails (E6)", async () => {
+    mockUseOrder.mockReturnValue({
+      data: { ...BASE_ORDER, status: "ARRIVED", riderId: "rider-1", measuredKg: 14.5, photoUrls: [] },
+      isLoading: false,
+    });
+    mockInvokeEdgeFunction.mockResolvedValue({ ok: false, message: "허용되지 않는 상태 전이예요." });
+    renderPage();
+
+    fireEvent.click(screen.getByTestId("confirm-measure-button"));
+    expect(await screen.findByTestId("toast")).toHaveTextContent("허용되지 않는 상태 전이예요.");
   });
 
   it("submits a dispute with the entered reason", async () => {
@@ -207,6 +253,27 @@ describe("OrderDetailPage", () => {
         expect.objectContaining({ orderId: "order-1", action: "DISPUTE", payload: { reason: "계량이 다른 것 같아요" } }),
       ),
     );
+    // E6: 접수 토스트 + 폼 닫힘.
+    expect(await screen.findByTestId("toast")).toHaveTextContent("이의신청을 접수했어요");
+    await waitFor(() => expect(screen.queryByTestId("dispute-form")).not.toBeInTheDocument());
+  });
+
+  it("keeps the dispute form open and shows an error toast when DISPUTE fails (E6)", async () => {
+    mockUseOrder.mockReturnValue({
+      data: { ...BASE_ORDER, status: "ARRIVED", riderId: "rider-1", measuredKg: 14.5, photoUrls: [] },
+      isLoading: false,
+    });
+    mockInvokeEdgeFunction.mockResolvedValue({ ok: false, message: "요청 처리 중 오류가 발생했어요." });
+    renderPage();
+
+    fireEvent.click(screen.getByTestId("open-dispute-form"));
+    fireEvent.change(screen.getByTestId("dispute-reason-input"), { target: { value: "계량이 다른 것 같아요" } });
+    fireEvent.click(screen.getByTestId("submit-dispute-button"));
+
+    expect(await screen.findByTestId("toast")).toHaveTextContent("요청 처리 중 오류가 발생했어요.");
+    // 실패 시 입력한 사유를 유지한 채 폼이 열려 있어야 한다.
+    expect(screen.getByTestId("dispute-form")).toBeInTheDocument();
+    expect(screen.getByTestId("dispute-reason-input")).toHaveValue("계량이 다른 것 같아요");
   });
 
   it("shows the large received-cash hero when COMPLETED (new model)", () => {

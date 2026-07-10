@@ -4,7 +4,7 @@
 create extension if not exists pgtap with schema extensions;
 
 begin;
-select plan(12);
+select plan(14);
 
 -- ── 픽스처(postgres = 트리거 예외) ────────────────────────────────────────
 insert into auth.users (id, instance_id, aud, role, email, created_at, updated_at) values
@@ -57,6 +57,29 @@ update profiles set fcm_token='tok-abc' where id='11111111-1111-1111-1111-111111
 reset role;
 select is((select fcm_token from profiles where id='11111111-1111-1111-1111-111111111111'),
           'tok-abc', '정상 컬럼(fcm_token) 업데이트는 유지');
+
+-- ── [06 E8-④] p_profiles_read_assigned_supplier: 배정 라이더만 supplier phone read ────────
+-- (20260709000011. [사장님께 전화] tel: 버튼용 — 배정 주문의 rider(2)는 supplier(1)의 profiles
+-- 행을 read 가능, 미배정 rider(3)는 불가.) 픽스처: supplier(1)의 주문에 rider(2) 배정.
+insert into supplier_profiles (id, biz_number, store_name, address, location) values
+  ('11111111-1111-1111-1111-111111111111','b','s','a', ST_SetSRID(ST_MakePoint(127,37.5),4326)::geography);
+insert into pickup_orders (id, supplier_id, rider_id, status, requested_kg, pickup_address, pickup_location, snapshot_price_per_kg, coupon_cost) values
+  ('00000000-aaaa-0000-0000-000000000001','11111111-1111-1111-1111-111111111111','22222222-2222-2222-2222-222222222222',
+   'ACCEPTED',10.0,'a',ST_SetSRID(ST_MakePoint(127,37.5),4326)::geography,700,1);
+
+-- 6) 배정 라이더(2)는 supplier(1)의 profiles.phone을 read 가능.
+set local role authenticated;
+select set_config('request.jwt.claims','{"sub":"22222222-2222-2222-2222-222222222222","role":"authenticated"}', true);
+select is((select phone from profiles where id='11111111-1111-1111-1111-111111111111'),
+          '010', '배정 라이더는 supplier phone read 가능(p_profiles_read_assigned_supplier)');
+reset role;
+
+-- 7) 미배정 라이더(3)에게는 supplier 행이 보이지 않는다(RLS 필터 → 0행 = null).
+set local role authenticated;
+select set_config('request.jwt.claims','{"sub":"33333333-3333-3333-3333-333333333333","role":"authenticated"}', true);
+select is((select phone from profiles where id='11111111-1111-1111-1111-111111111111'),
+          null::text, '미배정 라이더는 supplier phone read 불가');
+reset role;
 
 -- ── [07 F3a] 쿠폰 RPC EXECUTE 권한: service_role만 허용, 비 service_role 거부 ──────────
 -- (revoke all from public + grant service_role. 절대 규칙 1 — 쿠폰 원장 쓰기는 service_role RPC만.)

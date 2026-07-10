@@ -15,7 +15,7 @@
 supabase login
 supabase link --project-ref <PROJECT_REF>
 
-# 마이그레이션 적용(26개) — Storage 버킷·RLS·RPC·권한가드까지 전부 포함.
+# 마이그레이션 적용(27개) — Storage 버킷·RLS·RPC·권한가드까지 전부 포함.
 # seed.sql은 로컬 전용이라 프로덕션엔 적용되지 않는다(아래 3-1에서 admin 수동 생성).
 supabase db push
 

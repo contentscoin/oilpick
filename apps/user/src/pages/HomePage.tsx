@@ -22,7 +22,7 @@ import { usePriceTicksSince, type PriceTicksSinceDays } from "../hooks/usePriceT
 import { useActiveOrder } from "../hooks/useActiveOrder";
 import { useOrderHistory } from "../hooks/useOrderHistory";
 import { useMonthlyCashReceipt } from "../hooks/useCashReceipts";
-import { useNotifications } from "../hooks/useNotifications";
+import { useUnreadCount } from "../hooks/useUnreadCount";
 
 /**
  * U3 홈 — 07 F8 전면 리디자인. **일별 시세 히어로가 주인공**.
@@ -105,7 +105,8 @@ export function HomePage() {
   const { data: activeOrder } = useActiveOrder(userId);
   const { data: history } = useOrderHistory(userId, 0);
   const { data: monthly } = useMonthlyCashReceipt(userId);
-  const { data: notifications } = useNotifications(userId);
+  // 06 E7: 미읽음 카운트 — 주문상세 헤더와 공용 훅(리스트 기반 인라인 계산의 공통 추출).
+  const unread = useUnreadCount(userId);
 
   const daily = resampleDaily(ticks ?? [], days);
   const hasChart = daily.length >= 2;
@@ -117,7 +118,6 @@ export function HomePage() {
   const heroLabel = scrub ? koDate(scrub.date) : "오늘 매입가";
 
   const recentOrders = (history?.items ?? []).slice(0, 2);
-  const unread = (notifications ?? []).filter((n) => !n.readAt).length;
 
   const changeColor = change > 0 ? colors.up : change < 0 ? colors.down : surfaceDark.textOnDarkMuted;
   const changeArrow = change > 0 ? "▲" : change < 0 ? "▼" : "–";

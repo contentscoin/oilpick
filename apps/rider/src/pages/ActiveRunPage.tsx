@@ -11,6 +11,8 @@ import {
   gray,
   radius,
   surface,
+  touchTarget,
+  useToast,
   type PhotoAsset,
 } from "@oilpick/ui";
 import { estimateCash, formatKg, formatKrw, type OrderStatus } from "@oilpick/core";
@@ -96,6 +98,34 @@ export function ActiveRunPage() {
       {/* 레거시 전용: 신모델은 CONFIRM_MEASURE가 COMPLETED로 직행해 PICKED_UP에 도달하지 않는다.
           프로덕션 잔존분(구모델 PICKED_UP)만 이 QR 배송 경로를 탄다(07 F6-②). */}
       {run.status === "PICKED_UP" && <PickedUpPanel orderId={run.id} depotId={run.depotId} />}
+
+      {/* 06 E8-④: 현장 소통용 [사장님께 전화] — user OrderDetailPage의 tel: CTA(라이더에게 전화)
+          역방향. 이동/계량 단계에서만 노출하고, phone이 없으면(정책 미적용·미기입) 렌더하지 않는다. */}
+      {(run.status === "ACCEPTED" || run.status === "ARRIVED") && run.supplierPhone && (
+        <a
+          href={`tel:${run.supplierPhone}`}
+          data-testid="call-supplier-button"
+          aria-label={run.supplierName ? `${run.supplierName} 사장님께 전화` : "사장님께 전화"}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+            width: "100%",
+            minHeight: touchTarget,
+            padding: "14px 20px",
+            borderRadius: radius.button,
+            backgroundColor: colors.primary.DEFAULT,
+            color: "#fff",
+            fontSize: 17,
+            fontWeight: 700,
+            textDecoration: "none",
+          }}
+        >
+          <PhoneCtaIcon />
+          사장님께 전화
+        </a>
+      )}
     </main>
   );
 }
@@ -192,10 +222,10 @@ const inputStyle: CSSProperties = {
 /** R4 ACCEPTED: 지도+내비 딥링크+[도착]. */
 function AcceptedPanel({ orderId, pickupAddress }: { orderId: string; pickupAddress: string }) {
   const [arriving, setArriving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // 06 E6: 도착 성공/실패 피드백은 전역 토스트로 통일(인라인 에러 텍스트 대체).
+  const { showToast } = useToast();
 
   async function handleArrive() {
-    setError(null);
     setArriving(true);
     const result = await invokeEdgeFunction("order-transition", {
       orderId,
@@ -203,7 +233,11 @@ function AcceptedPanel({ orderId, pickupAddress }: { orderId: string; pickupAddr
       payload: {},
     });
     setArriving(false);
-    if (!result.ok) setError(result.message);
+    if (result.ok) {
+      showToast("도착을 알렸어요", { variant: "success" });
+    } else {
+      showToast(result.message, { variant: "error" });
+    }
   }
 
   return (
@@ -230,11 +264,6 @@ function AcceptedPanel({ orderId, pickupAddress }: { orderId: string; pickupAddr
       >
         길찾기 앱으로 이동
       </a>
-      {error && (
-        <p role="alert" data-testid="run-action-error" style={{ color: colors.status.danger, fontSize: 14, margin: 0 }}>
-          {error}
-        </p>
-      )}
       <BigButton data-testid="arrive-button" loading={arriving} onClick={handleArrive}>
         도착
       </BigButton>
@@ -262,7 +291,11 @@ function ArrivedPanel({
   const [kg, setKg] = useState("");
   const [photos, setPhotos] = useState<PhotoAsset[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  // 제출 전 검증(계량값/사진 누락)은 인라인 에러 유지 — 서버/업로드 실패는 토스트(06 E6).
   const [error, setError] = useState<string | null>(null);
+  // 06 E8-③: 순차 업로드 진행 카운트("사진 N/M 업로드 중"). 업로드 중이 아니면 null.
+  const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null);
+  const { showToast } = useToast();
 
   // 07 §1-3: 중재로 kg가 확정된(final_kg) 주문은 SUBMIT_MEASURE 재제출이 서버에서 거부된다.
   // 폼을 숨기고 확정 무게 + 지급할 현금 + 사장님 수령 확인 대기를 안내한다.
@@ -345,6 +378,8 @@ function ArrivedPanel({
     try {
       const uploadedUrls: string[] = [];
       for (const [i, photo] of photos.entries()) {
+        // E8-③: 제출 버튼 문구로 몇 번째 사진을 올리는 중인지 노출.
+        setUploadProgress({ current: i + 1, total: photos.length });
         const ext = photo.file instanceof File ? photo.file.name.split(".").pop() : "jpg";
         const path = `${orderId}/measure-${Date.now()}-${i}.${ext ?? "jpg"}`;
         const { error: uploadError } = await supabase.storage.from("order-photos").upload(path, photo.file, {
@@ -362,19 +397,26 @@ function ArrivedPanel({
         if (signError) throw signError;
         uploadedUrls.push(signed.signedUrl);
       }
+      // 업로드 완료 → 전이 호출 동안은 기본 loading("처리 중...")으로 복귀.
+      setUploadProgress(null);
 
       const result = await invokeEdgeFunction("order-transition", {
         orderId,
         action: "SUBMIT_MEASURE",
         payload: { measuredKg: parsedKg, photoUrls: uploadedUrls },
       });
-      if (!result.ok) {
-        setError(result.message);
+      if (result.ok) {
+        showToast("계량을 제출했어요 — 사장님 확인을 기다려요", { variant: "success" });
+      } else {
+        showToast(result.message, { variant: "error" });
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "사진 업로드 중 오류가 발생했어요.");
+      showToast(err instanceof Error ? err.message : "사진 업로드 중 오류가 발생했어요.", {
+        variant: "error",
+      });
     } finally {
       setSubmitting(false);
+      setUploadProgress(null);
     }
   }
 
@@ -443,8 +485,21 @@ function ArrivedPanel({
         </p>
       )}
 
-      <BigButton type="submit" data-testid="submit-measure-button" loading={submitting}>
-        계량 제출 → 사장님 확인 요청
+      {/* E8-③: 업로드 중에는 loading 스피너 문구("처리 중...") 대신 진행 카운트를 버튼에 노출한다
+          (loading=true면 BigButton이 children을 숨기므로 disabled로만 잠근다). */}
+      <BigButton
+        type="submit"
+        data-testid="submit-measure-button"
+        loading={submitting && !uploadProgress}
+        disabled={submitting}
+      >
+        {uploadProgress ? (
+          <span data-testid="upload-progress">
+            사진 {uploadProgress.current}/{uploadProgress.total} 업로드 중
+          </span>
+        ) : (
+          "계량 제출 → 사장님 확인 요청"
+        )}
       </BigButton>
     </form>
   );
@@ -698,6 +753,20 @@ function CheckMarkIcon() {
   return (
     <svg width={24} height={24} viewBox="0 0 24 24" fill="none" aria-hidden>
       <path d="M5 12.5l4.2 4.2L19 7" stroke="#fff" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/** [사장님께 전화] CTA 전화 아이콘 — user OrderDetailPage PhoneCtaIcon과 동형(E8-④). */
+function PhoneCtaIcon() {
+  return (
+    <svg width={20} height={20} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M6.5 4h3l1.2 3.2-1.8 1.4a11 11 0 0 0 4.5 4.5l1.4-1.8L18.5 12.5V15.5c0 1-.8 1.8-1.8 1.7A13.5 13.5 0 0 1 4.8 5.8C4.7 4.8 5.5 4 6.5 4Z"
+        stroke="#fff"
+        strokeWidth={1.6}
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }

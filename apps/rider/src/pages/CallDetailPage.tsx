@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { BigButton, ErrorScreen, MapView, Toast, colors, elevation, gray, radius, surface } from "@oilpick/ui";
+import { BigButton, ErrorScreen, MapView, colors, elevation, gray, radius, surface, useToast } from "@oilpick/ui";
 import { INSUFFICIENT_COUPON, estimateCash, formatKg, formatKrw } from "@oilpick/core";
 import { KAKAO_KEY } from "../lib/env";
 import { invokeEdgeFunction } from "../lib/edgeFunction";
@@ -26,8 +26,10 @@ export function CallDetailPage() {
   const { data: couponBalance } = useCouponBalance(session?.user.id);
   const call = calls?.find((c) => c.id === id);
 
+  // 06 E6: mutation 성공/실패 피드백은 전역 토스트로 통일(원시 <Toast> 인라인 렌더 대체).
+  const { showToast } = useToast();
+
   const [accepting, setAccepting] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
   // 409 INSUFFICIENT_COUPON 반환 시 CTA를 띄우고 이 페이지에 머문다(사전 체크를 통과한 경합 상황).
   const [gateBlocked, setGateBlocked] = useState(false);
 
@@ -42,14 +44,15 @@ export function CallDetailPage() {
     if (!result.ok) {
       if (result.code === INSUFFICIENT_COUPON) {
         // 쿠폰 부족: 목록으로 튕기지 않고 CTA를 노출해 바로 충전으로 유도.
-        setToast(result.message);
+        showToast(result.message, { variant: "error" });
         setGateBlocked(true);
         return;
       }
-      setToast(result.message);
+      showToast(result.message, { variant: "error" });
       setTimeout(() => navigate("/", { replace: true }), 1500);
       return;
     }
+    showToast("콜을 수락했어요", { variant: "success" });
     navigate("/active", { replace: true });
   }
 
@@ -98,8 +101,6 @@ export function CallDetailPage() {
         {/* 좌측 back과 시각적 균형을 맞추기 위한 스페이서. */}
         <span aria-hidden style={{ width: 20 }} />
       </div>
-
-      {toast && <Toast data-testid="call-accept-toast" message={toast} variant="error" />}
 
       <MapView
         apiKey={KAKAO_KEY}

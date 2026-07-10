@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
-import { colors } from "@oilpick/ui";
+import { elevation, gradient, radius, surface, surfaceDark } from "@oilpick/ui";
 import { useSession } from "../hooks/useSession";
 import { useRiderProfile } from "../hooks/useRiderProfile";
 
@@ -9,6 +9,9 @@ import { useRiderProfile } from "../hooks/useRiderProfile";
  * QR(rider_id 기반, T4에서 언급된 5분 만료 JWT 서명까지는 Phase 2 범위이므로 지금은 rider_id를
  * 담은 단순 QR로 충분)". QR payload는 `{ riderId }` JSON 문자열 — 서명/만료 없는 단순 식별자다.
  * Phase 2에서 JWT 서명 QR로 교체될 자리라는 점을 명확히 하려고 payload를 객체로 감쌌다.
+ *
+ * 06 E12 — 명함형 히어로로 고도화: 단색 배경 → gradient.brand(딥그린 히어로), 하드코딩
+ * 흰색/오버레이/반경을 surfaceDark·surface·radius 토큰으로 치환, 흰 QR 카드에 elevation.card.
  */
 export function BadgePage() {
   const { session } = useSession();
@@ -31,6 +34,7 @@ export function BadgePage() {
 
   return (
     <main
+      data-testid="badge-hero"
       style={{
         minHeight: "100vh",
         display: "flex",
@@ -39,8 +43,8 @@ export function BadgePage() {
         justifyContent: "center",
         gap: 20,
         padding: 24,
-        backgroundColor: colors.primary.DEFAULT,
-        color: "#fff",
+        background: gradient.brand,
+        color: surfaceDark.textOnDark,
       }}
     >
       <div
@@ -49,7 +53,7 @@ export function BadgePage() {
           width: 120,
           height: 120,
           borderRadius: "50%",
-          backgroundColor: "rgba(255,255,255,0.15)",
+          backgroundColor: surfaceDark.pill,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -72,9 +76,11 @@ export function BadgePage() {
       </div>
 
       <div
+        data-testid="badge-qr-card"
         style={{
-          backgroundColor: "#fff",
-          borderRadius: 16,
+          backgroundColor: surface.card,
+          borderRadius: radius.card,
+          boxShadow: elevation.card,
           padding: 16,
           display: "flex",
           alignItems: "center",
