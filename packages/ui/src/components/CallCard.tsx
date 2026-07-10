@@ -95,7 +95,7 @@ export function CallCard({
         <span
           className="oilpick-tabular-nums"
           data-testid="call-card-cash"
-          style={{ fontSize: 20, fontWeight: 800, color: colors.accent.DEFAULT, lineHeight: 1.1 }}
+          style={{ fontSize: 20, fontWeight: 800, color: colors.accent.deep, lineHeight: 1.1 }}
         >
           {formatKrw(estimatedCash)}
         </span>

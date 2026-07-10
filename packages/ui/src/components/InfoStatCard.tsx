@@ -68,7 +68,7 @@ export function InfoStatCard({ stats, footnote, className }: InfoStatCardProps) 
                 fontSize: 17,
                 fontWeight: 800,
                 letterSpacing: "-0.01em",
-                color: stat.accent ? colors.accent.DEFAULT : gray[900],
+                color: stat.accent ? colors.accent.deep : gray[900],
                 wordBreak: "keep-all",
               }}
             >

@@ -78,7 +78,11 @@ export function OnboardingPage() {
         ))}
       </div>
 
+      {/* key={index}로 슬라이드 교체마다 페이드인(styles.css oilpick-fade-in-up,
+          prefers-reduced-motion 시 animation:none). 이모지는 브랜드 틴트 원 안에 앉혀 위계를 준다. */}
       <div
+        key={index}
+        className="oilpick-fade-in-up"
         style={{
           display: "flex",
           flexDirection: "column",
@@ -90,7 +94,19 @@ export function OnboardingPage() {
         }}
         data-testid={`onboarding-slide-${index}`}
       >
-        <div style={{ fontSize: 72 }} aria-hidden>
+        <div
+          aria-hidden
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 128,
+            height: 128,
+            borderRadius: "50%",
+            backgroundColor: colors.primary.light,
+            fontSize: 64,
+          }}
+        >
           {slide.emoji}
         </div>
         <h1 style={{ fontSize: 24, margin: 0 }}>{slide.title}</h1>

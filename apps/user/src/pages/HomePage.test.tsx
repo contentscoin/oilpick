@@ -118,6 +118,25 @@ describe("HomePage", () => {
     expect(screen.queryByTestId("hero-price")).not.toBeInTheDocument();
   });
 
+  it("shows an error state (not the empty copy) with a retry button when the price query fails", () => {
+    const refetch = vi.fn();
+    mockUsePriceTicksSince.mockReturnValue({ data: undefined, isLoading: false, isError: true, refetch });
+    renderHome();
+    const error = screen.getByTestId("query-error");
+    expect(error).toHaveTextContent("시세를 불러오지 못했어요.");
+    // 실패가 "아직 등록된 시세가 없어요"로 위장되지 않는다.
+    expect(screen.queryByTestId("price-hero-nodata")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("query-error-retry"));
+    expect(refetch).toHaveBeenCalled();
+  });
+
+  it("shows skeleton cards (not the empty copy) while the recent order history is loading", () => {
+    mockUseOrderHistory.mockReturnValue({ data: undefined, isLoading: true });
+    renderHome();
+    expect(screen.getByTestId("recent-orders-skeleton")).toBeInTheDocument();
+    expect(screen.queryByText("아직 수거 이력이 없어요.")).not.toBeInTheDocument();
+  });
+
   it("shows this month's cash receipt summary and links to the receipts screen", () => {
     renderHome();
     const summary = screen.getByTestId("cash-receipt-summary");

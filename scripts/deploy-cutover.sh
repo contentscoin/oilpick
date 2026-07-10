@@ -49,7 +49,7 @@ cat <<'NEXT'
 ⓒ 초기 데이터 — 대시보드 SQL Editor에서 1회 (DEPLOY.md §1-1의 SQL 그대로):
    · 쿠폰 단가 tick 2,000원 (coupon_price_ticks — admin id를 created_by로)
    · (선택) 데모 라이더 쿠폰 20장 선지급 (fn_charge_coupon ADJUST)
-   · admin 계정·시세 tick·집하장은 구모델 운영분이 이미 있으면 생략
+   · admin 계정·시세 tick은 구모델 운영분이 이미 있으면 생략 (집하장은 07 피벗으로 일몰 — 불필요)
 
 ⓓ 잔존 주문 드레인 — admin 웹에서 진행중 구모델 주문 완결/취소
 

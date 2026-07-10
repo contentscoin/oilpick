@@ -87,6 +87,21 @@ describe("AuthPage", () => {
     expect(await screen.findByTestId("display-name-input")).toBeInTheDocument();
   });
 
+  it("uses a numeric keypad for the business-number input (inputMode)", async () => {
+    mockSignInWithOtp.mockResolvedValue({ error: null });
+    mockVerifyOtp.mockResolvedValue({ data: { user: { id: "user-1" } }, error: null });
+    renderPage();
+
+    fireEvent.change(screen.getByTestId("phone-input"), { target: { value: "010-1234-5678" } });
+    fireEvent.click(screen.getByTestId("send-otp-button"));
+    await screen.findByTestId("code-input");
+    fireEvent.change(screen.getByTestId("code-input"), { target: { value: "123456" } });
+    fireEvent.click(screen.getByTestId("verify-otp-button"));
+    await screen.findByTestId("display-name-input");
+
+    expect(screen.getByTestId("biz-number-input")).toHaveAttribute("inputmode", "numeric");
+  });
+
   it("navigates straight to home when the user already has a profile", async () => {
     mockSignInWithOtp.mockResolvedValue({ error: null });
     mockVerifyOtp.mockResolvedValue({ data: { user: { id: "user-1" } }, error: null });

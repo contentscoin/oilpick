@@ -34,6 +34,17 @@ describe("OrdersHistoryPage", () => {
     expect(screen.getByTestId("empty-state")).toBeInTheDocument();
   });
 
+  it("shows an error state (not the empty state) with a retry button when the query fails", () => {
+    const refetch = vi.fn();
+    mockUseOrderHistory.mockReturnValue({ data: undefined, isLoading: false, isError: true, refetch });
+    renderPage();
+    const error = screen.getByTestId("query-error");
+    expect(error).toHaveTextContent("불러오지 못했어요");
+    expect(screen.queryByText("아직 수거 이력이 없어요")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("query-error-retry"));
+    expect(refetch).toHaveBeenCalled();
+  });
+
   it("shows the received cash for a new-model completed order and legacy points for legacy orders", () => {
     mockUseOrderHistory.mockReturnValue({
       data: {

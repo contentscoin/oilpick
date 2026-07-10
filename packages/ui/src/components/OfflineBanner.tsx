@@ -60,7 +60,8 @@ export function OfflineBanner({
         left: 0,
         right: 0,
         zIndex: 1000,
-        padding: "10px 16px",
+        /* 노치/상태바 아래로 내용이 깔리지 않게 상단 safe-area만큼 패딩(배경은 최상단까지 채움). */
+        padding: "calc(10px + env(safe-area-inset-top, 0px)) 16px 10px",
         textAlign: "center",
         fontSize: 14,
         fontWeight: 600,

@@ -11,6 +11,7 @@ import {
 import { formatKrw, formatRelativeTime } from "@oilpick/core";
 import { useCouponPriceHistory, usePriceHistory } from "../hooks/usePriceAdmin";
 import { invokeEdgeFunction } from "../lib/edgeFunction";
+import { QueryError } from "../components/QueryError";
 import type { CouponPriceSetOutput, PriceSetOutput } from "@oilpick/core";
 
 /**
@@ -53,7 +54,9 @@ function TickCorrectionNotice({ testId }: { testId: string }) {
 }
 
 function OilPriceSection() {
-  const { data: history, isLoading, refetch } = usePriceHistory(30);
+  const { data: history, isLoading, isError, refetch } = usePriceHistory(30);
+  // 초기 로드 실패만 에러 UI로 — 백그라운드 refetch 실패는 캐시된 화면을 유지한다(TanStack v5는 error에도 data 보존).
+  const loadFailed = isError && history === undefined;
   const [pricePerKg, setPricePerKg] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -103,7 +106,7 @@ function OilPriceSection() {
             <span className="text-base font-medium">/kg</span>
           </p>
           {latest && (
-            <p className="mt-1 text-xs text-gray-400">{formatRelativeTime(latest.effectiveAt)} 갱신</p>
+            <p className="mt-1 text-xs text-gray-500">{formatRelativeTime(latest.effectiveAt)} 갱신</p>
           )}
         </div>
 
@@ -151,8 +154,10 @@ function OilPriceSection() {
 
       <div className="rounded-card bg-white p-6 shadow-card">
         <h2 className="mb-4 text-lg font-semibold text-gray-900">이력 (최근 {history?.length ?? 0}건)</h2>
-        {isLoading ? (
-          <p className="text-sm text-gray-400">불러오는 중...</p>
+        {loadFailed ? (
+          <QueryError onRetry={refetch} message="시세 이력을 불러오지 못했어요" />
+        ) : isLoading ? (
+          <p className="text-sm text-gray-500">불러오는 중...</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full whitespace-nowrap text-left text-sm" data-testid="price-history-table">
@@ -169,7 +174,7 @@ function OilPriceSection() {
                   <tr key={tick.id} className="border-b border-gray-50 transition-colors hover:bg-gray-50">
                     <td className="py-2 text-gray-600">{new Date(tick.effectiveAt).toLocaleString("ko-KR")}</td>
                     <td className="py-2 font-medium tabular-nums text-primary">{formatKrw(tick.pricePerKg)}</td>
-                    <td className="py-2 tabular-nums text-gray-400">
+                    <td className="py-2 tabular-nums text-gray-500">
                       {tick.riderFee !== null ? formatKrw(tick.riderFee) : "-"}
                     </td>
                   </tr>
@@ -185,7 +190,9 @@ function OilPriceSection() {
 
 /** 07 F10-①: 수거쿠폰 단가 섹션 — 현재 단가 카드 + coupon-price-set 폼 + 최근 이력. */
 function CouponPriceSection() {
-  const { data: history, isLoading, refetch } = useCouponPriceHistory(30);
+  const { data: history, isLoading, isError, refetch } = useCouponPriceHistory(30);
+  // 초기 로드 실패만 에러 UI로 — 백그라운드 refetch 실패는 캐시된 화면을 유지한다(TanStack v5는 error에도 data 보존).
+  const loadFailed = isError && history === undefined;
   const [unitPrice, setUnitPrice] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -223,12 +230,12 @@ function CouponPriceSection() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div className="rounded-card bg-white p-6 shadow-card">
           <p className="text-sm text-gray-500">현재 쿠폰 단가</p>
-          <p className="mt-1 text-4xl font-bold tabular-nums text-accent" data-testid="coupon-price-current">
+          <p className="mt-1 text-4xl font-bold tabular-nums text-accent-deep" data-testid="coupon-price-current">
             {latest ? formatKrw(latest.unitPrice) : "-"}
             <span className="text-base font-medium">/장</span>
           </p>
           {latest ? (
-            <p className="mt-1 text-xs text-gray-400">{formatRelativeTime(latest.effectiveAt)} 갱신</p>
+            <p className="mt-1 text-xs text-gray-500">{formatRelativeTime(latest.effectiveAt)} 갱신</p>
           ) : (
             <p className="mt-1 text-xs text-status-danger">
               단가 미설정 — 라이더가 쿠폰을 구매할 수 없어요. 첫 단가를 등록해주세요.
@@ -265,8 +272,10 @@ function CouponPriceSection() {
 
       <div className="rounded-card bg-white p-6 shadow-card">
         <h2 className="mb-4 text-lg font-semibold text-gray-900">쿠폰 단가 이력 (최근 {history?.length ?? 0}건)</h2>
-        {isLoading ? (
-          <p className="text-sm text-gray-400">불러오는 중...</p>
+        {loadFailed ? (
+          <QueryError onRetry={refetch} message="쿠폰 단가 이력을 불러오지 못했어요" />
+        ) : isLoading ? (
+          <p className="text-sm text-gray-500">불러오는 중...</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full whitespace-nowrap text-left text-sm" data-testid="coupon-price-history-table">
@@ -280,12 +289,12 @@ function CouponPriceSection() {
                 {(history ?? []).map((tick) => (
                   <tr key={tick.id} className="border-b border-gray-50 transition-colors hover:bg-gray-50">
                     <td className="py-2 text-gray-600">{new Date(tick.effectiveAt).toLocaleString("ko-KR")}</td>
-                    <td className="py-2 font-medium tabular-nums text-accent">{formatKrw(tick.unitPrice)}</td>
+                    <td className="py-2 font-medium tabular-nums text-accent-deep">{formatKrw(tick.unitPrice)}</td>
                   </tr>
                 ))}
                 {(history ?? []).length === 0 && (
                   <tr>
-                    <td colSpan={2} className="py-6 text-center text-gray-400">
+                    <td colSpan={2} className="py-6 text-center text-gray-500">
                       등록된 쿠폰 단가가 없어요.
                     </td>
                   </tr>

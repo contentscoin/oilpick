@@ -91,6 +91,34 @@ describe("쿠폰 매출 대시 (ⓐ)", () => {
     setup({ sales: [] });
     expect(screen.getByText("최근 14일 매출 데이터가 없어요.")).toBeInTheDocument();
   });
+
+  it("로딩 중에도 thead를 유지하고(레이아웃 시프트 방지) SummaryStat은 '-'를 표시한다", () => {
+    mockSales.mockReturnValue({ data: undefined, isLoading: true });
+    mockPickup.mockReturnValue({ data: undefined, isLoading: true });
+    mockLedger.mockReturnValue({ data: undefined, isLoading: true });
+    mockPurchases.mockReturnValue({ data: undefined, isLoading: true, refetch: vi.fn() });
+    render(<SettlementPage />);
+
+    const table = within(screen.getByTestId("coupon-sales-table"));
+    expect(table.getByText("날짜")).toBeInTheDocument(); // thead 유지
+    expect(table.getByText("불러오는 중...")).toBeInTheDocument(); // tbody 로딩 행
+    expect(screen.getByTestId("sales-total-amount")).toHaveTextContent("-"); // 0원으로 점프하지 않음
+  });
+
+  it("쿼리 실패 시 빈 상태 대신 에러 안내 + 다시 시도(refetch)를 표시한다", () => {
+    const refetch = vi.fn();
+    mockSales.mockReturnValue({ data: undefined, isLoading: false, isError: true, refetch });
+    mockPickup.mockReturnValue({ data: [], isLoading: false });
+    mockLedger.mockReturnValue({ data: [], isLoading: false });
+    mockPurchases.mockReturnValue({ data: [], isLoading: false, refetch: vi.fn() });
+    render(<SettlementPage />);
+
+    const table = within(screen.getByTestId("coupon-sales-table"));
+    expect(table.getByText("쿠폰 매출을 불러오지 못했어요")).toBeInTheDocument();
+    expect(table.queryByText("최근 14일 매출 데이터가 없어요.")).not.toBeInTheDocument();
+    fireEvent.click(table.getByTestId("query-error-retry"));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("수거 활동 추이 (ⓑ)", () => {

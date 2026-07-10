@@ -60,7 +60,7 @@ supabase secrets set KOEM_API_KEY="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
 ### 1-1. 프로덕션 초기 데이터(수동 — seed.sql은 로컬 전용)
-프로덕션 DB에는 admin·집하장·시세 tick·쿠폰 단가가 없다. 대시보드 SQL Editor 또는 psql로 최소 1회 생성:
+프로덕션 DB에는 admin·시세 tick·쿠폰 단가가 없다. 대시보드 SQL Editor 또는 psql로 최소 1회 생성:
 
 - **admin 계정**: 로그인은 **아이디/비밀번호**다(이메일 아님). LoginPage가 입력한 아이디를
   `<아이디>@oilpick.local`로 매핑해 GoTrue에 넘긴다. 즉 아이디 `admin`은 내부적으로 이메일
@@ -84,7 +84,6 @@ supabase secrets set KOEM_API_KEY="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
   ⚠️ `crypt()`의 비밀번호는 반드시 강한 값으로 하고, **실제 비밀번호를 이 문서/리포지토리에 적지 말 것**.
   임시/약한 비밀번호로 만들었다면 런칭 전 교체:
   `update auth.users set encrypted_password=crypt('<강한값>',gen_salt('bf')) where email='admin@oilpick.local';`
-- **집하장 1개 이상**: admin 웹의 집하장 관리에서 생성(또는 SQL). QR secret 자동 생성됨.
 - **초기 시세 tick**: admin 웹의 시세 관리에서 첫 매입가·수거비 설정(`price-set`).
 - **초기 쿠폰 단가**: admin 웹 시세 관리(PricePage)의 "수거쿠폰 단가" 섹션에서 첫 단가 등록
   (`coupon-price-set`). 신모델 기본 단가는 **2,000원/장**(07-pivot-plan.md). ⚠️ **미설정 시
@@ -146,7 +145,7 @@ supabase secrets set KOEM_API_KEY="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ---
 
 ## 3. 배포 후 점검
-- admin 로그인(생성한 admin 계정) → 대시보드/시세/집하장 설정.
+- admin 로그인(생성한 admin 계정) → 대시보드/시세/쿠폰 단가 설정. (집하장은 07 피벗으로 일몰 — 설정 불필요.)
 - user 앱: 가입(실 SMS) → 홈 실시세 표시 → 수거 요청 → 상태 Realtime 반영.
 - rider 앱: 가입 → 서류 제출 → admin 승인 → 콜 수락 → 운행.
 - Edge Functions 로그(대시보드 → Functions)로 order-transition/withdraw 등 정상 동작 확인.

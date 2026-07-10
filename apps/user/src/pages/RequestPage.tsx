@@ -154,7 +154,7 @@ export function RequestPage() {
           data-testid="request-back"
           aria-label="뒤로가기"
           onClick={() => (step === 1 ? navigate(-1) : setStep((s) => (s - 1) as Step))}
-          style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", padding: 0 }}
+          style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 44, height: 44, marginLeft: -12, background: "none", border: "none", fontSize: 20, cursor: "pointer", padding: 0 }}
         >
           &lt;
         </button>

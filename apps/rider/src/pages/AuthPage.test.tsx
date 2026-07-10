@@ -70,6 +70,16 @@ describe("AuthPage DOCS 단계 (07 F11)", () => {
     expect(screen.getByText(/수거한 기름을 인계·매각할 허가 재활용업체/)).toBeInTheDocument();
   });
 
+  it("사업자번호는 숫자 키패드, 인계처 연락처는 전화 키패드를 띄운다(inputMode)", async () => {
+    await renderDocsStep();
+    expect(screen.getByTestId("biz-number-input")).toHaveAttribute("inputmode", "numeric");
+    const contact = screen.getByTestId("recycler-contact-input");
+    expect(contact).toHaveAttribute("type", "tel");
+    expect(contact).toHaveAttribute("inputmode", "tel");
+    // 차량번호는 한글 포함 텍스트 입력 유지.
+    expect(screen.getByTestId("vehicle-number-input")).not.toHaveAttribute("inputmode");
+  });
+
   it("인계처 누락 제출 시 검증 에러를 내고 insert하지 않는다", async () => {
     await renderDocsStep();
     fireEvent.change(screen.getByTestId("display-name-input"), { target: { value: "김라이더" } });

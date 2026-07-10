@@ -418,7 +418,7 @@ REQUESTED→CANCELLED: supplier 자진 or 시스템 30분 무수락. 쿠폰 미�
   ③ 통 크기 프리셋(18L 말통/10L/기타 → estimateKg(cans, canSizeL) 확장 — **coupon_cost 공식에는 무영향,
   D2 참조**). ④ 희망시간 퀵칩(지금/오늘 오후/내일 오전/직접). ⑤ 제출 성공 ConfirmSheet(워킹트리 신규
   컴포넌트 재사용) + 주문 상세 이동. 스텝 인디케이터(1/2/3). ⑥ 카피 전환 전수: "예상 포인트"→"예상 현금
-  수령액"(P→원). OrderDetailPage — CONFIRM 버튼을 **"무게 OO.Okg 확인 · 현금 ₩N 받았습니다"** 카피로
+  수령액"(P→원). OrderDetailPage — CONFIRM 버튼을 **"무게 OO.Okg 확인 · 현금 ₩N 받았어요"**(해요체 — 05 2026-07-10 폴리시로 개정) 카피로
   (2자 확인=현금 수령 증빙의 핵심), COMPLETED 히어로를 포인트→현금 수령액으로.
   ⑦ **주문 진행 UI의 신 경로 반영**: 【ui】OrderTimeline HAPPY_PATH(OrderTimeline.tsx:12-18)를
   [REQUESTED, ACCEPTED, ARRIVED, COMPLETED]로 교체 + 레거시 주문(picked_up_at/delivered_at 존재)은 구경로

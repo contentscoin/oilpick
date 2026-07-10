@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { formatRelativeTime } from "@oilpick/core";
 import { useRiderCouponLedger } from "../hooks/useUsersAdmin";
+import { useEscapeClose, useInitialFocus } from "../hooks/useEscapeClose";
 import { invokeEdgeFunction } from "../lib/edgeFunction";
 import { COUPON_ENTRY_LABEL } from "../lib/couponSales";
 import type { CouponAdjustOutput } from "@oilpick/core";
@@ -30,7 +31,7 @@ export function RiderCouponPanel({
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm text-gray-500">쿠폰 잔액</span>
         <span
-          className="rounded-pill bg-accent-light px-3 py-1 text-sm font-bold tabular-nums text-accent"
+          className="rounded-pill bg-accent-light px-3 py-1 text-sm font-bold tabular-nums text-accent-deep"
           data-testid={`coupon-balance-${riderId}`}
         >
           {balance !== undefined ? `${balance.toLocaleString("ko-KR")}장` : "-"}
@@ -58,7 +59,7 @@ export function RiderCouponPanel({
       {ledgerOpen && (
         <div className="mt-3 overflow-x-auto" data-testid={`coupon-ledger-${riderId}`}>
           {ledgerLoading ? (
-            <p className="text-sm text-gray-400">불러오는 중...</p>
+            <p className="text-sm text-gray-500">불러오는 중...</p>
           ) : ledger && ledger.length > 0 ? (
             <table className="w-full whitespace-nowrap text-left text-sm">
               <thead>
@@ -84,7 +85,7 @@ export function RiderCouponPanel({
               </tbody>
             </table>
           ) : (
-            <p className="text-sm text-gray-400">쿠폰 이력이 없어요.</p>
+            <p className="text-sm text-gray-500">쿠폰 이력이 없어요.</p>
           )}
         </div>
       )}
@@ -119,6 +120,8 @@ function CouponAdjustModal({
   const [memo, setMemo] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  useEscapeClose(onClose);
+  const dialogRef = useInitialFocus<HTMLFormElement>();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -154,6 +157,11 @@ function CouponAdjustModal({
       data-testid="coupon-adjust-backdrop"
     >
       <form
+        ref={dialogRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-label="쿠폰 수동 조정"
         onSubmit={handleSubmit}
         onClick={(e) => e.stopPropagation()}
         className="w-full max-w-sm rounded-card bg-white p-6 shadow-raised"

@@ -99,7 +99,12 @@ export function ToastProvider({ children, offsetBottom = 24 }: ToastProviderProp
           }}
         >
           {toasts.map((t) => (
-            <div key={t.id} style={{ pointerEvents: "auto" }} onClick={() => dismiss(t.id)}>
+            <div
+              key={t.id}
+              className="oilpick-toast-item"
+              style={{ pointerEvents: "auto" }}
+              onClick={() => dismiss(t.id)}
+            >
               <Toast
                 message={t.message}
                 variant={t.variant}

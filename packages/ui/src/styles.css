@@ -20,6 +20,10 @@ body {
     "Segoe UI",
     sans-serif;
   font-size: 16px;
+  /* 한국어 줄바꿈: 단어(어절) 중간에서 꺾이지 않게 한다 — "수거 요청"이 "수/거 요청"으로
+     쪼개지는 것 방지. 모든 화면 공통 타이포 규칙(05-design-upgrade.md 가독성 원칙). */
+  word-break: keep-all;
+  overflow-wrap: break-word;
   /* 05-design-upgrade.md "토큰 확장": 앱 배경(약간 웜뉴트럴) — 흰 카드가 이 위에서 떠 보이게 한다.
      tokens.ts surface.app와 동일 값. 화면 컨테이너는 흰색을 강제하지 말고 이 배경을 비치게 둘 것. */
   background-color: #f5f6f5;
@@ -42,6 +46,30 @@ body {
 .oilpick-input:focus {
   border-color: #1b7a43;
   box-shadow: 0 0 0 3px rgba(27, 122, 67, 0.14);
+}
+
+/* 05-design-upgrade.md 2026-07-10 폴리시: 등장 모션(아래에서 8px 떠오르며 페이드인).
+   토스트·온보딩 슬라이드 등 "새로 나타나는 블록" 공용. duration/easing은 tokens.ts motion
+   (base 250ms)과 동일 값. 소멸은 즉시(큐/상태 정리 지연 없음). */
+@keyframes oilpick-fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.oilpick-fade-in-up,
+.oilpick-toast-item {
+  animation: oilpick-fade-in-up 250ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .oilpick-fade-in-up,
+  .oilpick-toast-item {
+    animation: none;
+  }
 }
 
 /* 05-design-upgrade.md "버튼/입력": BigButton active 시 살짝 눌림(scale .99). */

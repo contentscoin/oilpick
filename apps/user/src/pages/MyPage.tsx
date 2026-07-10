@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { colors, radius, surface } from "@oilpick/ui";
+import { colors, gray, radius, surface } from "@oilpick/ui";
 import { useSession } from "../hooks/useSession";
 import { useProfile } from "../hooks/useProfile";
 import { supabase } from "../lib/supabaseClient";
@@ -15,7 +15,7 @@ const NOTIFY_PREF_KEY = "oilpick:notify-enabled";
 export function MyPage() {
   const { session } = useSession();
   const userId = session?.user.id;
-  const { data: profile } = useProfile(userId);
+  const { data: profile, isLoading: profileLoading } = useProfile(userId);
 
   const [notifyEnabled, setNotifyEnabled] = useState(true);
 
@@ -41,32 +41,41 @@ export function MyPage() {
         data-testid="store-info-card"
         style={{ borderRadius: radius.card, padding: 16, backgroundColor: surface.card, border: `1px solid ${surface.border}` }}
       >
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-          <div style={{ minWidth: 0 }}>
-            <p style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>{profile?.storeName || "매장 정보 없음"}</p>
-            <p style={{ margin: "4px 0 0", fontSize: 13, color: colors.status.wait }}>{profile?.displayName}</p>
-            <p style={{ margin: "4px 0 0", fontSize: 13, color: colors.status.wait }}>{profile?.address}</p>
+        {profileLoading ? (
+          // 프로필 로딩 중 "매장 정보 없음" 플래시 방지 스켈레톤 블록.
+          <div data-testid="profile-skeleton" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ height: 18, width: "45%", borderRadius: 6, backgroundColor: gray[100] }} />
+            <div style={{ height: 14, width: "30%", borderRadius: 6, backgroundColor: gray[100] }} />
+            <div style={{ height: 14, width: "70%", borderRadius: 6, backgroundColor: gray[100] }} />
           </div>
-          <Link
-            to="/my/edit"
-            data-testid="edit-profile-link"
-            style={{
-              flexShrink: 0,
-              display: "inline-flex",
-              alignItems: "center",
-              minHeight: 36,
-              padding: "0 14px",
-              borderRadius: radius.button,
-              border: `1.5px solid ${colors.primary.DEFAULT}`,
-              color: colors.primary.DEFAULT,
-              fontSize: 13,
-              fontWeight: 700,
-              textDecoration: "none",
-            }}
-          >
-            수정
-          </Link>
-        </div>
+        ) : (
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+            <div style={{ minWidth: 0 }}>
+              <p style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>{profile?.storeName || "매장 정보 없음"}</p>
+              <p style={{ margin: "4px 0 0", fontSize: 13, color: colors.status.wait }}>{profile?.displayName}</p>
+              <p style={{ margin: "4px 0 0", fontSize: 13, color: colors.status.wait }}>{profile?.address}</p>
+            </div>
+            <Link
+              to="/my/edit"
+              data-testid="edit-profile-link"
+              style={{
+                flexShrink: 0,
+                display: "inline-flex",
+                alignItems: "center",
+                minHeight: 36,
+                padding: "0 14px",
+                borderRadius: radius.button,
+                border: `1.5px solid ${colors.primary.DEFAULT}`,
+                color: colors.primary.DEFAULT,
+                fontSize: 13,
+                fontWeight: 700,
+                textDecoration: "none",
+              }}
+            >
+              수정
+            </Link>
+          </div>
+        )}
       </section>
 
       <section style={{ display: "flex", flexDirection: "column", gap: 4 }}>

@@ -89,7 +89,7 @@ export function RiderVerifyCard({
       <div className="mb-3 flex items-center justify-between">
         <div>
           <p className="font-semibold text-gray-900">
-            {rider.displayName} <span className="text-sm font-normal text-gray-400">{rider.phone}</span>
+            {rider.displayName} <span className="text-sm font-normal text-gray-500">{rider.phone}</span>
           </p>
           <p className="text-sm text-gray-500">
             사업자번호 {rider.bizNumber} · 차량번호 {rider.vehicleNumber}
@@ -103,7 +103,7 @@ export function RiderVerifyCard({
                 ? "bg-status-danger/10 text-status-danger"
                 : rider.verifyStatus === "SUSPENDED"
                   ? "bg-gray-200 text-gray-700"
-                  : "bg-accent-light text-accent"
+                  : "bg-accent-light text-accent-deep"
           }`}
           data-testid={`rider-status-${rider.id}`}
         >
@@ -250,7 +250,7 @@ function DocThumb({
       ) : (
         <div
           className={`flex h-20 w-full items-center justify-center rounded-button text-xs ${
-            required && missing ? "bg-status-danger/5 text-status-danger" : "bg-gray-100 text-gray-400"
+            required && missing ? "bg-status-danger/5 text-status-danger" : "bg-gray-100 text-gray-500"
           }`}
         >
           {required && missing ? "미제출" : "없음"}

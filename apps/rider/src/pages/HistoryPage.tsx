@@ -17,8 +17,22 @@ export function HistoryPage() {
   const [page, setPage] = useState(0);
 
   const { data: monthly } = useMonthlyPickupStats(userId);
-  const { data, isLoading } = useRunHistory(userId, page);
+  const { data, isLoading, isError, refetch } = useRunHistory(userId, page);
+  // 초기 로드 실패만 에러 UI로 — 백그라운드 refetch 실패는 캐시된 화면을 유지한다(TanStack v5는 error에도 data 보존).
+  const loadFailed = isError && data === undefined;
   const items = data?.items ?? [];
+
+  // 이력 페이지네이션 버튼과 같은 톤의 작은 outline 재시도 버튼.
+  const retryButtonStyle = {
+    minHeight: 44,
+    padding: "0 20px",
+    borderRadius: radius.button,
+    border: `1px solid ${surface.border}`,
+    backgroundColor: surface.card,
+    fontSize: 14,
+    fontWeight: 600,
+    cursor: "pointer",
+  } as const;
 
   return (
     <main style={{ display: "flex", flexDirection: "column", gap: 16, padding: 20, maxWidth: 480, margin: "0 auto" }}>
@@ -39,11 +53,26 @@ export function HistoryPage() {
         <div data-testid="run-history-skeleton" style={{ height: 200, borderRadius: radius.card, backgroundColor: gray[100] }} />
       )}
 
-      {!isLoading && items.length === 0 && (
+      {/* 쿼리 실패는 빈 상태로 위장하지 않는다 — 에러 분기가 빈 상태 분기보다 먼저다. */}
+      {!isLoading && loadFailed && (
+        <div data-testid="query-error">
+          <EmptyState
+            title="불러오지 못했어요"
+            description="네트워크 상태를 확인한 뒤 다시 시도해주세요."
+            action={
+              <button type="button" data-testid="query-error-retry" onClick={() => refetch()} style={retryButtonStyle}>
+                다시 시도
+              </button>
+            }
+          />
+        </div>
+      )}
+
+      {!isLoading && !loadFailed && items.length === 0 && (
         <EmptyState title="운행 이력이 없어요" description="완료한 수거가 여기에 표시돼요." />
       )}
 
-      {!isLoading && items.length > 0 && (
+      {!isLoading && !loadFailed && items.length > 0 && (
         <ul data-testid="run-history-list" style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 12 }}>
           {items.map((order) => (
             <li
@@ -88,7 +117,7 @@ export function HistoryPage() {
         </ul>
       )}
 
-      {!isLoading && (items.length > 0 || page > 0) && (
+      {!isLoading && !loadFailed && (items.length > 0 || page > 0) && (
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
           <button
             type="button"

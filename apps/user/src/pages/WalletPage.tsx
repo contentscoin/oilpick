@@ -23,7 +23,14 @@ export function WalletPage() {
   const userId = session?.user.id;
 
   const { data: monthly, isLoading: monthlyLoading } = useMonthlyCashReceipt(userId);
-  const { data: receipts, isLoading: receiptsLoading } = useCashReceipts(userId);
+  const {
+    data: receipts,
+    isLoading: receiptsLoading,
+    isError: receiptsError,
+    refetch: refetchReceipts,
+  } = useCashReceipts(userId);
+  // 초기 로드 실패만 에러 UI로 — 백그라운드 refetch 실패는 캐시된 화면을 유지한다.
+  const receiptsLoadFailed = receiptsError && receipts === undefined;
 
   return (
     <main
@@ -72,6 +79,33 @@ export function WalletPage() {
         <h2 style={{ fontSize: typeScale.body, margin: 0, color: colors.status.wait }}>수령 내역</h2>
         {receiptsLoading ? (
           <div data-testid="receipts-skeleton" style={{ borderRadius: radius.card, height: 200, backgroundColor: gray[100] }} />
+        ) : receiptsLoadFailed ? (
+          // 쿼리 실패는 빈 상태로 위장하지 않는다 — 에러 분기가 빈 상태 분기보다 먼저다.
+          <div data-testid="query-error">
+            <EmptyState
+              title="불러오지 못했어요"
+              description="네트워크 상태를 확인한 뒤 다시 시도해주세요."
+              action={
+                <button
+                  type="button"
+                  data-testid="query-error-retry"
+                  onClick={() => refetchReceipts()}
+                  style={{
+                    minHeight: 44,
+                    padding: "0 20px",
+                    borderRadius: radius.button,
+                    border: `1px solid ${surface.border}`,
+                    backgroundColor: surface.card,
+                    fontSize: 14,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  다시 시도
+                </button>
+              }
+            />
+          </div>
         ) : receipts && receipts.length > 0 ? (
           <ul data-testid="receipts-list" style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
             {receipts.map((receipt) => (

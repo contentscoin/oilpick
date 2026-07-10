@@ -60,24 +60,41 @@ export function PhotoUploader({ photos, onChange, maxCount = 1, disabled, classN
               alt={`촬영 사진 ${i + 1}`}
               style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: radius.button }}
             />
+            {/* 시각 24px 원 유지 + 투명 패딩으로 히트 영역 40px 확보(라이더 장갑 낀 손 고려). */}
             <button
               type="button"
               aria-label="사진 삭제"
               onClick={() => removeAt(i)}
               style={{
                 position: "absolute",
-                top: -6,
-                right: -6,
-                width: 24,
-                height: 24,
+                top: -14,
+                right: -14,
+                width: 40,
+                height: 40,
+                padding: 8,
                 borderRadius: "50%",
                 border: "none",
-                backgroundColor: colors.status.danger,
-                color: "#fff",
+                background: "none",
                 cursor: "pointer",
               }}
             >
-              ×
+              <span
+                aria-hidden
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: 24,
+                  height: 24,
+                  borderRadius: "50%",
+                  backgroundColor: colors.status.danger,
+                  color: "#fff",
+                  fontSize: 14,
+                  lineHeight: 1,
+                }}
+              >
+                ×
+              </span>
             </button>
           </div>
         ))}
@@ -85,6 +102,7 @@ export function PhotoUploader({ photos, onChange, maxCount = 1, disabled, classN
           <button
             type="button"
             data-testid="photo-uploader-trigger"
+            aria-label="사진 추가"
             disabled={disabled}
             onClick={() => inputRef.current?.click()}
             style={{

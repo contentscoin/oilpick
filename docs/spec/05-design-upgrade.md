@@ -159,3 +159,60 @@ gray·surface·status 색, Pretendard. 로직/testid/데이터흐름/절대규�
 완료 기준: pnpm lint/test/build green(markup 변경 시 admin 테스트 동기 갱신). admin 로그인
 (admin@oilpick.local / oilpick-admin-seed) 후 대시보드/주문/정산 스크린샷으로 깊이+앰버 강조 반영,
 콘솔 에러 0. 브랜드색/정보구조/절대규칙 불변.
+
+## 2026-07-10 폴리시 패스 (프로덕션 배포 후 UI/UX 감사 기반)
+
+전 앱 코드 감사(로딩/에러/빈 상태·모션·터치 타깃·safe-area·폼·일관성·카피·위계 10개 관점)로
+잡은 갭을 일괄 반영한다. 근거 패턴은 상단 Lazyweb 리서치(2026-07-04)와 동일 축 — 지갑 히어로
+(Bilt/Robinhood), 주문추적(DoorDash) 문법의 실행 완성도를 마저 끌어올리는 것이며 리브랜딩 아님.
+
+### 토큰 추가 (packages/ui/src/tokens.ts)
+- `colors.accent.deep = #B45309` — **밝은 배경 위 "돈" 텍스트 전용 딥앰버**. #F5A623은 흰 배경
+  대비 ~1.9:1로 텍스트로는 미달(50대 타깃 4.5:1 원칙). 앰버 명도 축의 어두운 확장(surfaceDark와
+  같은 방식, 리브랜딩 아님). 규칙: **배경이 앰버(gradient.point)면 흰 텍스트, 배경이 밝으면
+  accent.deep 텍스트.** accent.DEFAULT는 배경/그라디언트/아이콘 채움 용도로 유지.
+  Tailwind(admin)에는 `text-accent-deep`로 자동 노출(프리셋이 colors.accent를 스프레드).
+
+### 전역 규칙
+- **한국어 줄바꿈**: `body { word-break: keep-all; overflow-wrap: break-word }` — 어절 중간
+  꺾임("수/거 요청") 방지. packages/ui styles.css + admin index.css 동일 적용.
+- **viewport-fit=cover**: user/rider index.html 뷰포트 메타에 추가. 이것 없이는
+  `env(safe-area-inset-*)`가 항상 0이라 기존 TabBar/CTA의 safe-area 코드가 실기기에서 무효였다.
+  상단 고정 요소(OfflineBanner, rider CallAlertListener)에도 `safe-area-inset-top` 반영.
+- **키보드 포커스 링(admin)**: `:focus-visible`에 브랜드 그린 3px **outline** 링 전역 제공(입력들이
+  outline-none으로 UA 링을 지워 키보드 위치가 안 보이던 문제). box-shadow가 아닌 outline인 이유:
+  shadow-* 유틸리티에 덮이지 않고, forced-colors(고대비)에서도 유지되며, 요소 모양(radius)을
+  바꾸지 않는다.
+- **쿼리 에러 표면화**: 어떤 화면도 `isError`를 소비하지 않아 **쿼리 실패가 "0건" 빈 상태로
+  위장**되던 것을 전 앱 공통으로 교정 — 빈 상태 분기보다 먼저 에러 분기("불러오지 못했어요"
+  + 다시 시도/refetch). customer 앱은 EmptyState action 슬롯 재사용, admin은 QueryError 컴포넌트.
+  단, 에러 분기 조건은 **`isError && data === undefined`(초기 로드 실패)로 좁힌다** — TanStack
+  Query v5는 error 상태에서도 data를 보존하므로, 폴링/포커스 refetch의 일시 실패가 잘 보이던
+  화면을 에러로 교체하지 않게 한다(admin 대시보드 KPI 포함 — 실패를 "0건/0원"으로 위장 금지).
+- **로딩 플래시 제거**: 로딩 중 "없어요" 빈 문구가 먼저 떴다가 데이터로 교체되던 화면(user 홈
+  최근 이력·시세 이력·마이, rider 콜홈 히어로/실적)에 스켈레톤 가드.
+
+### 컴포넌트/화면
+- **PriceChart**: SVG 속성 `height="auto"`는 스펙상 무효(콘솔 에러) → CSS `height:auto`로 이동.
+- **BottomSheet**: 백드롭 페이드 + 시트 슬라이드업(motion.base 250ms, reduced-motion 시 즉시).
+  닫힘은 기존대로 즉시 unmount(호출부 계약 불변). 하단 safe-area 패딩.
+- **Toast**: 등장 모션(8px 떠오르며 페이드인, reduced-motion 존중).
+- **PhotoUploader**: 삭제 버튼 히트 영역 24→40px(시각 24px 원 유지), "+" 트리거 aria-label.
+- **돈 히어로 격상**(Bilt/Robinhood 패턴): user 주문상세 "받은 현금" → gradient.brand 히어로,
+  rider 정산 "이번 달 지급한 현금"·콜상세 "예상 매입 지급액" → gradient.point 히어로. 셋 다
+  흰 40px/32px 숫자 + elevation.raised. 평면 pale 카드였던 "돈 모먼트"의 위계 회복.
+- **admin OrderStatusPill 공유화**: Orders/Dashboard의 인라인 상태 pill 매핑 중복을 단일
+  컴포넌트로. 대시보드가 상태 무관 항상 green이던 버그 교정. "오늘 현금 거래액" KPI와
+  Settlement 일별 현금도 앰버 강조(돈=앰버 통일). admin의 밝은 배경 위 text-accent는 일괄
+  `text-accent-deep`(대비 교정).
+- **admin 404**: catch-all 라우트 + NotFoundPage(이전엔 미지정 URL이 빈 화면).
+- **admin 대비·시프트**: 의미 텍스트 gray-400→gray-500, Settlement 로딩 시 thead 유지,
+  200건 상한 캡션 고지, 모달/드로어 Escape 닫기(한글 IME 조합 중 Escape는 무시 — isComposing
+  가드) + role="dialog" aria-modal + 열림 시 초기 포커스 이동(useInitialFocus).
+- **폼**: 사업자번호 inputMode="numeric", 연락처 tel(모바일 키보드).
+- **카피**: 해요체 통일(주문상세 확인 CTA "받았습니다"→"받았어요").
+
+완료 기준: pnpm lint/test/build 전부 green + dev 서버 스크린샷(홈/dev-ui/온보딩, 콘솔 에러 0).
+비범위(다음 패스 후보로 기록): 서버 원문 에러 메시지의 한국어 매핑 사전, 라우트 전환 페이드,
+리스트 스태거 등장, admin 테이블 정렬/페이지네이션, 헤더 관용구 3종 통일, /dev-ui에
+ErrorScreen·ConfirmSheet·OfflineBanner 목업 추가.

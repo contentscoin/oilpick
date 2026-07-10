@@ -29,7 +29,7 @@ export function DepotsPage() {
       <div className="rounded-card bg-white p-6 shadow-card">
         <h2 className="mb-4 text-lg font-semibold text-gray-900">등록된 집하장</h2>
         {isLoading ? (
-          <p className="text-sm text-gray-400">불러오는 중...</p>
+          <p className="text-sm text-gray-500">불러오는 중...</p>
         ) : depots && depots.length > 0 ? (
           <div className="flex flex-col gap-3" data-testid="depot-list">
             {depots.map((depot) => (
@@ -69,7 +69,7 @@ export function DepotsPage() {
             ))}
           </div>
         ) : (
-          <p className="text-sm text-gray-400">등록된 집하장이 없어요.</p>
+          <p className="text-sm text-gray-500">등록된 집하장이 없어요.</p>
         )}
       </div>
 
@@ -102,7 +102,7 @@ function DepotQrModal({ depot, onClose }: { depot: AdminDepotRow; onClose: () =>
         <h2 className="text-lg font-bold text-gray-900">{depot.name}</h2>
         <p className="text-sm text-gray-500">{depot.address}</p>
         <canvas ref={canvasRef} data-testid="depot-qr-canvas" />
-        <p className="max-w-xs break-all text-center text-xs text-gray-400">{depot.qrSecret}</p>
+        <p className="max-w-xs break-all text-center text-xs text-gray-500">{depot.qrSecret}</p>
         <button
           type="button"
           onClick={() => window.print()}
