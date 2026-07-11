@@ -3,11 +3,14 @@ import {
   BigButton,
   BottomSheet,
   CallCard,
+  ConfirmSheet,
   DriverCard,
   EmptyState,
+  ErrorScreen,
   InfoStatCard,
   LedgerList,
   MapView,
+  OfflineBanner,
   OrderTimeline,
   PhotoUploader,
   PointBalanceCard,
@@ -47,6 +50,7 @@ const DUMMY_PRICE_TICKS = Array.from({ length: 30 }, (_, i) => {
 export function DevUiPage() {
   const [qty, setQty] = useState(3);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("home");
   const [photos, setPhotos] = useState<PhotoAsset[]>([]);
   const [chartDays, setChartDays] = useState<"7" | "30" | "90">("30");
@@ -269,6 +273,76 @@ export function DevUiPage() {
             { id: 3, entryType: "REFUND", amount: 2, createdAt: new Date() },
           ]}
         />
+      </section>
+
+      {/* ── 05 2026-07-10 폴리시 패스 후속: 스크린샷 검증 사각지대 보강 ── */}
+
+      <section>
+        <h2>BigButton (secondary / danger / loading)</h2>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <BigButton variant="secondary" onClick={() => {}}>
+            보조 버튼
+          </BigButton>
+          <BigButton variant="danger" onClick={() => {}}>
+            위험 버튼
+          </BigButton>
+          <BigButton loading onClick={() => {}}>
+            로딩 상태
+          </BigButton>
+        </div>
+      </section>
+
+      <section>
+        <h2>StatusHeadline (나머지 상태)</h2>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <StatusHeadline status="REQUESTED" />
+          <StatusHeadline status="ARRIVED" />
+          <StatusHeadline status="DISPUTED" />
+        </div>
+      </section>
+
+      <section>
+        <h2>PriceCard (하락 케이스)</h2>
+        <PriceCard
+          pricePerKg={1180}
+          changeAmount={-40}
+          history={DUMMY_PRICE_TICKS.slice(-7).map((t) => t.pricePerKg)}
+        />
+      </section>
+
+      <section>
+        <h2>ErrorScreen</h2>
+        <ErrorScreen
+          title="주문을 찾을 수 없어요"
+          description="삭제됐거나 잘못된 주소일 수 있어요."
+          action={
+            <BigButton variant="secondary" onClick={() => {}}>
+              홈으로 돌아가기
+            </BigButton>
+          }
+        />
+      </section>
+
+      <section>
+        <h2>ConfirmSheet</h2>
+        <BigButton variant="secondary" onClick={() => setConfirmOpen(true)}>
+          ConfirmSheet 열기
+        </BigButton>
+        <ConfirmSheet
+          open={confirmOpen}
+          onClose={() => setConfirmOpen(false)}
+          onConfirm={() => setConfirmOpen(false)}
+          title="요청을 취소할까요?"
+          description="취소하면 라이더 매칭이 중단돼요."
+          confirmLabel="요청 취소"
+          danger
+        />
+      </section>
+
+      <section>
+        {/* forceVisible은 프리뷰 전용 prop — 실제 화면은 오프라인 시에만 뜬다(fixed 상단). */}
+        <h2>OfflineBanner (프리뷰 강제 표시 — 화면 최상단 fixed)</h2>
+        <OfflineBanner forceVisible />
       </section>
     </main>
   );

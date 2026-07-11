@@ -40,14 +40,17 @@ export interface OfflineBannerProps {
   /** 표시 문구 오버라이드(기본: 한국어 안내). */
   message?: string;
   className?: string;
+  /** 온라인이어도 강제 표시 — /dev-ui 프리뷰 전용(프로덕션 경로에서 쓰지 말 것). */
+  forceVisible?: boolean;
 }
 
 export function OfflineBanner({
   message = "인터넷 연결이 끊겼어요. 연결이 복구되면 자동으로 새로고침돼요.",
   className,
+  forceVisible,
 }: OfflineBannerProps) {
   const online = useOnlineStatus();
-  if (online) return null;
+  if (online && !forceVisible) return null;
 
   return (
     <div

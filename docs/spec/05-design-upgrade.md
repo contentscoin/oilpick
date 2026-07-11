@@ -213,6 +213,18 @@ gray·surface·status 색, Pretendard. 로직/testid/데이터흐름/절대규�
 - **카피**: 해요체 통일(주문상세 확인 CTA "받았습니다"→"받았어요").
 
 완료 기준: pnpm lint/test/build 전부 green + dev 서버 스크린샷(홈/dev-ui/온보딩, 콘솔 에러 0).
-비범위(다음 패스 후보로 기록): 서버 원문 에러 메시지의 한국어 매핑 사전, 라우트 전환 페이드,
-리스트 스태거 등장, admin 테이블 정렬/페이지네이션, 헤더 관용구 3종 통일, /dev-ui에
-ErrorScreen·ConfirmSheet·OfflineBanner 목업 추가.
+
+### 후속 패스 (2026-07-11) — 다음 패스 후보 중 3건 구현
+- **서버 원문 에러 한국어 매핑**: packages/core `humanizeSupabaseError` — supabase-js 직접
+  호출(GoTrue OTP/PostgREST/Storage)의 영어 원문을 사용자 카피로 매핑(OTP 만료/rate limit/
+  SMS 미설정/RLS/중복/네트워크 등). 한국어 메시지는 통과, 미매핑 영어는 fallback 뒤로 감춤
+  (원문 노출 금지). 적용: user·rider AuthPage, ProfileEditPage, ActiveRunPage 업로드.
+  Edge Function 에러는 기존 ERROR_MESSAGE_KO가 담당(대상 아님).
+- **탭 전환 페이드**: packages/ui `ContentFade`(라우터 비의존, fadeKey 리마운트로
+  oilpick-fade-in-up 재생) — User/RiderShell이 location.pathname을 넘겨 탭 콘텐츠만 페이드
+  (탭바 제외). reduced-motion 시 즉시 표시.
+- **/dev-ui 사각지대 보강**: ErrorScreen·ConfirmSheet·OfflineBanner(forceVisible 프리뷰
+  prop 신설)·BigButton secondary/danger/loading·StatusHeadline REQUESTED/ARRIVED/DISPUTED·
+  PriceCard 하락 케이스 목업 추가 — 스크린샷 회귀 검증 커버리지 확보.
+
+남은 다음 패스 후보: 리스트 스태거 등장, admin 테이블 정렬/페이지네이션, 헤더 관용구 3종 통일.

@@ -1,7 +1,7 @@
 import { type FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BigButton, colors, inputClassName, inputStyle } from "@oilpick/ui";
-import { isValidKrMobilePhone, supplierSignupInputSchema, toE164Kr } from "@oilpick/core";
+import { humanizeSupabaseError, isValidKrMobilePhone, supplierSignupInputSchema, toE164Kr } from "@oilpick/core";
 import { supabase } from "../lib/supabaseClient";
 import { AddressField, type AddressValue } from "../components/AddressField";
 
@@ -53,7 +53,7 @@ export function AuthPage() {
     });
     setLoading(false);
     if (otpError) {
-      setError(otpError.message);
+      setError(humanizeSupabaseError(otpError));
       return;
     }
     setStep("CODE");
@@ -70,7 +70,7 @@ export function AuthPage() {
     });
     setLoading(false);
     if (verifyError || !data.user) {
-      setError(verifyError?.message ?? "인증에 실패했어요.");
+      setError(humanizeSupabaseError(verifyError, "인증에 실패했어요."));
       return;
     }
 
@@ -125,7 +125,7 @@ export function AuthPage() {
     });
     if (profileError) {
       setLoading(false);
-      setError(profileError.message);
+      setError(humanizeSupabaseError(profileError));
       return;
     }
 
@@ -138,7 +138,7 @@ export function AuthPage() {
     });
     setLoading(false);
     if (supplierError) {
-      setError(supplierError.message);
+      setError(humanizeSupabaseError(supplierError));
       return;
     }
 
