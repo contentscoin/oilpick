@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { colors, radius, surface } from "@oilpick/ui";
+import { PageHeader, colors, radius, surface } from "@oilpick/ui";
 import {
   CS_CATEGORY_LABEL,
   CS_STATUS_LABEL,
@@ -80,15 +80,7 @@ export function SupportPage() {
 
   return (
     <main style={{ display: "flex", flexDirection: "column", gap: 20, padding: 20, maxWidth: 480, margin: "0 auto" }}>
-      <button
-        type="button"
-        data-testid="support-back"
-        onClick={() => navigate(-1)}
-        style={{ alignSelf: "flex-start", background: "none", border: "none", color: colors.status.wait, fontSize: 14, cursor: "pointer", padding: 0 }}
-      >
-        &lt; 뒤로
-      </button>
-      <h1 style={{ fontSize: 20, margin: 0 }}>고객센터</h1>
+      <PageHeader title="고객센터" onBack={() => navigate(-1)} backTestId="support-back" />
 
       {presetCategory.success && presetCategory.data === "CASH_DISPUTE" && (
         <p

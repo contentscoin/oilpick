@@ -107,7 +107,7 @@ export function WalletPage() {
             />
           </div>
         ) : receipts && receipts.length > 0 ? (
-          <ul data-testid="receipts-list" style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+          <ul data-testid="receipts-list" className="oilpick-stagger" style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
             {receipts.map((receipt) => (
               <li
                 key={receipt.id}

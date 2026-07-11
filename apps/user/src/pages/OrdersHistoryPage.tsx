@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { EmptyState, StatusBadge, colors, gray, radius, surface } from "@oilpick/ui";
+import { EmptyState, PageHeader, StatusBadge, colors, gray, radius, surface } from "@oilpick/ui";
 import { formatKg, formatKrw, formatPoint } from "@oilpick/core";
 import { useSession } from "../hooks/useSession";
 import { useOrderHistory } from "../hooks/useOrderHistory";
@@ -31,18 +31,7 @@ export function OrdersHistoryPage() {
 
   return (
     <main style={{ display: "flex", flexDirection: "column", gap: 16, padding: 20, maxWidth: 560, margin: "0 auto" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <button
-          type="button"
-          data-testid="orders-history-back"
-          aria-label="뒤로가기"
-          onClick={() => navigate("/")}
-          style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 44, height: 44, marginLeft: -12, background: "none", border: "none", fontSize: 20, cursor: "pointer", padding: 0 }}
-        >
-          &lt;
-        </button>
-        <h1 style={{ fontSize: 20, margin: 0 }}>수거 이력</h1>
-      </div>
+      <PageHeader title="수거 이력" onBack={() => navigate("/")} backTestId="orders-history-back" />
 
       {isLoading && (
         <div data-testid="orders-history-skeleton" style={{ height: 200, borderRadius: radius.card, backgroundColor: gray[100] }} />

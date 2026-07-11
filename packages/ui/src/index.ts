@@ -17,6 +17,7 @@ export * from "./components/BottomSheet";
 export * from "./components/ConfirmSheet";
 export * from "./components/ErrorScreen";
 export * from "./components/TabBar";
+export * from "./components/PageHeader";
 export * from "./components/Toast";
 export * from "./components/ToastProvider";
 export * from "./components/OfflineBanner";

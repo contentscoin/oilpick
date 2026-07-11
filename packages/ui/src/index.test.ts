@@ -13,6 +13,7 @@ describe("@oilpick/ui barrel", () => {
     expect(UI.QtyStepper).toBeTypeOf("function");
     expect(UI.BottomSheet).toBeTypeOf("function");
     expect(UI.TabBar).toBeTypeOf("function");
+    expect(UI.PageHeader).toBeTypeOf("function");
     expect(UI.Toast).toBeTypeOf("function");
     expect(UI.OfflineBanner).toBeTypeOf("function");
     expect(UI.useOnlineStatus).toBeTypeOf("function");

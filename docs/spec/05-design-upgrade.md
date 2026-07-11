@@ -227,4 +227,24 @@ gray·surface·status 색, Pretendard. 로직/testid/데이터흐름/절대규�
   prop 신설)·BigButton secondary/danger/loading·StatusHeadline REQUESTED/ARRIVED/DISPUTED·
   PriceCard 하락 케이스 목업 추가 — 스크린샷 회귀 검증 커버리지 확보.
 
-남은 다음 패스 후보: 리스트 스태거 등장, admin 테이블 정렬/페이지네이션, 헤더 관용구 3종 통일.
+### 후속 패스 2 (2026-07-11) — 남은 후보 3건 전부 구현
+- **admin 주문 테이블 정렬+페이지네이션**: limit(200) 고정 → 페이지 50건 서버 페이지네이션
+  (`.range`, 51건 요청으로 hasNextPage 판별 — user 앱 useOrderHistory와 동일 관용구) + 컬럼
+  정렬(요청일/kg, `aria-sort`+▲▼, `.order(...)` 서버 반영 + id 타이브레이커로 페이지 간
+  중복/누락 방지). 필터·정렬 변경 시 page 0 리셋. CSV는 현재 페이지 기준(캡션 고지).
+  "최근 200건 기준" 캡션은 "50건씩 표시"로 대체. 검색은 클라이언트 필터를 유지하되 **대상이
+  현재 페이지 50건으로 좁아진다**(종전 200건) — placeholder에 "현재 페이지 내 검색"으로 고지.
+  페이지/정렬 전환 시 `placeholderData: keepPreviousData`로 이전 rows를 유지(테이블 붕괴·
+  버튼 disabled로 인한 키보드 포커스 유실 방지 — 리뷰 확정 발견 반영).
+- **헤더 관용구 통일**: packages/ui `PageHeader` 신설(라우팅 비의존 — onBack 콜백) —
+  좌측 뒤로가기 44×44 + 중앙 16px/700 타이틀 + 우측 슬롯(기본 32px 스페이서, OrderDetail은
+  알림 벨). user 5면+Support, rider 3면+Support의 3가지 관용구("<+중앙"/"<+좌측"/"< 뒤로"
+  텍스트)를 단일 관용구로. 기존 back data-testid 전부 보존.
+- **리스트 스태거 등장**: styles.css `.oilpick-stagger`(직계 자식 40ms 간격 지연,
+  8번째부터 상한, reduced-motion 시 없음) — user 홈 최근 이력·알림·수령 내역, rider
+  운행 이력·알림에 적용. **주변 콜 목록은 제외**(위치정보 도착·Realtime 갱신 시 거리순
+  재정렬이 잦아 keyed 재삽입마다 모션이 재생돼 깜빡임 — 리뷰 확정 발견. 규칙: 재정렬
+  가능성 있는 목록에는 스태거 금지).
+
+이로써 2026-07-10 감사에서 나온 개선 후보는 전부 소진. 이후 고도화는 새 감사/사용자
+피드백 기반으로 스코프를 새로 잡는다.
