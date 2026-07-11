@@ -39,7 +39,7 @@ vi.mock("../lib/supabaseClient", () => ({
     from: (table: string) => {
       if (table === "pickup_orders") {
         const builder = mockDb.chainable(() => ({ data: mockDb.state.ordersData, error: null }));
-        const origRange = builder.range;
+        const origRange = builder.range!; // chainable()이 모든 메서드를 채우므로 존재 보장
         builder.range = vi.fn((...args: unknown[]) => {
           mockDb.state.rangeCalls.push(args);
           return origRange(...args);
