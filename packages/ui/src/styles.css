@@ -1,15 +1,9 @@
 /* @oilpick/ui 전역 스타일. docs/spec/03-frontend.md "디자인 토큰" 절.
    앱 엔트리에서 한 번만 import할 것 (예: apps/user/src/main.tsx 최상단). */
 
-@font-face {
-  font-family: "Pretendard Variable";
-  font-weight: 45 920;
-  font-style: normal;
-  font-display: swap;
-  /* jsDelivr npm 엔드포인트(배포 tarball 미러) — /gh/ 경로는 저장소 모노레포화로 dist 위치가 바뀌어 404. */
-  src: url("https://cdn.jsdelivr.net/npm/pretendard@1.3.9/dist/web/variable/woff2/PretendardVariable.woff2")
-    format("woff2-variations");
-}
+/* Pretendard @font-face는 각 앱 index.html의 동적 서브셋 CSS <link>가 담당한다
+   (pretendardvariable-dynamic-subset.css — unicode-range로 필요한 조각만 로드).
+   여기서 풀 가변 폰트(2MB) @font-face를 선언하면 전체 파일을 받게 되므로 금지. */
 
 body {
   font-family:
