@@ -62,7 +62,7 @@ export function NotificationsPage() {
           />
         </div>
       ) : notifications && notifications.length > 0 ? (
-        <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+        <ul className="oilpick-stagger" style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
           {notifications.map((n) => (
             <li key={n.id}>
               <button

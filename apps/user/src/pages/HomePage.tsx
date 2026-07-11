@@ -434,7 +434,7 @@ export function HomePage() {
           ) : recentOrders.length === 0 ? (
             <p style={{ margin: 0, fontSize: typeScale.label, color: colors.status.wait }}>아직 수거 이력이 없어요.</p>
           ) : (
-            <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+            <ul className="oilpick-stagger" style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
               {recentOrders.map((order) => (
                 <li key={order.id}>
                   <button

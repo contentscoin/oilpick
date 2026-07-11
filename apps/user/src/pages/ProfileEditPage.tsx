@@ -1,7 +1,7 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BigButton, colors, gray, inputClassName, inputStyle, radius, surface, useToast } from "@oilpick/ui";
+import { BigButton, PageHeader, colors, gray, inputClassName, inputStyle, radius, surface, useToast } from "@oilpick/ui";
 import { humanizeSupabaseError, supplierProfileUpdateSchema } from "@oilpick/core";
 import { useSession } from "../hooks/useSession";
 import { supabase } from "../lib/supabaseClient";
@@ -139,18 +139,7 @@ export function ProfileEditPage() {
 
   return (
     <main style={{ display: "flex", flexDirection: "column", gap: 20, padding: 20, maxWidth: 480, margin: "0 auto" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <button
-          type="button"
-          data-testid="profile-edit-back"
-          aria-label="뒤로가기"
-          onClick={() => navigate("/my")}
-          style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 44, height: 44, marginLeft: -12, background: "none", border: "none", fontSize: 20, cursor: "pointer", padding: 0, color: gray[900], lineHeight: 1 }}
-        >
-          &lt;
-        </button>
-        <h1 style={{ fontSize: 18, margin: 0, fontWeight: 700 }}>매장정보 수정</h1>
-      </div>
+      <PageHeader title="매장정보 수정" onBack={() => navigate("/my")} backTestId="profile-edit-back" />
 
       {error && (
         <p role="alert" data-testid="profile-edit-error" style={{ color: colors.status.danger, fontSize: 14, margin: 0 }}>

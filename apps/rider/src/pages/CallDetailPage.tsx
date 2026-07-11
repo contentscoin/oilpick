@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { BigButton, ErrorScreen, MapView, colors, elevation, gradient, gray, radius, surface, useToast } from "@oilpick/ui";
+import { BigButton, ErrorScreen, MapView, PageHeader, colors, elevation, gradient, gray, radius, surface, useToast } from "@oilpick/ui";
 import { INSUFFICIENT_COUPON, estimateCash, formatKg, formatKrw } from "@oilpick/core";
 import { KAKAO_KEY } from "../lib/env";
 import { invokeEdgeFunction } from "../lib/edgeFunction";
@@ -84,23 +84,8 @@ export function CallDetailPage() {
 
   return (
     <main style={{ display: "flex", flexDirection: "column", gap: 20, padding: 20, maxWidth: 480, margin: "0 auto" }}>
-      {/* U7 헤더 톤: 뒤로(<, gray-900) + "콜 상세"(중앙). */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <button
-          type="button"
-          data-testid="call-detail-back"
-          aria-label="뒤로가기"
-          onClick={() => navigate("/")}
-          style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 44, height: 44, marginLeft: -12, background: "none", border: "none", fontSize: 20, cursor: "pointer", padding: 0, color: gray[900], lineHeight: 1 }}
-        >
-          &lt;
-        </button>
-        <h1 style={{ fontSize: 16, margin: 0, flex: 1, fontWeight: 700, textAlign: "center", color: gray[900] }}>
-          콜 상세
-        </h1>
-        {/* 좌측 back과 시각적 균형을 맞추기 위한 스페이서. */}
-        <span aria-hidden style={{ width: 32 }} />
-      </div>
+      {/* U7 헤더 톤: 뒤로(<, gray-900) + "콜 상세"(중앙) — 공용 PageHeader 관용구. */}
+      <PageHeader title="콜 상세" onBack={() => navigate("/")} backTestId="call-detail-back" />
 
       <MapView
         apiKey={KAKAO_KEY}

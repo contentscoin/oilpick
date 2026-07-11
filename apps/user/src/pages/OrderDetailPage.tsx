@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { BigButton, ConfirmSheet, DriverCard, ErrorScreen, InfoStatCard, MapView, OrderTimeline, StatusHeadline, colors, elevation, gradient, gray, radius, surface, touchTarget, useToast } from "@oilpick/ui";
+import { BigButton, ConfirmSheet, DriverCard, ErrorScreen, InfoStatCard, MapView, OrderTimeline, PageHeader, StatusHeadline, colors, elevation, gradient, gray, radius, surface, touchTarget, useToast } from "@oilpick/ui";
 import { estimateCash, formatKg, formatKrw, formatPoint, formatTimeOfDay, type OrderStatus } from "@oilpick/core";
 import { KAKAO_KEY } from "../lib/env";
 import { invokeEdgeFunction } from "../lib/edgeFunction";
@@ -164,54 +164,47 @@ export function OrderDetailPage() {
 
   return (
     <main style={{ display: "flex", flexDirection: "column", gap: 20, padding: 20, maxWidth: 480, margin: "0 auto" }}>
-      {/* U7 목업 헤더: 뒤로(<) + "수거 상세"(중앙) + 우측 알림 벨. */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <button
-          type="button"
-          data-testid="order-detail-back"
-          aria-label="뒤로가기"
-          onClick={() => navigate("/")}
-          style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 44, height: 44, marginLeft: -12, background: "none", border: "none", fontSize: 20, cursor: "pointer", padding: 0, color: gray[900], lineHeight: 1 }}
-        >
-          &lt;
-        </button>
-        <h1 style={{ fontSize: 16, margin: 0, flex: 1, fontWeight: 700, textAlign: "center", color: gray[900] }}>
-          수거 상세
-        </h1>
-        <Link
-          to="/notifications"
-          data-testid="order-detail-notifications"
-          aria-label={unread > 0 ? `알림 ${unread}건` : "알림"}
-          style={{
-            position: "relative",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: 44,
-            height: 44,
-            color: gray[900],
-            textDecoration: "none",
-          }}
-        >
-          <BellIcon />
-          {/* 06 E7: 미읽음 도트 — 홈 헤더(notifications-unread-dot)와 동일 스타일. */}
-          {unread > 0 && (
-            <span
-              data-testid="order-detail-unread-dot"
-              style={{
-                position: "absolute",
-                top: 9,
-                right: 10,
-                minWidth: 8,
-                height: 8,
-                borderRadius: radius.pill,
-                backgroundColor: colors.up,
-                border: `1.5px solid ${surface.app}`,
-              }}
-            />
-          )}
-        </Link>
-      </div>
+      {/* U7 목업 헤더: 뒤로(<) + "수거 상세"(중앙) + 우측 알림 벨 — 공용 PageHeader 관용구. */}
+      <PageHeader
+        title="수거 상세"
+        onBack={() => navigate("/")}
+        backTestId="order-detail-back"
+        right={
+          <Link
+            to="/notifications"
+            data-testid="order-detail-notifications"
+            aria-label={unread > 0 ? `알림 ${unread}건` : "알림"}
+            style={{
+              position: "relative",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 44,
+              height: 44,
+              color: gray[900],
+              textDecoration: "none",
+            }}
+          >
+            <BellIcon />
+            {/* 06 E7: 미읽음 도트 — 홈 헤더(notifications-unread-dot)와 동일 스타일. */}
+            {unread > 0 && (
+              <span
+                data-testid="order-detail-unread-dot"
+                style={{
+                  position: "absolute",
+                  top: 9,
+                  right: 10,
+                  minWidth: 8,
+                  height: 8,
+                  borderRadius: radius.pill,
+                  backgroundColor: colors.up,
+                  border: `1.5px solid ${surface.app}`,
+                }}
+              />
+            )}
+          </Link>
+        }
+      />
 
       {/* 05-design-upgrade.md "## U7 주문상세 — 목업 확정": 상태 헤드라인(near-black 제목 + 우측 pill
           + 라이더명 보조문구). */}

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { BigButton, EmptyState, colors, elevation, gray, radius, surface } from "@oilpick/ui";
+import { BigButton, EmptyState, PageHeader, colors, elevation, gray, radius, surface } from "@oilpick/ui";
 import {
   formatKrw,
   type CouponPurchaseIntentOutput,
@@ -561,45 +561,7 @@ function Screen({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** 내부 헤더 — 공용 PageHeader 관용구 사용(purchase-back testid 보존). */
 function Header({ title, onBack }: { title: string; onBack: () => void }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-      <button
-        type="button"
-        data-testid="purchase-back"
-        aria-label="뒤로가기"
-        onClick={onBack}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          width: 44,
-          height: 44,
-          marginLeft: -12,
-          background: "none",
-          border: "none",
-          fontSize: 20,
-          cursor: "pointer",
-          padding: 0,
-          color: gray[900],
-          lineHeight: 1,
-        }}
-      >
-        &lt;
-      </button>
-      <h1
-        style={{
-          fontSize: 16,
-          margin: 0,
-          flex: 1,
-          fontWeight: 700,
-          textAlign: "center",
-          color: gray[900],
-        }}
-      >
-        {title}
-      </h1>
-      <span aria-hidden style={{ width: 32 }} />
-    </div>
-  );
+  return <PageHeader title={title} onBack={onBack} backTestId="purchase-back" />;
 }

@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../lib/supabaseClient";
 import { queryKeys } from "../lib/queryClient";
 import type { OrderStatus } from "@oilpick/core";
@@ -52,9 +52,9 @@ export interface AdminOrderRow {
 /**
  * 03-frontend.md apps/admin "/orders": "테이블(상태 필터)". statusFilter가 "ALL"이면 전체.
  * 06 E10-①: created_at 날짜 범위(dateFrom/dateTo, YYYY-MM-DD, 빈 문자열=미적용)는 서버 쿼리
- * 파라미터(.gte/.lt)로 필터한다 — limit(200) 때문에 클라이언트 필터로는 기간 밖의 과거 주문에
- * 닿을 수 없다(RLS/뷰 변경 없음). 경계는 브라우저 로컬 자정 기준 — 목록의 toLocaleString
- * 표시와 같은 타임존으로 맞춘다(created_at은 timestamptz).
+ * 파라미터(.gte/.lt)로 필터한다 — 페이지 단위(50건) 서버 조회라 클라이언트 필터로는 페이지
+ * 밖의 과거 주문에 닿을 수 없다(RLS/뷰 변경 없음). 경계는 브라우저 로컬 자정 기준 — 목록의
+ * toLocaleString 표시와 같은 타임존으로 맞춘다(created_at은 timestamptz).
  */
 /** 06 E10-① 시작 경계: 시작일 로컬 자정(포함). 목록 toLocaleString 표시와 동일 타임존 기준. */
 export function dateFromBoundaryIso(dateFrom: string): string {
@@ -66,64 +66,115 @@ export function dateToExclusiveBoundaryIso(dateTo: string): string {
   return new Date(new Date(`${dateTo}T00:00:00`).getTime() + 24 * 60 * 60 * 1000).toISOString();
 }
 
-export function useAdminOrders(statusFilter: string, dateFrom = "", dateTo = "") {
+/** 05 폴리시 패스 "admin 테이블 정렬/페이지네이션": 서버 페이지네이션 페이지 크기. */
+export const ADMIN_ORDERS_PAGE_SIZE = 50;
+
+/** 정렬 가능 컬럼 = 요청일(created_at)·예상 kg(requested_kg). 서버 .order로 반영한다. */
+export type AdminOrdersSortColumn = "created_at" | "requested_kg";
+
+export interface AdminOrdersSort {
+  column: AdminOrdersSortColumn;
+  ascending: boolean;
+}
+
+/** 기본 정렬: 요청일 최신순(기존 limit(200) 시절과 동일한 순서). */
+export const DEFAULT_ADMIN_ORDERS_SORT: AdminOrdersSort = { column: "created_at", ascending: false };
+
+export interface AdminOrdersPage {
+  rows: AdminOrderRow[];
+  hasNextPage: boolean;
+}
+
+/**
+ * useAdminOrders의 queryFn 본체. 훅에서 분리해 supabase 모킹만으로 단위 테스트한다.
+ * hasNextPage 판별: 페이지 크기+1(51)건을 요청해 초과분 존재 여부로 판단 — { count: "exact" }
+ * head 카운트보다 요청 1번에 끝나고 서버 카운트 비용도 없어 더 단순하다(user 앱
+ * useOrderHistory와 같은 관용구). 초과 1건은 slice로 버린다.
+ */
+export async function fetchAdminOrders(
+  statusFilter: string,
+  dateFrom: string,
+  dateTo: string,
+  page: number,
+  sort: AdminOrdersSort,
+): Promise<AdminOrdersPage> {
+  const from = page * ADMIN_ORDERS_PAGE_SIZE;
+  let q = supabase
+    .from("pickup_orders")
+    .select("id, status, supplier_id, rider_id, requested_kg, measured_kg, final_kg, pickup_address, created_at")
+    .order(sort.column, { ascending: sort.ascending })
+    // 동률(같은 kg·같은 시각)에서 페이지 간 행 중복/누락이 없도록 id로 순서를 고정한다.
+    .order("id", { ascending: true })
+    .range(from, from + ADMIN_ORDERS_PAGE_SIZE); // 페이지 크기+1건 — hasNextPage 판별용
+  if (statusFilter !== "ALL") {
+    q = q.eq("status", statusFilter);
+  }
+  // 시작일 로컬 자정 이상 ~ 종료일 다음날 로컬 자정 미만(종료일 포함).
+  if (dateFrom) {
+    q = q.gte("created_at", dateFromBoundaryIso(dateFrom));
+  }
+  if (dateTo) {
+    q = q.lt("created_at", dateToExclusiveBoundaryIso(dateTo));
+  }
+  const [{ data, error }, { supplierNames, riderNames }] = await Promise.all([q, fetchNameMaps()]);
+  if (error) throw error;
+  const fetched = data ?? [];
+  const hasNextPage = fetched.length > ADMIN_ORDERS_PAGE_SIZE;
+  const rows = fetched.slice(0, ADMIN_ORDERS_PAGE_SIZE);
+
+  // 07 F12-⑤: ARRIVED 주문의 진입 시각을 order_events에서 조회(pickup_orders엔 arrived_at 없음).
+  // ARRIVED 행이 있을 때만 추가 조회한다. 같은 주문에 ARRIVE 이벤트가 여러 개면 최신을 취한다.
+  const arrivedIds = rows.filter((r) => r.status === "ARRIVED").map((r) => r.id);
+  const arrivedAtMap = new Map<string, string>();
+  if (arrivedIds.length > 0) {
+    const { data: evs } = await supabase
+      .from("order_events")
+      .select("order_id, created_at")
+      .eq("to_status", "ARRIVED")
+      .in("order_id", arrivedIds)
+      .order("created_at", { ascending: false });
+    for (const ev of evs ?? []) {
+      if (!arrivedAtMap.has(ev.order_id)) arrivedAtMap.set(ev.order_id, ev.created_at);
+    }
+  }
+
+  return {
+    rows: rows.map((row) => ({
+      id: row.id,
+      status: row.status,
+      supplierId: row.supplier_id,
+      supplierName: supplierNames.get(row.supplier_id) ?? row.supplier_id.slice(0, 8),
+      riderId: row.rider_id,
+      riderName: row.rider_id ? (riderNames.get(row.rider_id) ?? row.rider_id.slice(0, 8)) : null,
+      requestedKg: Number(row.requested_kg),
+      measuredKg: row.measured_kg !== null ? Number(row.measured_kg) : null,
+      finalKg: row.final_kg !== null ? Number(row.final_kg) : null,
+      pickupAddress: row.pickup_address,
+      createdAt: row.created_at,
+      arrivedAt: arrivedAtMap.get(row.id) ?? null,
+    })),
+    hasNextPage,
+  };
+}
+
+export function useAdminOrders(
+  statusFilter: string,
+  dateFrom = "",
+  dateTo = "",
+  page = 0,
+  sort: AdminOrdersSort = DEFAULT_ADMIN_ORDERS_SORT,
+) {
   const queryClient = useQueryClient();
 
   const query = useQuery({
-    // 날짜 범위는 statusFilter와 같은 방식으로 queryKey에 포함한다. queryKeys.orders 프리픽스를
-    // 유지해 Realtime invalidate(["admin", "orders"]) 대상에 남긴다.
-    queryKey: [...queryKeys.orders(statusFilter), dateFrom, dateTo],
-    queryFn: async (): Promise<AdminOrderRow[]> => {
-      let q = supabase
-        .from("pickup_orders")
-        .select("id, status, supplier_id, rider_id, requested_kg, measured_kg, final_kg, pickup_address, created_at")
-        .order("created_at", { ascending: false })
-        .limit(200);
-      if (statusFilter !== "ALL") {
-        q = q.eq("status", statusFilter);
-      }
-      // 시작일 로컬 자정 이상 ~ 종료일 다음날 로컬 자정 미만(종료일 포함).
-      if (dateFrom) {
-        q = q.gte("created_at", dateFromBoundaryIso(dateFrom));
-      }
-      if (dateTo) {
-        q = q.lt("created_at", dateToExclusiveBoundaryIso(dateTo));
-      }
-      const [{ data, error }, { supplierNames, riderNames }] = await Promise.all([q, fetchNameMaps()]);
-      if (error) throw error;
-      const rows = data ?? [];
-
-      // 07 F12-⑤: ARRIVED 주문의 진입 시각을 order_events에서 조회(pickup_orders엔 arrived_at 없음).
-      // ARRIVED 행이 있을 때만 추가 조회한다. 같은 주문에 ARRIVE 이벤트가 여러 개면 최신을 취한다.
-      const arrivedIds = rows.filter((r) => r.status === "ARRIVED").map((r) => r.id);
-      const arrivedAtMap = new Map<string, string>();
-      if (arrivedIds.length > 0) {
-        const { data: evs } = await supabase
-          .from("order_events")
-          .select("order_id, created_at")
-          .eq("to_status", "ARRIVED")
-          .in("order_id", arrivedIds)
-          .order("created_at", { ascending: false });
-        for (const ev of evs ?? []) {
-          if (!arrivedAtMap.has(ev.order_id)) arrivedAtMap.set(ev.order_id, ev.created_at);
-        }
-      }
-
-      return rows.map((row) => ({
-        id: row.id,
-        status: row.status,
-        supplierId: row.supplier_id,
-        supplierName: supplierNames.get(row.supplier_id) ?? row.supplier_id.slice(0, 8),
-        riderId: row.rider_id,
-        riderName: row.rider_id ? (riderNames.get(row.rider_id) ?? row.rider_id.slice(0, 8)) : null,
-        requestedKg: Number(row.requested_kg),
-        measuredKg: row.measured_kg !== null ? Number(row.measured_kg) : null,
-        finalKg: row.final_kg !== null ? Number(row.final_kg) : null,
-        pickupAddress: row.pickup_address,
-        createdAt: row.created_at,
-        arrivedAt: arrivedAtMap.get(row.id) ?? null,
-      }));
-    },
+    // 날짜 범위·페이지·정렬은 statusFilter와 같은 방식으로 queryKey에 포함한다. queryKeys.orders
+    // 프리픽스를 유지해 Realtime invalidate(["admin", "orders"]) 대상에 남긴다.
+    queryKey: [...queryKeys.orders(statusFilter), dateFrom, dateTo, page, sort.column, sort.ascending],
+    queryFn: () => fetchAdminOrders(statusFilter, dateFrom, dateTo, page, sort),
+    // 페이지/정렬 전환 시 이전 페이지 rows·hasNextPage를 유지 — 없으면 매 전환마다 tbody가
+    // 로딩 행으로 붕괴하고, 방금 누른 이전/다음 버튼이 disabled로 바뀌며 키보드 포커스가
+    // body로 떨어진다(2026-07-11 리뷰 확정 발견).
+    placeholderData: keepPreviousData,
   });
 
   useEffect(() => {

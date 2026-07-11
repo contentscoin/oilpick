@@ -227,20 +227,25 @@ export function CallHomePage() {
         {!isLoading && !callsLoadFailed && sortedCalls.length === 0 && (
           <EmptyState title="지금은 콜이 없어요" description="새 콜이 들어오면 알려드릴게요." />
         )}
-        {!isLoading &&
-          !callsLoadFailed &&
-          sortedCalls.map((call) => (
-            <CallCard
-              key={call.id}
-              data-testid={`call-card-${call.id}`}
-              distanceKm={position ? distanceKm(position, { lat: call.pickupLat, lng: call.pickupLng }) : 0}
-              estimatedKg={call.requestedKg}
-              estimatedCash={estimateCash(call.requestedKg, call.snapshotPricePerKg)}
-              couponCost={call.couponCost}
-              address={call.pickupAddress}
-              onClick={() => navigate(`/calls/${call.id}`)}
-            />
-          ))}
+        {/* 스태거 미적용: 이 목록은 위치정보 도착·Realtime 갱신 시 거리순 재정렬이 잦아
+            keyed 재삽입마다 등장 모션이 재생돼 깜빡인다(2026-07-11 리뷰). 재정렬 없는
+            목록(이력/알림 등)에만 .oilpick-stagger를 쓴다. */}
+        {!isLoading && !callsLoadFailed && sortedCalls.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {sortedCalls.map((call) => (
+              <CallCard
+                key={call.id}
+                data-testid={`call-card-${call.id}`}
+                distanceKm={position ? distanceKm(position, { lat: call.pickupLat, lng: call.pickupLng }) : 0}
+                estimatedKg={call.requestedKg}
+                estimatedCash={estimateCash(call.requestedKg, call.snapshotPricePerKg)}
+                couponCost={call.couponCost}
+                address={call.pickupAddress}
+                onClick={() => navigate(`/calls/${call.id}`)}
+              />
+            ))}
+          </div>
+        )}
       </section>
     </main>
   );

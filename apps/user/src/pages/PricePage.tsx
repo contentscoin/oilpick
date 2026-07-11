@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+  PageHeader,
   PriceChart,
   SegmentToggle,
   colors,
@@ -62,18 +63,7 @@ export function PricePage() {
         minHeight: "100vh",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <button
-          type="button"
-          data-testid="price-page-back"
-          onClick={() => navigate(-1)}
-          aria-label="뒤로가기"
-          style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 44, height: 44, marginLeft: -12, background: "none", border: "none", fontSize: 20, cursor: "pointer", padding: 0 }}
-        >
-          &lt;
-        </button>
-        <h1 style={{ fontSize: typeScale.title, margin: 0 }}>시세 상세</h1>
-      </div>
+      <PageHeader title="시세 상세" onBack={() => navigate(-1)} backTestId="price-page-back" />
 
       {/* 다크 히어로 — 홈과 동일 체계 */}
       <section

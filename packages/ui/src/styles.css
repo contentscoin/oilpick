@@ -65,9 +65,39 @@ body {
 .oilpick-toast-item {
   animation: oilpick-fade-in-up 250ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
+
+/* 리스트 아이템 스태거 등장(05 후속 패스) — 직계 자식에 40ms 간격 지연을 준다.
+   `backwards`로 지연 동안 from(투명) 상태 유지. 8번째 이후는 지연 상한(과한 대기 방지).
+   목록 컨테이너(ul/div)에 클래스 하나만 붙이면 된다. */
+.oilpick-stagger > * {
+  animation: oilpick-fade-in-up 250ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+.oilpick-stagger > *:nth-child(2) {
+  animation-delay: 40ms;
+}
+.oilpick-stagger > *:nth-child(3) {
+  animation-delay: 80ms;
+}
+.oilpick-stagger > *:nth-child(4) {
+  animation-delay: 120ms;
+}
+.oilpick-stagger > *:nth-child(5) {
+  animation-delay: 160ms;
+}
+.oilpick-stagger > *:nth-child(6) {
+  animation-delay: 200ms;
+}
+.oilpick-stagger > *:nth-child(7) {
+  animation-delay: 240ms;
+}
+.oilpick-stagger > *:nth-child(n + 8) {
+  animation-delay: 280ms;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .oilpick-fade-in-up,
-  .oilpick-toast-item {
+  .oilpick-toast-item,
+  .oilpick-stagger > * {
     animation: none;
   }
 }

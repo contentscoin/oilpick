@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   BigButton,
   ConfirmSheet,
+  PageHeader,
   QtyStepper,
   colors,
   gray,
@@ -148,18 +149,12 @@ export function RequestPage() {
 
   return (
     <main style={{ display: "flex", flexDirection: "column", gap: 20, padding: 20, paddingBottom: 108, maxWidth: 480, margin: "0 auto" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <button
-          type="button"
-          data-testid="request-back"
-          aria-label="뒤로가기"
-          onClick={() => (step === 1 ? navigate(-1) : setStep((s) => (s - 1) as Step))}
-          style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 44, height: 44, marginLeft: -12, background: "none", border: "none", fontSize: 20, cursor: "pointer", padding: 0 }}
-        >
-          &lt;
-        </button>
-        <h1 style={{ fontSize: 20, margin: 0 }}>수거 요청</h1>
-      </div>
+      {/* step>1이면 뒤로가 스텝 후퇴(라우트 이탈은 step 1에서만) — 기존 로직 유지. */}
+      <PageHeader
+        title="수거 요청"
+        onBack={() => (step === 1 ? navigate(-1) : setStep((s) => (s - 1) as Step))}
+        backTestId="request-back"
+      />
 
       {/* 스텝 인디케이터: 1/2/3 도트 + 라벨. */}
       <div data-testid="request-step-indicator" style={{ display: "flex", gap: 8 }}>

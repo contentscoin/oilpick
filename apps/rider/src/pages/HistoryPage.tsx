@@ -73,7 +73,7 @@ export function HistoryPage() {
       )}
 
       {!isLoading && !loadFailed && items.length > 0 && (
-        <ul data-testid="run-history-list" style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 12 }}>
+        <ul data-testid="run-history-list" className="oilpick-stagger" style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 12 }}>
           {items.map((order) => (
             <li
               key={order.id}
