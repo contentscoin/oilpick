@@ -2,7 +2,7 @@ import { type FormEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BigButton, colors, gray, inputClassName, inputStyle, radius, surface, useToast } from "@oilpick/ui";
-import { supplierProfileUpdateSchema } from "@oilpick/core";
+import { humanizeSupabaseError, supplierProfileUpdateSchema } from "@oilpick/core";
 import { useSession } from "../hooks/useSession";
 import { supabase } from "../lib/supabaseClient";
 import { queryKeys } from "../lib/queryClient";
@@ -112,7 +112,7 @@ export function ProfileEditPage() {
       .eq("id", userId);
     if (profileError) {
       setSaving(false);
-      showToast(profileError.message, { variant: "error" });
+      showToast(humanizeSupabaseError(profileError, "저장에 실패했어요. 잠시 후 다시 시도해주세요."), { variant: "error" });
       return;
     }
 
@@ -126,7 +126,7 @@ export function ProfileEditPage() {
       .eq("id", userId);
     setSaving(false);
     if (supplierError) {
-      showToast(supplierError.message, { variant: "error" });
+      showToast(humanizeSupabaseError(supplierError, "저장에 실패했어요. 잠시 후 다시 시도해주세요."), { variant: "error" });
       return;
     }
 

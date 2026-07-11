@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { TabBar } from "@oilpick/ui";
+import { ContentFade, TabBar } from "@oilpick/ui";
 
 /**
  * 03-frontend.md apps/user "하단 탭: 홈/수거/수령액/마이". TabBar(packages/ui) 재사용.
@@ -25,7 +25,10 @@ export function UserShell({ children }: { children: ReactNode }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
-      <div style={{ flex: 1 }}>{children}</div>
+      {/* 탭 전환 페이드 — 탭바는 감싸지 않는다(재등장 방지). 05 2026-07-10 폴리시 패스 후속. */}
+      <div style={{ flex: 1 }}>
+        <ContentFade fadeKey={location.pathname}>{children}</ContentFade>
+      </div>
       <TabBar
         items={TABS.map(({ key, label }) => ({ key, label }))}
         activeKey={activeTab}

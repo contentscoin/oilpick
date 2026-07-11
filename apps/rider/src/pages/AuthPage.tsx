@@ -1,7 +1,7 @@
 import { type FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BigButton, PhotoUploader, colors, inputClassName, inputStyle, type PhotoAsset } from "@oilpick/ui";
-import { isValidKrMobilePhone, toE164Kr } from "@oilpick/core";
+import { humanizeSupabaseError, isValidKrMobilePhone, toE164Kr } from "@oilpick/core";
 import { supabase } from "../lib/supabaseClient";
 
 /**
@@ -46,7 +46,7 @@ export function AuthPage() {
     });
     setLoading(false);
     if (otpError) {
-      setError(otpError.message);
+      setError(humanizeSupabaseError(otpError));
       return;
     }
     setStep("CODE");
@@ -63,7 +63,7 @@ export function AuthPage() {
     });
     setLoading(false);
     if (verifyError || !data.user) {
-      setError(verifyError?.message ?? "인증에 실패했어요.");
+      setError(humanizeSupabaseError(verifyError, "인증에 실패했어요."));
       return;
     }
 
@@ -151,7 +151,7 @@ export function AuthPage() {
 
       navigate("/verify", { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "가입 처리 중 오류가 발생했어요.");
+      setError(humanizeSupabaseError(err instanceof Error ? err : null, "가입 처리 중 오류가 발생했어요."));
     } finally {
       setLoading(false);
     }

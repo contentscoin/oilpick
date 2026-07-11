@@ -8,5 +8,6 @@ export * from "./format";
 export * from "./estimate";
 export * from "./priceResample";
 export * from "./errorCodes";
+export * from "./supabaseErrorKo";
 export * from "./supabase";
 export * from "./phone";

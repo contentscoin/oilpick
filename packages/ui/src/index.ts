@@ -21,6 +21,7 @@ export * from "./components/Toast";
 export * from "./components/ToastProvider";
 export * from "./components/OfflineBanner";
 export * from "./components/EmptyState";
+export * from "./components/ContentFade";
 export * from "./components/PhotoUploader";
 export * from "./components/MapView";
 export * from "./components/StatusBadge";

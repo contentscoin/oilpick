@@ -15,7 +15,7 @@ import {
   useToast,
   type PhotoAsset,
 } from "@oilpick/ui";
-import { estimateCash, formatKg, formatKrw, type OrderStatus } from "@oilpick/core";
+import { estimateCash, formatKg, formatKrw, humanizeSupabaseError, type OrderStatus } from "@oilpick/core";
 import { KAKAO_KEY } from "../lib/env";
 import { invokeEdgeFunction } from "../lib/edgeFunction";
 import { supabase } from "../lib/supabaseClient";
@@ -411,7 +411,7 @@ function ArrivedPanel({
         showToast(result.message, { variant: "error" });
       }
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "사진 업로드 중 오류가 발생했어요.", {
+      showToast(humanizeSupabaseError(err instanceof Error ? err : null, "사진 업로드 중 오류가 발생했어요."), {
         variant: "error",
       });
     } finally {
