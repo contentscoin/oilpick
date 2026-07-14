@@ -68,24 +68,14 @@ export const fontFamily = {
 } as const;
 
 /**
- * CDN(jsDelivr)에서 서빙되는 Pretendard Variable woff2 경로.
- * jsDelivr의 npm 엔드포인트(`/npm/pretendard@…`)를 쓴다 — npm 배포 tarball을 그대로 미러링하므로
- * 경로가 안정적이다. GitHub 엔드포인트(`/gh/orioncactus/pretendard@…/dist/…`)는 저장소가 모노레포로
- * 재구성되며 dist가 `packages/pretendard/dist/`로 이동해 404가 난다.
+ * Pretendard **동적 서브셋** CSS 경로(jsDelivr npm 미러 — 배포 tarball 그대로라 경로 안정).
+ * unicode-range로 화면에 쓰인 조각 woff2만 로드한다(풀 가변 폰트 2MB 단일 파일 금지 —
+ * 성능 패스 2026-07-11). 각 앱 index.html이 <link rel="stylesheet">로 이 URL을 로드하고,
+ * 이 상수는 그 단일 진실을 코드에서 참조해야 할 때(웹뷰 주입 등)를 위한 export다.
+ * ※ GitHub 엔드포인트(/gh/...)는 저장소 모노레포화로 dist 경로가 바뀌어 404 — npm만 쓸 것.
  */
-export const PRETENDARD_CDN_URL =
-  "https://cdn.jsdelivr.net/npm/pretendard@1.3.9/dist/web/variable/woff2/PretendardVariable.woff2";
-
-/** styles.css에도 동일 내용이 있다 — 여기서는 JS에서 동적으로 주입해야 할 때를 위한 문자열 export. */
-export const fontFaceCss = `
-@font-face {
-  font-family: "Pretendard Variable";
-  font-weight: 45 920;
-  font-style: normal;
-  font-display: swap;
-  src: url("${PRETENDARD_CDN_URL}") format("woff2-variations");
-}
-`;
+export const PRETENDARD_CSS_URL =
+  "https://cdn.jsdelivr.net/npm/pretendard@1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css";
 
 /**
  * 폰트 크기. 03-frontend.md: "base 16px 미만 금지. 시세/포인트 강조 32~40px bold".

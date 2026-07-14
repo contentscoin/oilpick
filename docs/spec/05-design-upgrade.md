@@ -248,3 +248,14 @@ gray·surface·status 색, Pretendard. 로직/testid/데이터흐름/절대규�
 
 이로써 2026-07-10 감사에서 나온 개선 후보는 전부 소진. 이후 고도화는 새 감사/사용자
 피드백 기반으로 스코프를 새로 잡는다.
+
+### 성능 패스 (2026-07-11) — 번들 실측 기반
+번들 실측(user 504K / rider 888K / admin 792K JS) 결과 최대 병목은 **Pretendard 풀 가변
+폰트 2MB 단일 파일**(전 앱 공통, styles.css @font-face) — jsDelivr **동적 서브셋 CSS**
+(`pretendardvariable-dynamic-subset.css`, unicode-range로 화면에 쓰인 조각 woff2만 로드)로
+전환. 각 앱 index.html에 preconnect + <link rel="stylesheet">, styles.css의 @font-face 제거,
+tokens.ts는 `PRETENDARD_CSS_URL` 단일 상수로 정리(풀 폰트 URL·fontFaceCss 삭제 — 사용처 0 확인).
+그 외: admin recharts(376K)는 라우트 lazy 확인(문제 없음), rider 408K `web` 청크는
+@capacitor-community/barcode-scanner 웹 폴백으로 **다운로드되지 않는 자산**(Capacitor가
+동적 import — 레거시 DELIVER 드레인 경로가 참조해 의존성 유지). 앱 JS 청크 분리
+(react/supabase/query manualChunks + 라우트 lazy)는 기존 그대로 양호.
