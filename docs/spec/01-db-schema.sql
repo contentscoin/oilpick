@@ -262,7 +262,8 @@ from coupon_ledger group by rider_id;
 --   아니다(라이더는 쿠폰 구매 측). 완결 전이·QR 검증은 유지, 잔존 HOLD는 held 잔존(과거 회계 기록).
 -- fn_transition_order 현장 지급수단 개정(20260715000002_rpc_transition_payout.sql, 08 G2-②):
 --   SUBMIT_MEASURE가 payload.payoutMethod('CASH'|'POINT')를 검증해 pickup_orders.payout_method 기록
---   (생략 시 CASH 폴백 — 구버전 호환. 재제출로 수단 변경 가능). CONFIRM_MEASURE/FORCE_COMPLETE는
+--   (생략·명시적 null이면 CASH 폴백 — 구버전 호환. 유효하지 않은 문자열만 거부. 재제출로 수단 변경
+--   가능). CONFIRM_MEASURE/FORCE_COMPLETE는
 --   coalesce(payout_method,'CASH')='POINT'면 같은 트랜잭션에서 fn_post_ledger(supplier,'EARN',
 --   cash_paid_amount, order_id) 발행 — 포인트 복권의 유일한 적립 경로. 멱등은 point_ledger
 --   unique(order_id, entry_type, user_id). ACCEPT/CANCEL의 쿠폰 분기는 전환기 잔존 주문 전용 보존(08 P1).

@@ -40,6 +40,7 @@ declare
   v_reason text;
   v_consume coupon_ledger;
   v_payout payout_method;
+  v_payout_text text;
 begin
   -- 대상 주문 잠금 (동시 전이 방지).
   select * into v_order from pickup_orders where id = p_order_id for update;
@@ -122,15 +123,18 @@ begin
       raise exception 'VALIDATION_ERROR' using errcode = 'P0001';
     end if;
 
-    -- [08 P2] 지급수단: 값이 있으면 CASH|POINT만 허용, 생략 시 CASH 폴백(구버전 번들 호환).
+    -- [08 P2] 지급수단: 값이 있으면 CASH|POINT만 허용, 생략/명시적 null이면 CASH 폴백(구버전 번들 호환).
     -- 신 클라이언트는 order-transition Edge zod가 필수를 강제한다. 재제출로 수단 변경 가능.
-    if p_payload ? 'payoutMethod' then
-      if p_payload->>'payoutMethod' not in ('CASH', 'POINT') then
-        raise exception 'VALIDATION_ERROR' using errcode = 'P0001';
-      end if;
-      v_payout := (p_payload->>'payoutMethod')::payout_method;
-    else
+    -- ->>는 키 부재·JSON null을 모두 SQL NULL로 반환한다. `? '키'` + `NULL not in (...)`(→NULL, 미발화)
+    -- 조합은 명시적 null을 payout_method NULL로 남겨 "계량 전"으로 오표시될 수 있어, 텍스트를 한 번
+    -- 추출해 NULL(부재/명시적 null)은 CASH 폴백, 유효하지 않은 문자열만 거부한다.
+    v_payout_text := p_payload->>'payoutMethod';
+    if v_payout_text is null then
       v_payout := 'CASH';
+    elsif v_payout_text not in ('CASH', 'POINT') then
+      raise exception 'VALIDATION_ERROR' using errcode = 'P0001';
+    else
+      v_payout := v_payout_text::payout_method;
     end if;
 
     update pickup_orders

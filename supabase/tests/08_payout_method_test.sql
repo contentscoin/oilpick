@@ -7,7 +7,7 @@
 create extension if not exists pgtap with schema extensions;
 
 begin;
-select plan(22);
+select plan(23);
 
 -- ── 픽스처 ──────────────────────────────────────────────────────────────
 insert into auth.users (id, instance_id, aud, role, email, created_at, updated_at) values
@@ -46,6 +46,12 @@ select throws_ok(
   $$ select fn_transition_order('00000000-0808-0000-0000-000000000001','SUBMIT_MEASURE','22222222-0808-2222-2222-222222222222','rider',
        '{"measuredKg":45.0,"photoUrls":["https://x/p.jpg"],"payoutMethod":"POINTS"}'::jsonb) $$,
   'VALIDATION_ERROR', 'P2: payoutMethod는 CASH|POINT만(POINTS 거부)');
+
+-- 명시적 JSON null은 거부하지 않고 CASH 폴백으로 저장(payout_method NULL로 남기지 않음).
+select fn_transition_order('00000000-0808-0000-0000-000000000001','SUBMIT_MEASURE','22222222-0808-2222-2222-222222222222','rider',
+  '{"measuredKg":45.0,"photoUrls":["https://x/p.jpg"],"payoutMethod":null}'::jsonb);
+select is((select payout_method from pickup_orders where id='00000000-0808-0000-0000-000000000001'), 'CASH',
+  'P2: payoutMethod 명시적 null → CASH 폴백(NULL 저장 안 함)');
 
 select fn_transition_order('00000000-0808-0000-0000-000000000001','SUBMIT_MEASURE','22222222-0808-2222-2222-222222222222','rider',
   '{"measuredKg":45.0,"photoUrls":["https://x/p.jpg"],"payoutMethod":"CASH"}'::jsonb);
