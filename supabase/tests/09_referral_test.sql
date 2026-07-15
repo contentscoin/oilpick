@@ -6,19 +6,21 @@
 create extension if not exists pgtap with schema extensions;
 
 begin;
-select plan(17);
+select plan(20);
 
--- ── 픽스처: 라이더 2(승인/미승인) + 점주 2 ──────────────────────────────
+-- ── 픽스처: 라이더 2(승인/미승인) + 점주 2 + admin 1 ──────────────────────
 insert into auth.users (id, instance_id, aud, role, email, created_at, updated_at) values
   ('99000000-0000-0000-0000-0000000000a1','00000000-0000-0000-0000-000000000000','authenticated','authenticated','rsup1@t',now(),now()),
   ('99000000-0000-0000-0000-0000000000a2','00000000-0000-0000-0000-000000000000','authenticated','authenticated','rsup2@t',now(),now()),
   ('99000000-0000-0000-0000-0000000000b1','00000000-0000-0000-0000-000000000000','authenticated','authenticated','rrid1@t',now(),now()),
-  ('99000000-0000-0000-0000-0000000000b2','00000000-0000-0000-0000-000000000000','authenticated','authenticated','rrid2@t',now(),now());
+  ('99000000-0000-0000-0000-0000000000b2','00000000-0000-0000-0000-000000000000','authenticated','authenticated','rrid2@t',now(),now()),
+  ('99000000-0000-0000-0000-0000000000c1','00000000-0000-0000-0000-000000000000','authenticated','authenticated','radm1@t',now(),now());
 insert into profiles (id, role, phone, display_name) values
   ('99000000-0000-0000-0000-0000000000a1','supplier','010','점주1'),
   ('99000000-0000-0000-0000-0000000000a2','supplier','011','점주2'),
   ('99000000-0000-0000-0000-0000000000b1','rider','012','라이더승인'),
-  ('99000000-0000-0000-0000-0000000000b2','rider','013','라이더미승인');
+  ('99000000-0000-0000-0000-0000000000b2','rider','013','라이더미승인'),
+  ('99000000-0000-0000-0000-0000000000c1','admin','014','관리자');
 insert into supplier_profiles (id, biz_number, store_name, address, location) values
   ('99000000-0000-0000-0000-0000000000a1','b','s1','a',ST_SetSRID(ST_MakePoint(127,37.5),4326)::geography),
   ('99000000-0000-0000-0000-0000000000a2','b','s2','a',ST_SetSRID(ST_MakePoint(127,37.5),4326)::geography);
@@ -91,6 +93,21 @@ select is((select activated from v_referral_stats where referrer_rider_id='99000
   1, 'v_referral_stats: 라이더1 활성 1');
 select is((select rider_reward_earned from v_referral_stats where referrer_rider_id='99000000-0000-0000-0000-0000000000b1'),
   3000, 'v_referral_stats: 활성 보상 합 3000');
+
+-- ============ v_referral_daily(일별 추이 — 가입/활성화 각각 자기 날짜 버킷) ============
+-- 교차일 재현: 점주1 가입을 2일 전으로 백데이트(활성화는 위에서 오늘 발생). admin 컨텍스트로 조회.
+update referrals set signed_up_at = now() - interval '2 days'
+  where referred_supplier_id='99000000-0000-0000-0000-0000000000a1';
+select set_config('request.jwt.claims',
+  '{"sub":"99000000-0000-0000-0000-0000000000c1","role":"authenticated"}', true);
+
+select is((select signed_up from v_referral_daily where day = (current_date - 2)),
+  1, 'v_referral_daily: 가입은 signed_up_at 날짜(2일 전)에 집계');
+select is((select activated from v_referral_daily where day = current_date),
+  1, 'v_referral_daily: 활성화는 activated_at 날짜(오늘)에 집계');
+-- 회귀 방지: 가입일 버킷에 활성화가 잡히면 안 된다(기존 same-day 필터 결함).
+select is((select coalesce((select activated from v_referral_daily where day = (current_date - 2)), 0)),
+  0, 'v_referral_daily: 가입일에는 활성화가 0(교차일 결함 회귀 방지)');
 
 select * from finish();
 rollback;

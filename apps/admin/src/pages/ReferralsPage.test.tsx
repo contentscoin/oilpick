@@ -28,8 +28,8 @@ const STATS: ReferralStatRow[] = [
   { riderId: "r2", riderName: "이라이더", signedUp: 2, activated: 0, conversion: 0, supplierBonusPaid: 0, riderRewardEarned: 0 },
 ];
 const DAILY: ReferralDailyRow[] = [
-  { day: "2026-07-14", signedUp: 3, activatedSameDay: 1 },
-  { day: "2026-07-15", signedUp: 1, activatedSameDay: 0 },
+  { day: "2026-07-14", signedUp: 3, activated: 1 },
+  { day: "2026-07-15", signedUp: 1, activated: 2 },
 ];
 
 describe("ReferralsPage (09 H4 admin)", () => {

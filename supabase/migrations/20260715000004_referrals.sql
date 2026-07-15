@@ -52,16 +52,23 @@ from referrals
 group by referrer_rider_id;
 
 -- 일별 추이(admin 전용 — is_admin() 게이트 + security_invoker, 집계 뷰 선례 미러).
+-- 가입은 signed_up_at::date, 활성화는 activated_at::date로 각각 버킷팅한다(UNION ALL). 활성화(첫 수거
+-- 완료, H6)는 가입보다 대개 며칠 뒤라, "같은 날 활성화"로 세면 거의 항상 0이 된다(적대적 리뷰 확정 결함).
 create view v_referral_daily
   with (security_invoker = true)
 as
 select
-  signed_up_at::date                                        as day,
-  count(*)::int                                             as signed_up,
-  count(*) filter (where activated_at::date = signed_up_at::date)::int as activated_same_day
-from referrals
+  t.day,
+  coalesce(sum(t.signed_up), 0)::int as signed_up,
+  coalesce(sum(t.activated), 0)::int as activated
+from (
+  select signed_up_at::date as day, 1 as signed_up, 0 as activated from referrals
+  union all
+  select activated_at::date as day, 0 as signed_up, 1 as activated
+  from referrals where status = 'ACTIVATED' and activated_at is not null
+) t
 where is_admin()
-group by 1;
+group by t.day;
 
 -- ===== ⑥ Realtime (라이더 실적 실시간 갱신 — point_ledger 선례) =====
 alter publication supabase_realtime add table referrals;

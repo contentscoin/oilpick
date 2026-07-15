@@ -3,6 +3,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../lib/supabaseClient";
 import { queryKeys } from "../lib/queryClient";
 
+// 채널 토픽 인스턴스 시퀀스 — useReferralStatsAdmin은 ReferralsPage에서 두 번(SummarySection·
+// RiderFunnelSection) 마운트되므로 고정 토픽이면 supabase-js가 채널을 공유해 나중 바인딩이
+// 발화하지 않고, 한쪽 unmount의 removeChannel이 공유 채널을 죽인다(useRiderProfile.ts 선례).
+let referralChannelSeq = 0;
+
 /**
  * [09 H4]【A】레퍼럴 실적분석 데이터 훅.
  *  - 라이더별 퍼널: v_referral_stats(admin은 RLS로 전체 조회) + 이름 join → 가입/활성화/전환율/보너스/보상.
@@ -72,7 +77,7 @@ export function useReferralStatsAdmin() {
 
   useEffect(() => {
     const channel = supabase
-      .channel("admin_referrals")
+      .channel(`admin_referrals_${++referralChannelSeq}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "referrals" }, () => {
         queryClient.invalidateQueries({ queryKey: ["admin", "referral"] });
       })
@@ -90,24 +95,25 @@ export function useReferralStatsAdmin() {
 export interface ReferralDailyRow {
   day: string;
   signedUp: number;
-  activatedSameDay: number;
+  /** 그 날짜에 활성화(첫 수거 완료)된 추천 수 — 가입일이 아니라 activated_at::date 기준(뷰가 UNION으로 분리 집계). */
+  activated: number;
 }
 
-/** 일별 추천 추이(v_referral_daily). 최근 days일 가입/당일활성화. */
+/** 일별 추천 추이(v_referral_daily). 최근 days일 일별 가입/활성화(각각 자기 날짜 버킷). */
 export function useReferralDaily(days = 30) {
   return useQuery({
     queryKey: queryKeys.referralDaily(days),
     queryFn: async (): Promise<ReferralDailyRow[]> => {
       const { data, error } = await supabase
         .from("v_referral_daily")
-        .select("day, signed_up, activated_same_day")
+        .select("day, signed_up, activated")
         .gte("day", sinceIso(days))
         .order("day", { ascending: true });
       if (error) throw error;
       return (data ?? []).map((row) => ({
         day: row.day as string,
         signedUp: Number(row.signed_up ?? 0),
-        activatedSameDay: Number(row.activated_same_day ?? 0),
+        activated: Number(row.activated ?? 0),
       }));
     },
   });

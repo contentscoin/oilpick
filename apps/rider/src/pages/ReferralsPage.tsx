@@ -1,5 +1,5 @@
 import { colors, elevation, gradient, gray, radius, surface, useToast } from "@oilpick/ui";
-import { REFERRAL_SUPPLIER_BONUS, formatPoint } from "@oilpick/core";
+import { REFERRAL_SUPPLIER_BONUS, formatKrw, formatPoint } from "@oilpick/core";
 import { useSession } from "../hooks/useSession";
 import { useReferralCode, useReferralStats } from "../hooks/useReferral";
 
@@ -137,7 +137,7 @@ export function ReferralsPage() {
                 <span style={{ fontSize: 12, color: colors.status.wait }}>정산 시 지급 (오프라인 정산)</span>
               </div>
               <span className="oilpick-tabular-nums" style={{ fontSize: 22, fontWeight: 800, color: colors.accent.deep }}>
-                {formatPoint(rewardEarned)}
+                {formatKrw(rewardEarned)}
               </span>
             </div>
           </div>

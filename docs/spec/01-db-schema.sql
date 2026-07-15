@@ -473,16 +473,23 @@ from referrals
 group by referrer_rider_id;
 
 -- [09 H2] 일별 추천 추이(admin 전용 — is_admin() 게이트 + security_invoker, 집계 뷰 선례 미러).
+-- 가입은 signed_up_at, 활성화는 activated_at으로 각각 버킷팅(UNION ALL) — 활성화는 가입보다 대개 며칠 뒤라
+-- "같은 날 활성화"로 세면 거의 항상 0이 된다(어드버서리얼 리뷰 확정 결함 수정).
 create view v_referral_daily
   with (security_invoker = true)
 as
 select
-  signed_up_at::date                                                     as day,
-  count(*)::int                                                          as signed_up,
-  count(*) filter (where activated_at::date = signed_up_at::date)::int   as activated_same_day
-from referrals
+  t.day,
+  coalesce(sum(t.signed_up), 0)::int as signed_up,
+  coalesce(sum(t.activated), 0)::int as activated
+from (
+  select signed_up_at::date as day, 1 as signed_up, 0 as activated from referrals
+  union all
+  select activated_at::date as day, 0 as signed_up, 1 as activated
+  from referrals where status = 'ACTIVATED' and activated_at is not null
+) t
 where is_admin()
-group by 1;
+group by t.day;
 
 -- profiles: 본인 R/W(role 변경 불가는 컬럼 권한으로), admin 전체 R
 -- 성능 advisor(auth_rls_initplan): auth.uid()는 (select auth.uid())로 감싸 행마다 재평가되지 않고

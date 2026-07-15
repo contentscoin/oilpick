@@ -123,7 +123,14 @@ referrals(
 
 ### H5. 【검증】 게이트 + 리뷰 + PR
 - lint/test/build + DB 하네스 green, 어드버서리얼 리뷰, 커밋/푸시.
-- [ ]
+- [x] 완료: lint 7/7·test 7/7·build 5/5·DB 하네스 9스위트(09 20 asserts) green. 3층 병렬 어드버서리얼 리뷰
+  (DB/Edge+core/앱) — 확정 결함 3건 수정:
+  ① [DB] v_referral_daily가 "같은 날 활성화"만 세어 활성화 추이가 거의 항상 0 → 가입/활성화를 각자 날짜로
+     버킷팅(UNION ALL)하도록 재작성 + 컬럼 activated_same_day→activated + pgTAP 교차일 회귀 테스트 3건 추가.
+  ② [앱-admin] useReferralStatsAdmin이 한 페이지에서 2회 마운트되며 고정 채널 토픽 공유 → Realtime 결함
+     (useRiderProfile 선례). 인스턴스 시퀀스로 고유 토픽화.
+  ③ [앱-R/A] 라이더 보상(원 단위, 08 P5)을 formatPoint("P")로 표기 → formatKrw("원")로 수정.
+  Edge+core 리뷰는 확정 결함 0(정규식↔알파벳·RPC 시그니처·멱등·best-effort 훅 정상). PR #16(08 위에 스택).
 
 ## 스코프 밖
 - 실 앱스토어/플레이스토어 URL·유니버설 링크(Branch 등) 인프라 — 랜딩이 env 스토어 링크 플레이스홀더로 대체.

@@ -1,4 +1,4 @@
-import { formatPoint } from "@oilpick/core";
+import { formatKrw, formatPoint } from "@oilpick/core";
 import {
   useReferralDaily,
   useReferralStatsAdmin,
@@ -135,7 +135,7 @@ function RiderFunnelSection() {
                   <td className="py-2 tabular-nums text-gray-700">{r.conversion}%</td>
                   <td className="py-2 tabular-nums text-gray-700">{formatPoint(r.supplierBonusPaid)}</td>
                   <td className="py-2 font-semibold tabular-nums text-accent-deep">
-                    {formatPoint(r.riderRewardEarned)}
+                    {formatKrw(r.riderRewardEarned)}
                   </td>
                 </tr>
               ))
@@ -154,8 +154,8 @@ function DailyTrendSection() {
 
   function handleCsv() {
     const csv = toCsv(
-      ["날짜", "가입", "당일 활성화"],
-      (rows ?? []).map((r: ReferralDailyRow) => [r.day, r.signedUp, r.activatedSameDay]),
+      ["날짜", "가입", "활성화"],
+      (rows ?? []).map((r: ReferralDailyRow) => [r.day, r.signedUp, r.activated]),
     );
     downloadCsv("레퍼럴_일별추이", csv);
   }
@@ -180,7 +180,7 @@ function DailyTrendSection() {
             <tr className="border-b border-gray-100 text-gray-500">
               <th className="py-2 font-medium">날짜</th>
               <th className="py-2 font-medium">가입</th>
-              <th className="py-2 font-medium">당일 활성화</th>
+              <th className="py-2 font-medium">활성화</th>
             </tr>
           </thead>
           <tbody>
@@ -203,7 +203,7 @@ function DailyTrendSection() {
                 <tr key={r.day} className="border-b border-gray-50">
                   <td className="py-2 text-gray-700">{r.day}</td>
                   <td className="py-2 tabular-nums text-gray-800">{r.signedUp}명</td>
-                  <td className="py-2 tabular-nums text-gray-800">{r.activatedSameDay}명</td>
+                  <td className="py-2 tabular-nums text-gray-800">{r.activated}명</td>
                 </tr>
               ))
             )}
