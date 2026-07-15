@@ -38,6 +38,9 @@ const NotificationsPage = lazy(() =>
   import("./pages/NotificationsPage").then((m) => ({ default: m.NotificationsPage })),
 );
 const MyPage = lazy(() => import("./pages/MyPage").then((m) => ({ default: m.MyPage })));
+const ReferralsPage = lazy(() =>
+  import("./pages/ReferralsPage").then((m) => ({ default: m.ReferralsPage })),
+);
 const SupportPage = lazy(() =>
   import("./pages/SupportPage").then((m) => ({ default: m.SupportPage })),
 );
@@ -143,6 +146,17 @@ export function App() {
               <AuthGuard>
                 <RiderShell>
                   <HistoryPage />
+                </RiderShell>
+              </AuthGuard>
+            }
+          />
+          {/* 09 H4 — 내 추천(코드·공유·실적). 탭바에 없고 마이에서 진입(운행 이력과 동일 패턴). */}
+          <Route
+            path="/referrals"
+            element={
+              <AuthGuard>
+                <RiderShell>
+                  <ReferralsPage />
                 </RiderShell>
               </AuthGuard>
             }

@@ -19,7 +19,8 @@ export type PointLedgerEntryType =
   | "WITHDRAW_REQUEST"
   | "WITHDRAW_CANCEL"
   | "ADJUST"
-  | "PURCHASE";
+  | "PURCHASE"
+  | "REFERRAL";
 
 /** [07 F2/F5] 쿠폰 원장 entry_type(coupon_entry_type enum). ADJUST는 포인트와 값이 겹치나 라벨이 다르다. */
 export type CouponLedgerEntryType = "CHARGE" | "CONSUME" | "REFUND" | "ADJUST";
@@ -35,6 +36,7 @@ export const LEDGER_ENTRY_LABEL: Record<PointLedgerEntryType, string> = {
   WITHDRAW_CANCEL: "출금 반려 복구",
   ADJUST: "관리자 조정",
   PURCHASE: "쇼핑몰 결제",
+  REFERRAL: "추천 보너스",
 };
 
 /** [07 F5] 쿠폰 원장 라벨(07 §1-1 entry_type). CHARGE 충전 / CONSUME 콜 배정 소진 / REFUND 귀책 환급 / ADJUST 관리자 조정. */

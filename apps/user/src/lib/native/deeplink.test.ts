@@ -7,6 +7,10 @@ describe("normalizeDeepLink (user)", () => {
     expect(normalizeDeepLink("oilpick-user://wallet")).toBe("/wallet");
   });
 
+  it("[09 H3] 추천 딥링크를 /ref/:code로 변환한다", () => {
+    expect(normalizeDeepLink("oilpick-user://ref/ABCD2345")).toBe("/ref/ABCD2345");
+  });
+
   it("이미 앱 상대경로면 그대로 둔다", () => {
     expect(normalizeDeepLink("/orders/abc")).toBe("/orders/abc");
     expect(normalizeDeepLink("/wallet")).toBe("/wallet");

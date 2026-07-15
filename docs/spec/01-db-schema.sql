@@ -7,8 +7,11 @@ create extension if not exists postgis;
 create type user_role as enum ('supplier','rider','admin');
 create type order_status as enum ('REQUESTED','ACCEPTED','ARRIVED','PICKED_UP','DELIVERED','COMPLETED','CANCELLED','DISPUTED');
 -- [08 P3·P4] 포인트 복권 — 현역: EARN(POINT 지급수단 적립)/WITHDRAW_REQUEST/WITHDRAW_CANCEL/ADJUST.
+-- [09 H5] REFERRAL(추천 활성화 시 점주 보너스, +부호·출금 가능) 추가(실 DDL: 20260715000003 alter type add value).
 -- 레거시 전용(신규 발행 없음): HOLD/RELEASE(구모델 수거비), PURCHASE(미래 예약).
-create type ledger_type as enum ('EARN','HOLD','RELEASE','WITHDRAW_REQUEST','WITHDRAW_CANCEL','ADJUST','PURCHASE');
+create type ledger_type as enum ('EARN','HOLD','RELEASE','WITHDRAW_REQUEST','WITHDRAW_CANCEL','ADJUST','PURCHASE','REFERRAL');
+-- [09 H2] 라이더 추천 상태(SIGNED_UP=가입, ACTIVATED=첫 수거 완료·보너스 발행, CANCELLED)
+create type referral_status as enum ('SIGNED_UP','ACTIVATED','CANCELLED');
 -- [07 F2] SUSPENDED 추가(실 마이그레이션은 별도 파일의 alter type add value — 사용 트랜잭션과 분리. 액션·정책은 07 F11)
 create type verify_status as enum ('PENDING','APPROVED','REJECTED','SUSPENDED');
 create type withdraw_status as enum ('REQUESTED','APPROVED','REJECTED','PAID'); -- [08 P4] 현역 복권(출금 부활)
@@ -53,6 +56,7 @@ create table rider_profiles (
   work_radius_km int not null default 15,
   bank_name text, bank_account text, bank_holder text,
   recycler_name text, recycler_contact text,  -- 인계 재활용업체(승인 조건, 07 F11 D5. 실 DDL: 20260709000008)
+  referral_code text unique,   -- [09 H2] 라이더 추천코드(Crockford base32 8자, Edge referral-code 생성. APPROVED 코드만 attach 유효. 실 DDL: 20260715000004)
   created_at timestamptz not null default now()
 );
 create index idx_rider_location on rider_profiles using gist(last_location);
@@ -346,6 +350,38 @@ create table notifications (
 );
 create index idx_notifications_user on notifications (user_id, created_at desc);
 
+-- ===== [09 H2] 라이더 추천(레퍼럴) — 실 DDL: 20260715000004_referrals.sql =====
+-- 라이더(referrer)가 점주(referred)에게 앱 설치를 영업. 추천으로 가입한 점주가 첫 수거를 완료(활성화)하면
+-- 점주에게 REFERRAL 포인트(출금 가능) 적립 + 라이더 추천 실적 집계(라이더 보상은 08 P5 오프라인 정산 근거).
+-- 점주 1인 1회(referred_supplier_id unique, 선착순 최초 확정). 쓰기는 service_role RPC에만(절대 규칙 1 확장).
+create table referrals (
+  id uuid primary key default gen_random_uuid(),
+  referrer_rider_id uuid not null references rider_profiles(id),
+  referred_supplier_id uuid not null unique references supplier_profiles(id),  -- 점주 1인 1회
+  code text not null,                                       -- 사용된 코드 스냅샷
+  status referral_status not null default 'SIGNED_UP',
+  supplier_bonus int not null check (supplier_bonus >= 0),  -- 활성화 시 점주 REFERRAL 포인트(가입 시점 스냅샷)
+  rider_reward int not null check (rider_reward >= 0),      -- 라이더 오프라인 정산 보상(스냅샷, admin 통계 전용)
+  signed_up_at timestamptz not null default now(),
+  activated_at timestamptz,                                 -- 활성화(첫 수거 완료) 시각
+  activating_order_id uuid references pickup_orders(id)     -- 활성화 유발 주문
+);
+create index idx_referrals_referrer on referrals (referrer_rider_id, signed_up_at desc);
+-- RLS: referrer 본인 or referred 본인 or admin(select). insert/update 정책 부재 = service_role RPC만(아래 RLS 절).
+-- Realtime: 라이더 실적 실시간 갱신(alter publication supabase_realtime add table referrals).
+
+-- 추천 RPC [09 H2] — 실 정의는 20260715000004_referrals.sql. 둘 다 SECURITY DEFINER + search_path=public
+--   + revoke all/grant service_role(절대 규칙 1: referrals·point_ledger 쓰기는 service_role RPC에만).
+--   fn_attach_referral(p_supplier_id uuid, p_code text, p_supplier_bonus int, p_rider_reward int) returns referrals
+--     - 코드 정규화(upper/trim) → APPROVED 라이더 해석(없으면 raise 'INVALID_REFERRAL_CODE'). 자기추천 차단.
+--       이미 추천된 점주면 기존 행 반환(멱등, 점주 1인 1회). on conflict(referred_supplier_id) do nothing.
+--       보너스는 파라미터 스냅샷(core 상수가 단일 진실). gen 직후 best-effort로 referral-attach Edge가 호출.
+--   fn_activate_referral(p_supplier_id uuid, p_order_id uuid) returns referrals
+--     - referrals FOR UPDATE. status<>'SIGNED_UP'(미추천·이미활성·취소)면 no-op(멱등, null 반환).
+--       SIGNED_UP→ACTIVATED 전이 + fn_post_ledger(supplier,'REFERRAL',supplier_bonus,order_id) 발행.
+--       order-transition Edge가 완료 전이 성공 후 호출(fn_transition_order 본체 무변경, 09 H7). 멱등은
+--       point_ledger unique(order_id,'REFERRAL',user_id).
+
 -- ===== RLS =====
 alter table profiles enable row level security;
 alter table supplier_profiles enable row level security;
@@ -363,6 +399,8 @@ alter table coupon_purchases enable row level security;
 alter table coupon_ledger enable row level security;
 -- [07 F12] CS 티켓 RLS
 alter table cs_tickets enable row level security;
+-- [09 H2] 레퍼럴 RLS
+alter table referrals enable row level security;
 
 -- security definer 함수는 search_path를 고정해 하이재킹을 막는다(Supabase security advisor 대응).
 create or replace function is_admin() returns boolean as
@@ -420,6 +458,31 @@ select
 from pickup_orders
 where status='COMPLETED' and completed_at is not null and rider_id is not null and is_admin()
 group by 1, 2;
+
+-- [09 H2] 라이더별 추천 실적(security_invoker=true → referrals RLS 의존): 라이더는 본인 1행, admin은 전체.
+create view v_referral_stats
+  with (security_invoker = true)
+as
+select
+  referrer_rider_id,
+  count(*)::int                                                          as signed_up,
+  count(*) filter (where status = 'ACTIVATED')::int                      as activated,
+  coalesce(sum(supplier_bonus) filter (where status='ACTIVATED'),0)::int as supplier_bonus_paid,
+  coalesce(sum(rider_reward)   filter (where status='ACTIVATED'),0)::int as rider_reward_earned
+from referrals
+group by referrer_rider_id;
+
+-- [09 H2] 일별 추천 추이(admin 전용 — is_admin() 게이트 + security_invoker, 집계 뷰 선례 미러).
+create view v_referral_daily
+  with (security_invoker = true)
+as
+select
+  signed_up_at::date                                                     as day,
+  count(*)::int                                                          as signed_up,
+  count(*) filter (where activated_at::date = signed_up_at::date)::int   as activated_same_day
+from referrals
+where is_admin()
+group by 1;
 
 -- profiles: 본인 R/W(role 변경 불가는 컬럼 권한으로), admin 전체 R
 -- 성능 advisor(auth_rls_initplan): auth.uid()는 (select auth.uid())로 감싸 행마다 재평가되지 않고
@@ -511,9 +574,17 @@ create policy p_cs_read on cs_tickets for select using (author_id = (select auth
 create policy p_cs_insert on cs_tickets for insert with check (author_id = (select auth.uid()) and role = fn_current_role());
 create policy p_cs_admin_update on cs_tickets for update using (is_admin()) with check (is_admin());
 
+-- [09 H2] referrals: referrer 라이더 본인 + referred 점주 본인 + admin read. insert/update 정책 부재 = service_role RPC만.
+create policy p_referral_read on referrals for select using (
+  referrer_rider_id = (select auth.uid())
+  or referred_supplier_id = (select auth.uid())
+  or is_admin()
+);
+
 -- Storage 버킷: order-photos (관련자 read / rider write), rider-docs (본인 write, admin read)
--- Realtime publication: pickup_orders, notifications, price_ticks, rider_profiles, point_ledger, coupon_ledger 활성화
+-- Realtime publication: pickup_orders, notifications, price_ticks, rider_profiles, point_ledger, coupon_ledger, referrals 활성화
 -- [07 F5] coupon_ledger 추가(20260709000006 — apps/rider 쿠폰 잔액 카드/내역이 CHARGE/CONSUME/REFUND/ADJUST insert를 폴링 없이 반영. RLS p_coupon_ledger_read 적용, 본인 행만 전달)
+-- [09 H2] referrals 추가(20260715000004 — apps/rider "내 추천" 실적이 attach/activate를 폴링 없이 반영. RLS p_referral_read 적용, 본인 관련 행만 전달)
 -- (price_ticks는 03-frontend.md U3 "PriceCard(최신 tick, Realtime 구독)"에 필요 — T7에서 추가.
 --  rider_profiles는 apps/rider R1 "PENDING 대기 화면(Realtime으로 verify_status 변경 감지)"에
 --  필요 — T9에서 추가. point_ledger는 apps/user U11 지갑·apps/rider R7/R8 정산의

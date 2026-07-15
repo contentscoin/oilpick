@@ -38,4 +38,7 @@ export const queryKeys = {
   pickupStatsDaily: (days: number) => ["admin", "settlement", "pickupDaily", days] as const,
   depots: () => ["admin", "depots"] as const,
   csTickets: (statusFilter: string) => ["admin", "cs", statusFilter] as const,
+  // 09 H4 레퍼럴 실적분석 — 라이더별 퍼널(v_referral_stats) + 일별 추이(v_referral_daily).
+  referralStats: () => ["admin", "referral", "stats"] as const,
+  referralDaily: (days: number) => ["admin", "referral", "daily", days] as const,
 };

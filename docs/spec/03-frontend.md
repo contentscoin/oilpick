@@ -100,6 +100,13 @@ spacing: 4px 그리드. 터치 타깃 최소 48px. radius: 카드 16px, 버튼 1
 >   예상 수령액 = 예상 kg × 시세). "예상 현금 수령액" → **"예상 수령액"**(지급수단은 현장에서 결정되므로
 >   수단 중립 카피).
 
+> **09 레퍼럴 개정 (상세는 09-referral.md H3/H4)**
+> - **추천 랜딩(`/ref/:code`)** [H3]: **신규 화면**(AuthGuard 밖 — 미인증 접근 허용). 유효 코드면 localStorage
+>   (`oilpick_referral_code`)에 저장 + 보너스 안내(REFERRAL_SUPPLIER_BONUS) + [가입하고 시작하기](미인증)/[홈으로](로그인) CTA.
+>   딥링크 `oilpick-user://ref/<code>`가 deeplink.ts로 이 경로에 정규화. 스토어 링크는 env 플레이스홀더.
+> - **가입(`/auth`)** [H4]: supplier_profiles insert 성공 직후 저장된 코드로 `referral-attach` 호출(best-effort, 비차단).
+> - **U11 지갑(`/wallet`)** [H4]: LedgerList에 `REFERRAL`("추천 보너스") 라벨 추가 — 추천 보너스 적립이 내역에 표시.
+
 Realtime: `pickup_orders` 자기 행 UPDATE 구독으로 상태 자동 갱신 (폴링 금지).
 
 ### apps/rider (하단 탭: 콜/운행/정산/마이)
@@ -129,6 +136,11 @@ Realtime: `pickup_orders` 자기 행 UPDATE 구독으로 상태 자동 갱신 (�
 >   패널 수단별 요약. 재제출 시 수단 변경 가능(중재 확정 전).
 > - **R7 실적(`/earnings`)** [G6-④]: 쿠폰 요약 제거 → 이번 달 **현금 지급/포인트 지급 분리** 통계
 >   (건수/kg/금액). 콜 홈 오늘 실적도 수단 분리.
+
+> **09 레퍼럴 개정 (상세는 09-referral.md H4)**
+> - **내 추천(`/referrals`)** [H4]: **신규 화면**(탭바에 없음 — 마이 "내 추천" 진입). 내 추천코드·공유 링크
+>   (복사/공유, referral-code Edge) + 실적(가입/활성화/전환율/누적 보상, v_referral_stats + referrals Realtime).
+>   라이더 보상은 오프라인 정산 근거로만 표기(08 P5 — 라이더 지갑 없음). **마이(`/my`)**에 진입점 추가.
 
 ### apps/admin (사이드바 내비, shadcn/ui + TanStack Table)
 | 경로 | 뷰 | 구현 요점 |
@@ -163,10 +175,14 @@ Realtime: `pickup_orders` 자기 행 UPDATE 구독으로 상태 자동 갱신 (�
 > - **`/users` 라이더탭** [G7-⑤]: RiderCouponPanel(잔액/수동 조정) 제거 → 라이더별 지급 실적 요약
 >   (v_rider_payout_daily). supplier 탭에 [포인트 조정](point-adjust, memo 필수) 연결.
 
-## Capacitor 설정
+> **09 레퍼럴 개정 (상세는 09-referral.md H4)**
+> - **레퍼럴(`/referrals`, 신설)** [H4]: 사이드바 "레퍼럴" 내비 추가. 요약 KPI(총 가입/활성화/전환율/지급 보너스)
+>   + 라이더별 추천 퍼널 테이블(v_referral_stats — 가입→활성화→전환율+보너스/보상) + 일별 추이(v_referral_daily)
+>   + CSV 2종(BOM). referrals Realtime로 갱신. 라이더 보상은 오프라인 정산 근거(08 P5).
 - 플러그인: @capacitor/push-notifications, geolocation, camera, app, splash-screen,
   @capacitor-community/barcode-scanner (rider만)
-- 딥링크: `oilpick-user://orders/:id`, `oilpick-rider://calls/:id` — 푸시 link 필드와 매핑
+- 딥링크: `oilpick-user://orders/:id`, `oilpick-user://ref/:code`(09 H3 추천 랜딩), `oilpick-rider://calls/:id` — 푸시 link 필드와 매핑
+- 추천 링크(웹): `VITE_REFERRAL_BASE_URL`(기본 `https://app.oilpick.kr`) — 라이더 공유 링크 `${base}/ref/<CODE>` 베이스
 - iOS Info.plist: 위치(사용 중), 카메라 사용 사유 문구. rider는 위치 "항상 허용" 요구하지 않음(운행 화면 활성 시만)
 - 환경변수: `.env.development` / `.env.production` (VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, VITE_KAKAO_KEY)
 

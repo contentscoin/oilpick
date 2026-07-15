@@ -78,6 +78,9 @@
   - `WITHDRAW_REQUEST`(출금 신청 시 -amount 즉시 차감) / `WITHDRAW_CANCEL`(반려 시 +amount 복구)
     — withdrawal_id로 멱등.
   - `ADJUST`(admin 수동 ± — point-adjust Edge Function, memo 필수).
+  - `REFERRAL`(supplier 추천 보너스 적립, +부호·출금 가능 = EARN과 동일 취급) — 추천 점주의 첫 수거
+    완료(활성화) 시 `fn_activate_referral` → `fn_post_ledger(supplier,'REFERRAL',보너스,order_id)`로 발행.
+    멱등 `unique(order_id, entry_type, user_id)`. service_role 전용(09 H5, 아래 "라이더 추천" 절).
 - **레거시 전용 entry_type(신규 발행 없음)**: `HOLD`/`RELEASE`(구모델 수거비 — 잔존 HOLD는 held
   표시로만 남는 과거 회계 기록, 지급 의무 아님), `PURCHASE`(쇼핑몰, 미래 예약).
 - 부호 규칙: 잔액 증가 = 양수, 감소 = 음수. HOLD는 `held` 컬럼 별도 집계 (잔액 미포함).
@@ -96,6 +99,23 @@
 > fn_consume_coupon/fn_confirm_purchase/fn_refund_purchase)·과거 데이터는 append-only 회계 기록으로
 > 보존(삭제 금지). 3중 무결성(append-only 트리거·멱등 unique 2종·security_invoker 뷰+RLS)도 유지.
 > 아래 07 규칙(소진량 공식·단가·구매·환불)은 과거 데이터 감사 목적으로만 유효하다 — 07-pivot-plan.md §1 참조.
+
+## 라이더 추천 (레퍼럴) 규칙 (09 H — 단일 진실: docs/spec/09-referral.md)
+> 라이더(referrer)가 점주(referred)에게 앱 설치를 영업하는 성장 루프. 08 위에 순수 추가(상태머신·원장 규칙 승계).
+- **추천코드**: `rider_profiles.referral_code`(unique, Crockford base32 8자, Edge `referral-code`가 없으면 생성).
+  공유 링크 `${VITE_REFERRAL_BASE_URL}/ref/<CODE>`(기본 `https://app.oilpick.kr`). 딥링크 `oilpick-user://ref/<code>`.
+- **연결(attach)**: 점주 가입 직후 저장된 코드로 `referral-attach`(best-effort, 비차단). `fn_attach_referral`이
+  APPROVED 라이더 코드만 유효(아니면 INVALID_REFERRAL_CODE), **점주 1인 1회**(referred_supplier_id unique,
+  선착순 최초 확정·멱등), 자기추천 차단. 보너스 금액은 core 상수 스냅샷(가입 시점, 이후 상수 변경 무영향).
+- **활성화**: 추천 점주의 **첫 수거 완료**(COMPLETED 도달) 시 order-transition Edge가 `fn_activate_referral`
+  호출 → referrals `SIGNED_UP→ACTIVATED` + 점주 `REFERRAL` 보너스 발행. 멱등 no-op(추천 없음/이미 활성).
+- **보상 구조**: 점주 = `point_ledger REFERRAL(+REFERRAL_SUPPLIER_BONUS=5000)`(출금 가능). 라이더 =
+  `referrals.rider_reward(REFERRAL_RIDER_REWARD=3000)` 스냅샷 — **라이더 지갑 없음(08 P5)**, admin 통계·
+  오프라인 정산 청구 근거로만 기록.
+- **통계**: `v_referral_stats`(라이더별 가입/활성화/전환/보너스/보상, RLS 본인 1행·admin 전체),
+  `v_referral_daily`(admin 게이트 — 일별 추이). 쓰기는 service_role RPC에만(절대 규칙 1 확장).
+- 불변식(테스트로 검증): 오코드·미승인 라이더 코드 거부, 점주 1인 1회(재-attach 멱등), 활성화 1회당 REFERRAL 1행
+  (재활성화 no-op), 추천 없는 점주 활성화 no-op, 통계 뷰 집계.
 
 ## 시세 규칙
 - admin이 (원/kg 매입가) 설정 → `price_ticks` insert (effective_at now).

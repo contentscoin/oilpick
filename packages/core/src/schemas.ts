@@ -331,3 +331,48 @@ export const csReplyOutputSchema = z.object({
   status: csStatusSchema,
 });
 export type CsReplyOutput = z.infer<typeof csReplyOutputSchema>;
+
+// ===== 라이더 추천(레퍼럴) — 09 H2/H3 (referrals·rider_profiles.referral_code와 1:1) =====
+
+/** referrals.status(01-db-schema.sql referral_status). */
+export const referralStatusSchema = z.enum(["SIGNED_UP", "ACTIVATED", "CANCELLED"]);
+export type ReferralStatus = z.infer<typeof referralStatusSchema>;
+
+/**
+ * 추천코드 형식: Crockford base32(혼동문자 I·L·O·U 제외) 대문자 8자. trim·대문자 정규화 후 검증.
+ * 라이더 공유 코드 발급(referral-code 출력)과 점주 attach 입력(referral-attach)이 공유한다.
+ */
+export const referralCodeSchema = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .regex(/^[0-9A-HJKMNP-TV-Z]{8}$/, "추천코드 형식이 올바르지 않아요.");
+
+/** referral-code (rider): 입력 없음(세션 라이더 본인). 코드가 없으면 서버가 생성해 반환. */
+export const referralCodeOutputSchema = z.object({
+  code: referralCodeSchema,
+  shareUrl: z.string().url(),
+});
+export type ReferralCodeOutput = z.infer<typeof referralCodeOutputSchema>;
+
+/** referral-attach (supplier): 가입 직후 저장해둔 코드로 추천 연결(best-effort, 비차단). */
+export const referralAttachInputSchema = z.object({
+  code: referralCodeSchema,
+});
+export type ReferralAttachInput = z.infer<typeof referralAttachInputSchema>;
+
+export const referralAttachOutputSchema = z.object({
+  status: referralStatusSchema,
+  supplierBonus: z.number().int().nonnegative(),
+});
+export type ReferralAttachOutput = z.infer<typeof referralAttachOutputSchema>;
+
+/** v_referral_stats 행(라이더 실적 — 본인 1행, admin 전체). 앱/관리자 공유 조회 스키마. */
+export const referralStatsSchema = z.object({
+  referrer_rider_id: uuidSchema,
+  signed_up: z.number().int().nonnegative(),
+  activated: z.number().int().nonnegative(),
+  supplier_bonus_paid: z.number().int().nonnegative(),
+  rider_reward_earned: z.number().int().nonnegative(),
+});
+export type ReferralStats = z.infer<typeof referralStatsSchema>;

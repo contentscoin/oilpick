@@ -18,6 +18,9 @@ const OnboardingPage = lazy(() =>
   import("./pages/OnboardingPage").then((m) => ({ default: m.OnboardingPage })),
 );
 const AuthPage = lazy(() => import("./pages/AuthPage").then((m) => ({ default: m.AuthPage })));
+const RefLandingPage = lazy(() =>
+  import("./pages/RefLandingPage").then((m) => ({ default: m.RefLandingPage })),
+);
 const HomePage = lazy(() => import("./pages/HomePage").then((m) => ({ default: m.HomePage })));
 const PricePage = lazy(() => import("./pages/PricePage").then((m) => ({ default: m.PricePage })));
 const RequestPage = lazy(() =>
@@ -102,6 +105,8 @@ export function App() {
         <Routes>
           <Route path="/onboarding" element={<OnboardingPage />} />
           <Route path="/auth" element={<AuthPage />} />
+          {/* [09 H3] 추천 랜딩 — 미인증 접근 허용(AuthGuard 밖). 코드 저장 후 가입 CTA. */}
+          <Route path="/ref/:code" element={<RefLandingPage />} />
 
           {/* 탭바가 있는 앱 셸(홈/이력/수령액/알림/마이) */}
           <Route element={<AppShell />}>

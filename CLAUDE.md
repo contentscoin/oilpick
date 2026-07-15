@@ -11,6 +11,7 @@
 - `docs/spec/04-tasks.md` — 작업 순서와 완료 기준 (위에서부터 순서대로 진행)
 - `docs/spec/07-pivot-plan.md` — 수거쿠폰 피벗(2차 고도화 F-태스크). **08이 쿠폰 모델을 폐기 — 이력 참조용**
 - `docs/spec/08-payout-pivot.md` — 현장 지급수단 피벗(3차 고도화 G-태스크). 쿠폰 폐기·포인트 복권(현금/포인트 지급, 출금 부활)·상태머신 부수효과 재정의의 단일 진실
+- `docs/spec/09-referral.md` — 라이더 추천(레퍼럴) 시스템(4차 고도화 H-태스크). 추천코드·딥링크·점주 보너스·라이더 실적/통계의 단일 진실(08 위에 순수 추가)
 
 ## 스택 (변경 금지)
 - pnpm workspace + Turborepo. Node 18 LTS (환경 확인됨: v18.19.1, pnpm 10.14.0), TypeScript strict.

@@ -88,9 +88,59 @@ Deno.serve((req) =>
 
     await notifyForAction(admin, action, order as TransitionOrder, before, fault);
 
+    // [09 H6·H7] 완료 전이 성공 후 추천 활성화 시도(멱등 no-op). fn_transition_order 본체는 무변경 —
+    // 레퍼럴은 순수 추가라 상태머신을 오염시키지 않는다. 첫 수거 완료(COMPLETED 도달)에서만 발행된다.
+    if ((order as TransitionOrder & { status?: string }).status === "COMPLETED") {
+      await activateReferralIfAny(admin, (order as TransitionOrder).supplier_id, (order as TransitionOrder).id);
+    }
+
     return okResponse({ orderId: order.id, status: order.status });
   })
 );
+
+/**
+ * [09 H7] 완료된 주문의 점주에 대해 추천 활성화를 시도한다(fn_activate_referral, 멱등).
+ * RPC는 추천 없음/이미 활성/취소면 null을 반환(no-op) — 그 경우 알림 없이 조용히 넘어간다.
+ * 방금 SIGNED_UP→ACTIVATED로 전이된 경우에만 행이 반환되어 점주·라이더에게 1회 알림을 보낸다.
+ * best-effort: 예외/실패는 로그만 남기고 전이 응답을 막지 않는다(핵심 로직 무영향).
+ */
+async function activateReferralIfAny(
+  admin: SupabaseClient,
+  supplierId: string,
+  orderId: string,
+): Promise<void> {
+  try {
+    const { data: referral, error } = await admin.rpc("fn_activate_referral", {
+      p_supplier_id: supplierId,
+      p_order_id: orderId,
+    });
+    if (error) {
+      console.error("fn_activate_referral 실패 (핵심 로직 무영향)", error);
+      return;
+    }
+    if (!referral) return; // 추천 없음/이미 활성 — no-op
+
+    const bonus = Number(referral.supplier_bonus ?? 0);
+    await sendPush(
+      admin,
+      [supplierId],
+      "추천 보너스 적립",
+      `추천 보너스 ${formatPoint(bonus)}가 적립됐어요 — 지갑에서 확인하세요.`,
+      "/wallet",
+    );
+    if (referral.referrer_rider_id) {
+      await sendPush(
+        admin,
+        [referral.referrer_rider_id],
+        "추천 실적 적립",
+        "회원님 추천으로 가입한 점주가 첫 수거를 완료했어요 — 추천 실적이 적립됐어요.",
+        "/referrals",
+      );
+    }
+  } catch (err) {
+    console.error("추천 활성화 처리 중 예외 (핵심 로직 무영향)", err);
+  }
+}
 
 function mapTransitionError(rpcErr: { message?: string }): Response {
   const message = rpcErr.message ?? "";

@@ -59,6 +59,9 @@ ACCEPTED 이후 모든 전이 단일 엔드포인트.
 - 전이 유효성은 packages/core `orderMachine.canTransition(from, action, role)` 재사용. 위반 409 `INVALID_TRANSITION`.
 - **알림은 00-domain.md 알림 매트릭스(08 §1-5)를 단일 진실로 참조** — `buildActionNotifications` 분기를
   매트릭스대로 개정(지급수단별 카피 분기, 08 G3-④).
+- **[09 H7] 추천 활성화 훅**: 완료 전이(status='COMPLETED')가 성공한 뒤 `fn_activate_referral(supplier_id, order_id)`를
+  호출한다(best-effort·비차단, 멱등 no-op). fn_transition_order 본체는 무변경(레퍼럴은 순수 추가 — 상태머신 오염 방지).
+  방금 활성화된 경우(SIGNED_UP→ACTIVATED)에만 점주("추천 보너스 N P 적립" → /wallet)·라이더("추천 실적 적립" → /referrals) 푸시.
 
 ## 4. `order-expire` (cron, 1분마다 — Supabase scheduled function)
 - REQUESTED이고 created_at 경과별 처리: 5분→반경 7km 재브로드캐스트, 10분→15km, 30분→CANCELLED(NO_RIDER)+푸시.
@@ -109,6 +112,23 @@ ACCEPTED 이후 모든 전이 단일 엔드포인트.
 > ✅ **부활 (08 P4·G3-⑤)** — CS 수동 조정 경로 복원.
 - 입력: `{ userId, amount, memo }` (memo 필수, amount ± 정수) → `fn_post_ledger`(ADJUST) insert.
 - 음수 조정으로 잔액이 음수가 되는 것은 admin 책임(원장 감사로 추적) — 구계약 유지.
+
+## 16. `referral-code` (rider) — 09 H3
+> 라이더 추천코드 발급/조회. 세션 라이더 본인.
+- 입력: 없음(`{}`). role=rider 필수(FORBIDDEN 아니면).
+- 처리: `rider_profiles.referral_code`가 있으면 반환, 없으면 Crockford base32 8자를 생성해 unique 저장 후 반환
+  (충돌 시 재시도, 동시 생성 방어 = `update ... where referral_code is null`). rider_profiles 행 없으면 404.
+- 출력: `{ code, shareUrl }`(`shareUrl = ${REFERRAL_BASE_URL ?? REFERRAL_LINK_BASE}/ref/<CODE>`). `referralCodeOutputSchema`.
+- 코드/알파벳/링크 규칙은 packages/core(`generateReferralCode`/`buildReferralShareUrl`)가 단일 진실. APPROVED 검증은
+  attach 시점에만(미승인 라이더도 코드는 볼 수 있으나 그 코드로는 활성화되지 않음, 09 §안티어뷰즈).
+
+## 17. `referral-attach` (supplier) — 09 H4
+> 점주 가입 직후 저장된 코드로 추천 연결(best-effort, 비차단 — 실패해도 가입 성립).
+- 입력: `{ code }`(`referralAttachInputSchema` — trim·대문자 정규화). role=supplier 필수.
+- 처리: `fn_attach_referral(supplier_id, code, REFERRAL_SUPPLIER_BONUS, REFERRAL_RIDER_REWARD)`. APPROVED 라이더
+  코드만 유효(아니면 400 `INVALID_REFERRAL_CODE`), 점주 1인 1회(멱등 — 기존 행 반환), 자기추천 차단. 이미 다른
+  코드로 연결된 점주면 409 `ALREADY_REFERRED`. 원장·referrals 쓰기는 RPC(service_role)에만(절대 규칙 1 확장).
+- 출력: `{ status, supplierBonus }`(`referralAttachOutputSchema`).
 
 ## 11~15. `coupon-*` (coupon-purchase-intent/confirm/return, coupon-refund, coupon-adjust, coupon-price-set)
 > ⚠️ **삭제됨 (08 P1·G3-⑥)** — 수거쿠폰 모델 폐기. Edge Function 코드 6종 저장소에서 삭제.

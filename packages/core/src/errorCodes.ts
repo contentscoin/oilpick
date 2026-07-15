@@ -69,6 +69,18 @@ export const FORBIDDEN = "FORBIDDEN";
 /** 대상 리소스(주문/출금 등)를 찾을 수 없는 경우의 공통 코드. HTTP 404. */
 export const NOT_FOUND = "NOT_FOUND";
 
+/**
+ * [09 H3] referral-attach 시 코드가 APPROVED 라이더의 추천코드와 매칭되지 않을 때(오코드·미승인·정지).
+ * fn_attach_referral의 raise 'INVALID_REFERRAL_CODE' 매핑. HTTP 400. attach는 best-effort라 가입은 성립.
+ */
+export const INVALID_REFERRAL_CODE = "INVALID_REFERRAL_CODE";
+
+/**
+ * [09 H3] referral-attach 시 점주가 이미 다른 코드로 추천 연결됨(점주 1인 1회, 선착순 최초 확정).
+ * RPC는 기존 행을 반환(멱등)하며, Edge가 요청 코드와 기존 코드 불일치를 감지해 이 코드로 알린다. HTTP 409.
+ */
+export const ALREADY_REFERRED = "ALREADY_REFERRED";
+
 export const ERROR_CODES = {
   TOO_MANY_ACTIVE,
   RIDER_NOT_ELIGIBLE,
@@ -83,6 +95,8 @@ export const ERROR_CODES = {
   UNAUTHORIZED,
   FORBIDDEN,
   NOT_FOUND,
+  INVALID_REFERRAL_CODE,
+  ALREADY_REFERRED,
 } as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
@@ -102,4 +116,6 @@ export const ERROR_MESSAGE_KO: Record<ErrorCode, string> = {
   UNAUTHORIZED: "로그인이 필요해요.",
   FORBIDDEN: "권한이 없어요.",
   NOT_FOUND: "요청한 정보를 찾을 수 없어요.",
+  INVALID_REFERRAL_CODE: "추천코드가 올바르지 않아요.",
+  ALREADY_REFERRED: "이미 다른 추천으로 가입된 계정이에요.",
 };

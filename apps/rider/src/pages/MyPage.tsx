@@ -94,6 +94,16 @@ export function MyPage() {
           <span>운행 이력</span>
           <span style={{ color: colors.status.wait }}>&gt;</span>
         </button>
+        {/* 09 H4 — 내 추천(코드·공유·실적) 진입점. */}
+        <button
+          type="button"
+          data-testid="referrals-link"
+          onClick={() => navigate("/referrals")}
+          style={{ ...menuRowStyle, cursor: "pointer", color: "inherit" }}
+        >
+          <span>내 추천</span>
+          <span style={{ color: colors.status.wait }}>&gt;</span>
+        </button>
         <button
           type="button"
           data-testid="notify-toggle"

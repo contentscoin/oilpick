@@ -183,6 +183,26 @@ var csReplyOutputSchema = z.object({
   ticketId: uuidSchema,
   status: csStatusSchema
 });
+var referralStatusSchema = z.enum(["SIGNED_UP", "ACTIVATED", "CANCELLED"]);
+var referralCodeSchema = z.string().trim().toUpperCase().regex(/^[0-9A-HJKMNP-TV-Z]{8}$/, "\uCD94\uCC9C\uCF54\uB4DC \uD615\uC2DD\uC774 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC544\uC694.");
+var referralCodeOutputSchema = z.object({
+  code: referralCodeSchema,
+  shareUrl: z.string().url()
+});
+var referralAttachInputSchema = z.object({
+  code: referralCodeSchema
+});
+var referralAttachOutputSchema = z.object({
+  status: referralStatusSchema,
+  supplierBonus: z.number().int().nonnegative()
+});
+var referralStatsSchema = z.object({
+  referrer_rider_id: uuidSchema,
+  signed_up: z.number().int().nonnegative(),
+  activated: z.number().int().nonnegative(),
+  supplier_bonus_paid: z.number().int().nonnegative(),
+  rider_reward_earned: z.number().int().nonnegative()
+});
 export {
   arrivePayloadSchema,
   cancelPayloadSchema,
@@ -212,6 +232,12 @@ export {
   pointAdjustOutputSchema,
   priceSetInputSchema,
   priceSetOutputSchema,
+  referralAttachInputSchema,
+  referralAttachOutputSchema,
+  referralCodeOutputSchema,
+  referralCodeSchema,
+  referralStatsSchema,
+  referralStatusSchema,
   resolveDisputePayloadSchema,
   riderLocationInputSchema,
   riderLocationOutputSchema,

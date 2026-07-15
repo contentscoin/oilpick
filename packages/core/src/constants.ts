@@ -2,7 +2,7 @@
 // 이 파일의 값은 임의 변경 금지 — 스펙 변경 시 스펙 문서를 먼저 갱신할 것.
 
 import type { OrderStatus } from "./orderMachine";
-import type { CsCategory, CsStatus, PayoutMethod } from "./schemas";
+import type { CsCategory, CsStatus, PayoutMethod, ReferralStatus } from "./schemas";
 
 /** 통 1개당 예상 kg (18L 통 기준). 00-domain.md "계량/수량 규칙". */
 export const KG_PER_CAN = 15;
@@ -69,3 +69,30 @@ export const CS_STATUS_LABEL: Record<CsStatus, string> = {
 
 /** ARRIVED 24h 초과 체류 = 교착 조기 감지 임계(07 §1-3·F12-⑤, admin OrdersPage 하이라이트). */
 export const ARRIVED_STALE_MS = 24 * 60 * 60 * 1000;
+
+// ===== 라이더 추천(레퍼럴) — 09 H5/H3 =====
+
+/**
+ * 추천 활성화(피추천 점주 첫 수거 완료) 시 점주에게 적립되는 REFERRAL 포인트(P). 출금 가능(EARN과 동일 취급).
+ * 가입 시점 스냅샷(referrals.supplier_bonus) — 이후 이 상수를 바꿔도 기존 추천엔 무영향. 임의 변경 금지.
+ */
+export const REFERRAL_SUPPLIER_BONUS = 5000;
+
+/**
+ * 추천 활성화 시 라이더 오프라인 정산 보상(원). 라이더 지갑 없음(08 P5) — 원장 적립이 아니라
+ * referrals.rider_reward 스냅샷으로만 기록되어 admin 통계·오프라인 정산 청구 근거가 된다. 임의 변경 금지.
+ */
+export const REFERRAL_RIDER_REWARD = 3000;
+
+/** user 앱 랜딩(/ref/:code)이 코드를 저장하는 localStorage 키. 가입 성공 직후 attach가 읽어 소비한다. */
+export const REFERRAL_CODE_STORAGE_KEY = "oilpick_referral_code";
+
+/** 라이더 공유 링크 베이스(웹 랜딩). 앱은 VITE_REFERRAL_BASE_URL 우선, 미설정 시 이 기본값. */
+export const REFERRAL_LINK_BASE = "https://app.oilpick.kr";
+
+/** 추천 상태 한글 라벨(09 H2). 라이더 실적·admin 퍼널 공용. */
+export const REFERRAL_STATUS_LABEL: Record<ReferralStatus, string> = {
+  SIGNED_UP: "가입",
+  ACTIVATED: "활성화",
+  CANCELLED: "취소",
+};

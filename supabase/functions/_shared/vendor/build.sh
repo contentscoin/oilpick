@@ -23,7 +23,7 @@ mkdir -p "$OUT_DIR"
 # esbuild는 타입 annotation을 지우고 순수 JS로 트랜스파일한다(noImplicitAny 위반 방지를
 # 위해 각 파일 맨 위에 @ts-nocheck를 붙인다 — 원본 packages/core/src는 이미 strict
 # 모드로 vitest/tsc 검증을 통과했으므로 vendor 산출물의 타입 재검증은 불필요하다).
-for f in constants schemas errorCodes estimate orderMachine format supabase; do
+for f in constants schemas errorCodes estimate orderMachine format supabase referral; do
   npx esbuild "$CORE_SRC/$f.ts" \
     --bundle \
     --format=esm \
@@ -44,6 +44,7 @@ export * from "./schemas.ts";
 export * from "./format.ts";
 export * from "./estimate.ts";
 export * from "./errorCodes.ts";
+export * from "./referral.ts";
 export * from "./supabase.ts";
 EOF
 

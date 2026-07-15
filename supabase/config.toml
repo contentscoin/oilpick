@@ -443,6 +443,15 @@ import_map = "./functions/import_map.json"
 verify_jwt = true
 import_map = "./functions/import_map.json"
 
+# [09 H3] 라이더 추천(레퍼럴) — referral-code(rider 코드 발급/조회), referral-attach(supplier 가입 후 코드 연결).
+[functions.referral-code]
+verify_jwt = true
+import_map = "./functions/import_map.json"
+
+[functions.referral-attach]
+verify_jwt = true
+import_map = "./functions/import_map.json"
+
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
