@@ -15,10 +15,14 @@ function normalizeReferralCode(raw) {
 function buildReferralShareUrl(code, base) {
   return `${base.replace(/\/+$/, "")}/ref/${normalizeReferralCode(code)}`;
 }
+function referralConversionRate(activated, signedUp) {
+  return signedUp > 0 ? Math.round(activated / signedUp * 100) : 0;
+}
 export {
   REFERRAL_CODE_ALPHABET,
   REFERRAL_CODE_LENGTH,
   buildReferralShareUrl,
   generateReferralCode,
-  normalizeReferralCode
+  normalizeReferralCode,
+  referralConversionRate
 };

@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { BigButton, colors, elevation, gray, radius, surface, typeScale } from "@oilpick/ui";
 import { REFERRAL_CODE_STORAGE_KEY, REFERRAL_SUPPLIER_BONUS, formatPoint, referralCodeSchema } from "@oilpick/core";
@@ -17,11 +17,9 @@ export function RefLandingPage() {
   const navigate = useNavigate();
   const { session, loading } = useSession();
 
-  // 코드 정규화·검증(Crockford base32 8자). 유효할 때만 저장한다.
-  const validCode = useMemo(() => {
-    const parsed = referralCodeSchema.safeParse(rawCode ?? "");
-    return parsed.success ? parsed.data : null;
-  }, [rawCode]);
+  // 코드 정규화·검증(Crockford base32 8자). 유효할 때만 저장한다. safeParse는 값싼 순수 계산이라 메모 불필요.
+  const parsedCode = referralCodeSchema.safeParse(rawCode ?? "");
+  const validCode = parsedCode.success ? parsedCode.data : null;
 
   useEffect(() => {
     if (validCode) {
@@ -54,7 +52,7 @@ export function RefLandingPage() {
     >
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         <span style={{ fontSize: 40 }}>♻️</span>
-        <h1 style={{ fontSize: 28, lineHeight: 1.25, margin: 0, fontWeight: 800 }}>
+        <h1 style={{ fontSize: typeScale.headline, lineHeight: 1.25, margin: 0, fontWeight: 800 }}>
           폐식용유, 버리지 말고
           <br />
           현장에서 바로 정산받으세요

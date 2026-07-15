@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../lib/supabaseClient";
 import { queryKeys } from "../lib/queryClient";
+import { fetchDisplayNameMap, sinceIso } from "../lib/adminQueries";
 
 /**
  * 08 G7-① "정산" 재편 데이터 훅 — 07 F10의 useSalesAdmin(쿠폰 매출/결제)을 대체한다(쿠폰 모델 폐기).
@@ -13,20 +14,7 @@ import { queryKeys } from "../lib/queryClient";
  *  - 수거 활동 추이: v_pickup_stats_daily — 08에서 cash_amount/point_amount 분리 컬럼 추가.
  */
 
-/** user_id → display_name 매핑(임베드 미사용 — 기존 useSalesAdmin 선례). */
-async function fetchDisplayNameMap(userIds: string[]): Promise<Map<string, string>> {
-  const unique = [...new Set(userIds)];
-  if (unique.length === 0) return new Map();
-  const { data, error } = await supabase.from("profiles").select("id, display_name").in("id", unique);
-  if (error) throw error;
-  return new Map((data ?? []).map((p) => [p.id as string, p.display_name as string]));
-}
-
-function sinceIso(days: number): string {
-  const since = new Date();
-  since.setDate(since.getDate() - days);
-  return since.toISOString().slice(0, 10);
-}
+// user_id→이름 매핑·최근 days일 하한(sinceIso)은 ../lib/adminQueries로 공용화(useReferralAdmin과 공유).
 
 // ===== 출금 큐 (08 P4) =====
 

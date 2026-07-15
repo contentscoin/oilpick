@@ -6,7 +6,7 @@
 create extension if not exists pgtap with schema extensions;
 
 begin;
-select plan(20);
+select plan(22);
 
 -- ── 픽스처: 라이더 2(승인/미승인) + 점주 2 + admin 1 ──────────────────────
 insert into auth.users (id, instance_id, aud, role, email, created_at, updated_at) values
@@ -51,12 +51,19 @@ select is((select supplier_bonus from referrals where referred_supplier_id='9900
 select is((select rider_reward from referrals where referred_supplier_id='99000000-0000-0000-0000-0000000000a1'),
   3000, '라이더 보상 스냅샷 3000');
 
--- 4) 재-attach(다른 금액/코드) → 기존 행 유지(멱등, 점주 1인 1회)
+-- 4) 재-attach(같은 코드) → 기존 행 유지(멱등, 점주 1인 1회)
 select fn_attach_referral('99000000-0000-0000-0000-0000000000a1','ABCD2345',9999,9999);
 select is((select count(*)::int from referrals where referred_supplier_id='99000000-0000-0000-0000-0000000000a1'),
   1, '재-attach 멱등: 1행 유지');
 select is((select supplier_bonus from referrals where referred_supplier_id='99000000-0000-0000-0000-0000000000a1'),
   5000, '재-attach는 기존 스냅샷 유지(9999 무시)');
+
+-- 4-b) 이미 추천된 점주가 다른 코드로 재-attach → ALREADY_REFERRED(RPC가 서버에서 판정, 선착순 최초 확정)
+select throws_ok(
+  $$ select fn_attach_referral('99000000-0000-0000-0000-0000000000a1','WXYZ6789',5000,3000) $$,
+  'ALREADY_REFERRED', '다른 코드로 재-attach는 ALREADY_REFERRED');
+select is((select code from referrals where referred_supplier_id='99000000-0000-0000-0000-0000000000a1'),
+  'ABCD2345', 'ALREADY_REFERRED 후에도 기존 코드 유지(선착순 최초 확정)');
 
 -- ============ activate 검증 ============
 -- 활성화 유발 주문(점주1의 완료 주문). 실제 상태머신 대신 직삽입(REFERRAL 발행 로직만 검증).

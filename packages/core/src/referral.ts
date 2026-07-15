@@ -34,3 +34,11 @@ export function normalizeReferralCode(raw: string): string {
 export function buildReferralShareUrl(code: string, base: string): string {
   return `${base.replace(/\/+$/, "")}/ref/${normalizeReferralCode(code)}`;
 }
+
+/**
+ * 추천 전환율(%) = 활성화 / 가입, 정수 반올림. 가입 0이면 0(분모 0 방어).
+ * 라이더 실적·admin 퍼널·admin 요약이 공유하는 단일 계산(중복 정의 금지).
+ */
+export function referralConversionRate(activated: number, signedUp: number): number {
+  return signedUp > 0 ? Math.round((activated / signedUp) * 100) : 0;
+}

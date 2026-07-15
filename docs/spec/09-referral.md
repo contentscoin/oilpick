@@ -20,7 +20,7 @@
 |---|---|---|
 | H1 | 추천 주체·대상 | **라이더(referrer) → 점주(referred)**. 라이더가 영업 세일즈포스. 점주 1인당 추천 1회(선착순 최초 코드 확정) |
 | H2 | 추천코드 | `rider_profiles.referral_code`(unique). 서버 생성 8자리(Crockford base32, 혼동문자 제외). Edge `referral-code`가 라이더 요청 시 없으면 생성해 반환. **attach 시 라이더 `verify_status='APPROVED'` 검증**(정지·미승인 코드는 무효) |
-| H3 | 추천링크·딥링크 | 웹 랜딩 `/ref/:code`(user 앱 라우트) — 코드를 localStorage(`oilpick_referral_code`)에 저장 + 보너스 안내 + 설치/계속 CTA. 앱 스킴 `oilpick-user://ref/<code>` → 동일 라우트로 정규화(deeplink.ts). 라이더 공유 링크 = `${VITE_REFERRAL_BASE_URL}/ref/<CODE>`(기본 `https://app.oilpick.kr`) |
+| H3 | 추천링크·딥링크 | 웹 랜딩 `/ref/:code`(user 앱 라우트) — 코드를 localStorage(`oilpick_referral_code`)에 저장 + 보너스 안내 + 설치/계속 CTA. 앱 스킴 `oilpick-user://ref/<code>` → 동일 라우트로 정규화(deeplink.ts). 라이더 공유 링크는 Edge(referral-code)가 `${REFERRAL_BASE_URL}/ref/<CODE>`로 조립해 shareUrl로 반환(REFERRAL_BASE_URL=Supabase 시크릿, 미설정 시 `REFERRAL_LINK_BASE`=`https://app.oilpick.kr`. 앱은 서버가 준 shareUrl 표시) |
 | H4 | 코드 연결(attach) | 가입(supplier_profiles insert) **성공 직후** best-effort로 `referral-attach`(저장된 코드) 호출 — 실패해도 가입은 성립(비차단). 원장·referrals 쓰기는 service_role RPC에만(절대 규칙 1 확장) |
 | H5 | 보너스 구조 | **점주 보너스**: 활성화 시 `point_ledger REFERRAL(+supplier_bonus)` 적립(출금 가능, EARN과 동일 취급). **라이더 보상**: `referrals.rider_reward` 스냅샷 — 라이더 지갑 없음(08), admin 통계·오프라인 정산 근거로만 기록. 금액은 core 상수 `REFERRAL_SUPPLIER_BONUS=5000` / `REFERRAL_RIDER_REWARD=3000`, **가입 시점 스냅샷**(이후 상수 변경 무영향) |
 | H6 | 활성화 조건 | **추천 점주의 첫 수거 완료**(CONFIRM_MEASURE/FORCE_COMPLETE로 COMPLETED 도달). referrals.status `SIGNED_UP→ACTIVATED` 원자 전이 + 보너스 발행. 가짜 설치·가입 파밍 차단 |
@@ -123,14 +123,20 @@ referrals(
 
 ### H5. 【검증】 게이트 + 리뷰 + PR
 - lint/test/build + DB 하네스 green, 어드버서리얼 리뷰, 커밋/푸시.
-- [x] 완료: lint 7/7·test 7/7·build 5/5·DB 하네스 9스위트(09 20 asserts) green. 3층 병렬 어드버서리얼 리뷰
+- [x] 완료: lint 7/7·test 7/7·build 5/5·DB 하네스 9스위트(09 22 asserts) green. 3층 병렬 어드버서리얼 리뷰
   (DB/Edge+core/앱) — 확정 결함 3건 수정:
   ① [DB] v_referral_daily가 "같은 날 활성화"만 세어 활성화 추이가 거의 항상 0 → 가입/활성화를 각자 날짜로
      버킷팅(UNION ALL)하도록 재작성 + 컬럼 activated_same_day→activated + pgTAP 교차일 회귀 테스트 3건 추가.
   ② [앱-admin] useReferralStatsAdmin이 한 페이지에서 2회 마운트되며 고정 채널 토픽 공유 → Realtime 결함
-     (useRiderProfile 선례). 인스턴스 시퀀스로 고유 토픽화.
+     (useRiderProfile 선례). 훅을 ReferralsPage 부모에서 1회 마운트해 props로 내리는 구조로 근본 수정(품질 패스에서).
   ③ [앱-R/A] 라이더 보상(원 단위, 08 P5)을 formatPoint("P")로 표기 → formatKrw("원")로 수정.
   Edge+core 리뷰는 확정 결함 0(정규식↔알파벳·RPC 시그니처·멱등·best-effort 훅 정상). PR #16(08 위에 스택).
+- [x] 품질·단순화 패스(4각 병렬: 재사용/단순화/효율/고도): ⓐ 전환율 계산을 core `referralConversionRate`로
+  추출(rider/admin 3곳 중복 제거) ⓑ admin `fetchDisplayNameMap`/`sinceIso`를 `lib/adminQueries`로 공용화
+  (useSettlementAdmin 중복 제거) ⓒ admin 퍼널 훅 부모 1회 마운트(②의 근본 수정, 채널 1개) ⓓ RefLandingPage
+  useMemo 제거·`typeScale.headline` 토큰화 ⓔ `ALREADY_REFERRED`를 Edge 문자열 비교 → RPC raise로 이관
+  (서버 단일 정규화 판정, INVALID_REFERRAL_CODE와 일관 + pgTAP 2건) ⓕ 공유 링크 base는 Edge `REFERRAL_BASE_URL`
+  단일 소스임을 문서·상수 주석 정정(허상 VITE_ env 제거). 전 게이트 재-green.
 
 ## 스코프 밖
 - 실 앱스토어/플레이스토어 URL·유니버설 링크(Branch 등) 인프라 — 랜딩이 env 스토어 링크 플레이스홀더로 대체.

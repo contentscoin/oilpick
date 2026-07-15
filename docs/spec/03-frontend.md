@@ -182,7 +182,7 @@ Realtime: `pickup_orders` 자기 행 UPDATE 구독으로 상태 자동 갱신 (�
 - 플러그인: @capacitor/push-notifications, geolocation, camera, app, splash-screen,
   @capacitor-community/barcode-scanner (rider만)
 - 딥링크: `oilpick-user://orders/:id`, `oilpick-user://ref/:code`(09 H3 추천 랜딩), `oilpick-rider://calls/:id` — 푸시 link 필드와 매핑
-- 추천 링크(웹): `VITE_REFERRAL_BASE_URL`(기본 `https://app.oilpick.kr`) — 라이더 공유 링크 `${base}/ref/<CODE>` 베이스
+- 추천 링크(웹): Edge(referral-code)가 `REFERRAL_BASE_URL`(Supabase 시크릿, 미설정 시 core `REFERRAL_LINK_BASE`=`https://app.oilpick.kr`)로 `${base}/ref/<CODE>`를 조립해 shareUrl로 반환 — 앱은 서버가 준 shareUrl을 그대로 표시(앱 env로 별도 조립 안 함)
 - iOS Info.plist: 위치(사용 중), 카메라 사용 사유 문구. rider는 위치 "항상 허용" 요구하지 않음(운행 화면 활성 시만)
 - 환경변수: `.env.development` / `.env.production` (VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, VITE_KAKAO_KEY)
 

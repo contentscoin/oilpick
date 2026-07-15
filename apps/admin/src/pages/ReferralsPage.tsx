@@ -1,4 +1,4 @@
-import { formatKrw, formatPoint } from "@oilpick/core";
+import { formatKrw, formatPoint, referralConversionRate } from "@oilpick/core";
 import {
   useReferralDaily,
   useReferralStatsAdmin,
@@ -8,14 +8,19 @@ import {
 import { downloadCsv, toCsv } from "../lib/csv";
 import { QueryError } from "../components/QueryError";
 
+/** 부모가 1회 마운트한 퍼널 쿼리를 자식에 내려준다(다중 마운트=중복 채널 회피, useReferralAdmin 주석). */
+type StatsQuery = ReturnType<typeof useReferralStatsAdmin>;
+
 /**
  * [09 H4]【A】레퍼럴 실적분석(/referrals). 라이더가 점주에게 앱을 영업하는 성장 루프를 분석한다.
  *  ⓐ 요약 KPI(총 가입/활성화/전환율/지급 보너스 합)
  *  ⓑ 라이더별 퍼널(v_referral_stats — 가입→활성화→전환율 + 보너스/보상) + CSV
- *  ⓒ 일별 추이(v_referral_daily — 일별 가입/당일활성화) + CSV
+ *  ⓒ 일별 추이(v_referral_daily — 일별 가입/활성화) + CSV
  * 라이더 보상(rider_reward_earned)은 08 P5 오프라인 정산·청구 근거로만 표기한다(라이더 지갑 없음).
+ * 요약·퍼널은 같은 v_referral_stats에서 파생되므로 훅을 부모에서 1회만 호출해 두 섹션에 공유한다.
  */
 export function ReferralsPage() {
+  const stats = useReferralStatsAdmin();
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -23,20 +28,20 @@ export function ReferralsPage() {
         <p className="text-sm text-gray-500">라이더별 추천 퍼널과 지급 보너스를 분석해요.</p>
       </div>
 
-      <SummarySection />
-      <RiderFunnelSection />
+      <SummarySection stats={stats} />
+      <RiderFunnelSection stats={stats} />
       <DailyTrendSection />
     </div>
   );
 }
 
 /** ⓐ 요약 KPI — 전체 합산(라이더 퍼널을 재사용). */
-function SummarySection() {
-  const { data: rows, isLoading } = useReferralStatsAdmin();
+function SummarySection({ stats }: { stats: StatsQuery }) {
+  const { data: rows, isLoading } = stats;
 
   const totalSignedUp = (rows ?? []).reduce((s, r) => s + r.signedUp, 0);
   const totalActivated = (rows ?? []).reduce((s, r) => s + r.activated, 0);
-  const conversion = totalSignedUp > 0 ? Math.round((totalActivated / totalSignedUp) * 100) : 0;
+  const conversion = referralConversionRate(totalActivated, totalSignedUp);
   const totalBonus = (rows ?? []).reduce((s, r) => s + r.supplierBonusPaid, 0);
 
   const cards = [
@@ -61,8 +66,8 @@ function SummarySection() {
 }
 
 /** ⓑ 라이더별 퍼널 테이블 + CSV. */
-function RiderFunnelSection() {
-  const { data: rows, isLoading, isError, refetch } = useReferralStatsAdmin();
+function RiderFunnelSection({ stats }: { stats: StatsQuery }) {
+  const { data: rows, isLoading, isError, refetch } = stats;
   const loadFailed = isError && rows === undefined;
 
   function handleCsv() {

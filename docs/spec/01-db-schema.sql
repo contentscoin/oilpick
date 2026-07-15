@@ -374,7 +374,8 @@ create index idx_referrals_referrer on referrals (referrer_rider_id, signed_up_a
 --   + revoke all/grant service_role(절대 규칙 1: referrals·point_ledger 쓰기는 service_role RPC에만).
 --   fn_attach_referral(p_supplier_id uuid, p_code text, p_supplier_bonus int, p_rider_reward int) returns referrals
 --     - 코드 정규화(upper/trim) → APPROVED 라이더 해석(없으면 raise 'INVALID_REFERRAL_CODE'). 자기추천 차단.
---       이미 추천된 점주면 기존 행 반환(멱등, 점주 1인 1회). on conflict(referred_supplier_id) do nothing.
+--       이미 추천된 점주: 같은 코드면 기존 행 반환(멱등), 다른 코드면 raise 'ALREADY_REFERRED'(점주 1인 1회·
+--       선착순 최초 확정 — 서버 단일 정규화 판정). on conflict(referred_supplier_id) do nothing.
 --       보너스는 파라미터 스냅샷(core 상수가 단일 진실). gen 직후 best-effort로 referral-attach Edge가 호출.
 --   fn_activate_referral(p_supplier_id uuid, p_order_id uuid) returns referrals
 --     - referrals FOR UPDATE. status<>'SIGNED_UP'(미추천·이미활성·취소)면 no-op(멱등, null 반환).

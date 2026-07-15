@@ -101,10 +101,14 @@ declare
   v_existing referrals;
   v_row referrals;
 begin
-  -- 이미 추천된 점주면 기존 행 반환(선착순 최초 확정, 멱등 — 재시도·중복 호출 안전).
+  -- 이미 추천된 점주: 같은 코드면 기존 행 반환(재시도·중복 호출 멱등), 다른 코드면 ALREADY_REFERRED
+  -- (점주 1인 1회·선착순 최초 확정 — 안티어뷰즈를 서버에서 단일 정규화(v_code)로 판정, Edge 문자열 비교 제거).
   select * into v_existing from referrals where referred_supplier_id = p_supplier_id;
   if found then
-    return v_existing;
+    if v_existing.code = v_code then
+      return v_existing;
+    end if;
+    raise exception 'ALREADY_REFERRED' using errcode = 'P0001';
   end if;
 
   -- APPROVED 라이더의 코드만 유효.

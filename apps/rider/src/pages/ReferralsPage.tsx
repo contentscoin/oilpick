@@ -1,5 +1,5 @@
 import { colors, elevation, gradient, gray, radius, surface, useToast } from "@oilpick/ui";
-import { REFERRAL_SUPPLIER_BONUS, formatKrw, formatPoint } from "@oilpick/core";
+import { REFERRAL_SUPPLIER_BONUS, formatKrw, formatPoint, referralConversionRate } from "@oilpick/core";
 import { useSession } from "../hooks/useSession";
 import { useReferralCode, useReferralStats } from "../hooks/useReferral";
 
@@ -19,7 +19,7 @@ export function ReferralsPage() {
 
   const signedUp = stats?.signed_up ?? 0;
   const activated = stats?.activated ?? 0;
-  const conversion = signedUp > 0 ? Math.round((activated / signedUp) * 100) : 0;
+  const conversion = referralConversionRate(activated, signedUp);
   const rewardEarned = stats?.rider_reward_earned ?? 0;
 
   async function handleCopy() {

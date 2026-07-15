@@ -87,7 +87,11 @@ export const REFERRAL_RIDER_REWARD = 3000;
 /** user 앱 랜딩(/ref/:code)이 코드를 저장하는 localStorage 키. 가입 성공 직후 attach가 읽어 소비한다. */
 export const REFERRAL_CODE_STORAGE_KEY = "oilpick_referral_code";
 
-/** 라이더 공유 링크 베이스(웹 랜딩). 앱은 VITE_REFERRAL_BASE_URL 우선, 미설정 시 이 기본값. */
+/**
+ * 라이더 공유 링크 베이스(웹 랜딩)의 기본값. 실제 링크 조립은 Edge(referral-code)가 담당한다 —
+ * `REFERRAL_BASE_URL`(Supabase 시크릿) 우선, 미설정 시 이 상수로 `${base}/ref/<CODE>`를 만들어 shareUrl로
+ * 반환하고, 앱은 서버가 준 shareUrl을 그대로 표시한다(앱에서 별도 env로 조립하지 않음).
+ */
 export const REFERRAL_LINK_BASE = "https://app.oilpick.kr";
 
 /** 추천 상태 한글 라벨(09 H2). 라이더 실적·admin 퍼널 공용. */

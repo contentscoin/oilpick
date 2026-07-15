@@ -13,6 +13,7 @@ import {
   buildReferralShareUrl,
   generateReferralCode,
   normalizeReferralCode,
+  referralConversionRate,
   referralAttachInputSchema,
   referralAttachOutputSchema,
   referralCodeOutputSchema,
@@ -109,6 +110,20 @@ describe("referral-code / referral-attach 스키마 (09 H3)", () => {
     expect(
       referralAttachOutputSchema.safeParse({ status: "PENDING", supplierBonus: 5000 }).success,
     ).toBe(false);
+  });
+});
+
+describe("referralConversionRate", () => {
+  it("활성화/가입 백분율을 정수 반올림한다", () => {
+    expect(referralConversionRate(3, 4)).toBe(75);
+    expect(referralConversionRate(1, 3)).toBe(33); // round(33.33)
+    expect(referralConversionRate(2, 3)).toBe(67); // round(66.67)
+    expect(referralConversionRate(5, 5)).toBe(100);
+  });
+
+  it("가입 0이면 0(분모 0 방어)", () => {
+    expect(referralConversionRate(0, 0)).toBe(0);
+    expect(referralConversionRate(3, 0)).toBe(0);
   });
 });
 

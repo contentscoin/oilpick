@@ -45,7 +45,11 @@ Deno.serve((req) =>
     });
 
     if (rpcErr) {
+      // 안티어뷰즈 판정은 RPC가 raise(단일 정규화). Edge는 코드→HTTP 상태 매핑만 담당.
       const message = rpcErr.message ?? "";
+      if (message.includes("ALREADY_REFERRED")) {
+        return errorResponse("ALREADY_REFERRED", 409);
+      }
       if (message.includes("INVALID_REFERRAL_CODE")) {
         return errorResponse("INVALID_REFERRAL_CODE", 400);
       }
@@ -54,11 +58,6 @@ Deno.serve((req) =>
     }
     if (!referral) {
       return errorResponse("INVALID_REFERRAL_CODE", 400);
-    }
-
-    // 이미 다른 코드로 연결된 점주(선착순 최초 확정) — 요청 코드와 확정 코드 불일치. 멱등이지만 클라이언트에 알린다.
-    if (referral.code !== code) {
-      return errorResponse("ALREADY_REFERRED", 409);
     }
 
     return okResponse({

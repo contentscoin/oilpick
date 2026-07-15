@@ -103,7 +103,8 @@
 ## 라이더 추천 (레퍼럴) 규칙 (09 H — 단일 진실: docs/spec/09-referral.md)
 > 라이더(referrer)가 점주(referred)에게 앱 설치를 영업하는 성장 루프. 08 위에 순수 추가(상태머신·원장 규칙 승계).
 - **추천코드**: `rider_profiles.referral_code`(unique, Crockford base32 8자, Edge `referral-code`가 없으면 생성).
-  공유 링크 `${VITE_REFERRAL_BASE_URL}/ref/<CODE>`(기본 `https://app.oilpick.kr`). 딥링크 `oilpick-user://ref/<code>`.
+  공유 링크는 Edge(referral-code)가 `${REFERRAL_BASE_URL}/ref/<CODE>`로 조립해 반환(REFERRAL_BASE_URL은
+  Supabase 시크릿, 미설정 시 core 상수 `REFERRAL_LINK_BASE`=`https://app.oilpick.kr`). 딥링크 `oilpick-user://ref/<code>`.
 - **연결(attach)**: 점주 가입 직후 저장된 코드로 `referral-attach`(best-effort, 비차단). `fn_attach_referral`이
   APPROVED 라이더 코드만 유효(아니면 INVALID_REFERRAL_CODE), **점주 1인 1회**(referred_supplier_id unique,
   선착순 최초 확정·멱등), 자기추천 차단. 보너스 금액은 core 상수 스냅샷(가입 시점, 이후 상수 변경 무영향).

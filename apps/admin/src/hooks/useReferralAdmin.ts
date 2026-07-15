@@ -1,34 +1,18 @@
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { referralConversionRate } from "@oilpick/core";
 import { supabase } from "../lib/supabaseClient";
 import { queryKeys } from "../lib/queryClient";
-
-// 채널 토픽 인스턴스 시퀀스 — useReferralStatsAdmin은 ReferralsPage에서 두 번(SummarySection·
-// RiderFunnelSection) 마운트되므로 고정 토픽이면 supabase-js가 채널을 공유해 나중 바인딩이
-// 발화하지 않고, 한쪽 unmount의 removeChannel이 공유 채널을 죽인다(useRiderProfile.ts 선례).
-let referralChannelSeq = 0;
+import { fetchDisplayNameMap, sinceIso } from "../lib/adminQueries";
 
 /**
  * [09 H4]【A】레퍼럴 실적분석 데이터 훅.
  *  - 라이더별 퍼널: v_referral_stats(admin은 RLS로 전체 조회) + 이름 join → 가입/활성화/전환율/보너스/보상.
- *  - 일별 추이: v_referral_daily(is_admin() 게이트 뷰) — 일별 가입/당일활성화.
+ *  - 일별 추이: v_referral_daily(is_admin() 게이트 뷰) — 일별 가입/활성화.
  * referrals Realtime(attach/activate) 수신 시 ["admin","referral"] 프리픽스를 invalidate해 폴링 없이 갱신.
- * 원장·referrals 쓰기는 어디에도 없다(조회 전용, 절대 규칙 1).
+ * 원장·referrals 쓰기는 어디에도 없다(조회 전용, 절대 규칙 1). useReferralStatsAdmin은 ReferralsPage 부모에서
+ * 1회만 마운트해 자식(Summary·Funnel)에 props로 내린다 — 다중 마운트 시 고정 채널 토픽 공유 결함을 구조적으로 회피.
  */
-
-async function fetchDisplayNameMap(userIds: string[]): Promise<Map<string, string>> {
-  const unique = [...new Set(userIds)];
-  if (unique.length === 0) return new Map();
-  const { data, error } = await supabase.from("profiles").select("id, display_name").in("id", unique);
-  if (error) throw error;
-  return new Map((data ?? []).map((p) => [p.id as string, p.display_name as string]));
-}
-
-function sinceIso(days: number): string {
-  const since = new Date();
-  since.setDate(since.getDate() - days);
-  return since.toISOString().slice(0, 10);
-}
 
 // ===== 라이더별 추천 퍼널 =====
 
@@ -66,7 +50,7 @@ export function useReferralStatsAdmin() {
             riderName: nameMap.get(riderId) ?? riderId.slice(0, 8),
             signedUp,
             activated,
-            conversion: signedUp > 0 ? Math.round((activated / signedUp) * 100) : 0,
+            conversion: referralConversionRate(activated, signedUp),
             supplierBonusPaid: Number(row.supplier_bonus_paid ?? 0),
             riderRewardEarned: Number(row.rider_reward_earned ?? 0),
           };
@@ -75,9 +59,11 @@ export function useReferralStatsAdmin() {
     },
   });
 
+  // 부모에서 1회만 마운트하므로 고정 토픽으로 충분하다(다중 마운트 시 채널 공유 결함은 구조로 회피 —
+  // 상단 훅 주석). 채널 1개가 ["admin","referral"] 프리픽스를 invalidate해 퍼널·일별 추이를 함께 갱신.
   useEffect(() => {
     const channel = supabase
-      .channel(`admin_referrals_${++referralChannelSeq}`)
+      .channel("admin_referrals")
       .on("postgres_changes", { event: "*", schema: "public", table: "referrals" }, () => {
         queryClient.invalidateQueries({ queryKey: ["admin", "referral"] });
       })
