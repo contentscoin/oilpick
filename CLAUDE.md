@@ -9,7 +9,8 @@
 - `docs/spec/02-api.md` — Edge Functions 명세 (엔드포인트/입출력/에러코드)
 - `docs/spec/03-frontend.md` — 모노레포 구조, 라우팅, 화면별 스펙, 디자인 토큰
 - `docs/spec/04-tasks.md` — 작업 순서와 완료 기준 (위에서부터 순서대로 진행)
-- `docs/spec/07-pivot-plan.md` — 수거쿠폰 피벗(2차 고도화 F-태스크). 신모델·쿠폰 원장·상태머신 재정의의 단일 진실
+- `docs/spec/07-pivot-plan.md` — 수거쿠폰 피벗(2차 고도화 F-태스크). **08이 쿠폰 모델을 폐기 — 이력 참조용**
+- `docs/spec/08-payout-pivot.md` — 현장 지급수단 피벗(3차 고도화 G-태스크). 쿠폰 폐기·포인트 복권(현금/포인트 지급, 출금 부활)·상태머신 부수효과 재정의의 단일 진실
 
 ## 스택 (변경 금지)
 - pnpm workspace + Turborepo. Node 18 LTS (환경 확인됨: v18.19.1, pnpm 10.14.0), TypeScript strict.

@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import type { OrderStatus } from "@oilpick/core";
+import type { OrderStatus, PayoutMethod } from "@oilpick/core";
 import { supabase } from "../lib/supabaseClient";
 import { queryKeys } from "../lib/queryClient";
 
@@ -9,6 +9,8 @@ export interface OrderHistoryItem {
   requestedKg: number;
   finalKg: number | null;
   supplierPoint: number | null;
+  /** [08 P2] 현장 지급수단. null=레거시(완료 시 CASH 간주 — 08 P3). */
+  payoutMethod: PayoutMethod | null;
   cashPaidAmount: number | null;
   createdAt: string;
 }
@@ -31,7 +33,7 @@ export function useOrderHistory(userId: string | undefined, page: number) {
 
       const { data, error } = await supabase
         .from("pickup_orders")
-        .select("id, status, requested_kg, final_kg, supplier_point, cash_paid_amount, created_at")
+        .select("id, status, requested_kg, final_kg, supplier_point, payout_method, cash_paid_amount, created_at")
         .eq("supplier_id", userId)
         .order("created_at", { ascending: false })
         .range(from, to);
@@ -45,6 +47,7 @@ export function useOrderHistory(userId: string | undefined, page: number) {
         requestedKg: row.requested_kg,
         finalKg: row.final_kg,
         supplierPoint: row.supplier_point,
+        payoutMethod: row.payout_method ?? null,
         cashPaidAmount: row.cash_paid_amount,
         createdAt: row.created_at,
       }));

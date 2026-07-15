@@ -235,6 +235,8 @@ export interface AdminOrderDetail extends Omit<AdminOrderRow, "arrivedAt"> {
   snapshotPricePerKg: number;
   /** 07 F10-⑤: 소진 쿠폰 장수(주문 생성 시 스냅샷). 레거시 주문은 null. */
   couponCost: number | null;
+  /** [08 P2] 현장 지급수단. null=레거시(완료 표시는 CASH 간주 — 08 P3). */
+  payoutMethod: "CASH" | "POINT" | null;
   /** 07 F10-⑤: 완료 시 지급된 현금(round(final_kg×snapshot_price)). 미완료 null. */
   cashPaidAmount: number | null;
   completedAt: string | null;
@@ -252,7 +254,7 @@ export function useAdminOrderDetail(orderId: string | undefined) {
         supabase
           .from("pickup_orders")
           .select(
-            "id, status, supplier_id, rider_id, requested_kg, final_kg, measured_kg, photo_urls, dispute_reason, cancel_reason, pickup_address, created_at, snapshot_price_per_kg, coupon_cost, cash_paid_amount, completed_at",
+            "id, status, supplier_id, rider_id, requested_kg, final_kg, measured_kg, photo_urls, dispute_reason, cancel_reason, pickup_address, created_at, snapshot_price_per_kg, coupon_cost, payout_method, cash_paid_amount, completed_at",
           )
           .eq("id", orderId)
           .maybeSingle(),
@@ -285,6 +287,7 @@ export function useAdminOrderDetail(orderId: string | undefined) {
         createdAt: data.created_at,
         snapshotPricePerKg: data.snapshot_price_per_kg,
         couponCost: data.coupon_cost !== null && data.coupon_cost !== undefined ? Number(data.coupon_cost) : null,
+        payoutMethod: (data.payout_method ?? null) as "CASH" | "POINT" | null,
         cashPaidAmount:
           data.cash_paid_amount !== null && data.cash_paid_amount !== undefined ? Number(data.cash_paid_amount) : null,
         completedAt: data.completed_at ?? null,

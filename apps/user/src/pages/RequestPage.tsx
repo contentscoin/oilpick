@@ -29,10 +29,10 @@ import { AddressField, type AddressValue } from "../components/AddressField";
 
 /**
  * U5 요청 3스텝. 03-frontend.md(07 F9 개정): 3스텝 골격 유지 +
- * ① 전 스텝 공통 sticky 예상 현금 수령액 푸터 ② 최근 주소 재사용 칩 ③ 통 크기 프리셋
+ * ① 전 스텝 공통 sticky 예상 수령액 푸터(08 G5-⑥ 수단 중립 카피) ② 최근 주소 재사용 칩 ③ 통 크기 프리셋
  * ④ 희망시간 퀵칩 ⑤ 제출 성공 ConfirmSheet + 스텝 인디케이터.
  *
- * 카피는 신모델(07 D1): "예상 포인트" → "예상 현금 수령액"(P → 원). coupon_cost는 서버가
+ * 카피는 08 신모델: "예상 수령액"(지급수단은 현장에서 현금/포인트 중 결정 — 수단 중립). requestedKg는 서버가
  * requestedKg 기준으로 산정하므로(07 §1-2) 클라이언트는 kg만 정확히 보내면 된다.
  */
 
@@ -381,7 +381,7 @@ export function RequestPage() {
         </section>
       )}
 
-      {/* ① 전 스텝 공통 sticky 예상 현금 수령액 푸터. */}
+      {/* ① 전 스텝 공통 sticky 예상 수령액 푸터(수단 중립 — 08 G5-⑥). */}
       <div
         data-testid="request-estimate-footer"
         style={{
@@ -397,7 +397,7 @@ export function RequestPage() {
       >
         <div style={{ maxWidth: 480, margin: "0 auto", padding: "12px 20px", display: "flex", flexDirection: "column", gap: 2 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-            <span style={{ fontSize: 14, color: colors.status.wait }}>예상 현금 수령액</span>
+            <span style={{ fontSize: 14, color: colors.status.wait }}>예상 수령액</span>
             <span
               data-testid="request-estimate-cash"
               className="oilpick-tabular-nums"

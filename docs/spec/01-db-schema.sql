@@ -6,14 +6,18 @@ create extension if not exists postgis;
 -- ===== enums =====
 create type user_role as enum ('supplier','rider','admin');
 create type order_status as enum ('REQUESTED','ACCEPTED','ARRIVED','PICKED_UP','DELIVERED','COMPLETED','CANCELLED','DISPUTED');
-create type ledger_type as enum ('EARN','HOLD','RELEASE','WITHDRAW_REQUEST','WITHDRAW_CANCEL','ADJUST','PURCHASE'); -- 레거시(신규 발행 중지, 07 D1)
+-- [08 P3·P4] 포인트 복권 — 현역: EARN(POINT 지급수단 적립)/WITHDRAW_REQUEST/WITHDRAW_CANCEL/ADJUST.
+-- 레거시 전용(신규 발행 없음): HOLD/RELEASE(구모델 수거비), PURCHASE(미래 예약).
+create type ledger_type as enum ('EARN','HOLD','RELEASE','WITHDRAW_REQUEST','WITHDRAW_CANCEL','ADJUST','PURCHASE');
 -- [07 F2] SUSPENDED 추가(실 마이그레이션은 별도 파일의 alter type add value — 사용 트랜잭션과 분리. 액션·정책은 07 F11)
 create type verify_status as enum ('PENDING','APPROVED','REJECTED','SUSPENDED');
-create type withdraw_status as enum ('REQUESTED','APPROVED','REJECTED','PAID'); -- 레거시(출금 폐기, 07 D1/F13)
--- [07 F2] 수거쿠폰 원장 항목 타입
+create type withdraw_status as enum ('REQUESTED','APPROVED','REJECTED','PAID'); -- [08 P4] 현역 복권(출금 부활)
+-- [07 F2] 수거쿠폰 원장 항목 타입 — [08 P1] 레거시(신규 발행 중지, 전환기 CONSUME/REFUND만 잔존)
 create type coupon_entry_type as enum ('CHARGE','CONSUME','REFUND','ADJUST');
--- [07 F2] 쿠폰 구매(PG 결제) 상태 — EXPIRED 포함(orphan PENDING 24h TTL, 07 §1-4)
+-- [07 F2] 쿠폰 구매(PG 결제) 상태 — [08 P1] 레거시(coupon-* 함수 일몰)
 create type coupon_purchase_status as enum ('PENDING','PAID','FAILED','EXPIRED','REFUNDED');
+-- [08 P2] 현장 지급수단(실 DDL: 20260715000001)
+create type payout_method as enum ('CASH','POINT');
 
 -- ===== profiles =====
 create table profiles (
@@ -89,12 +93,13 @@ create table pickup_orders (
   -- 스냅샷 (생성 시 고정)
   snapshot_price_per_kg int not null,
   snapshot_rider_fee int,                   -- [07 F2] 레거시 — not null 해제, 신규 미기록
-  coupon_cost int,                          -- [07 F2] 소진 쿠폰 장수 스냅샷 = ceil(requested_kg/KG_PER_CAN). 레거시 주문 null(CONSUME/REFUND skip)
+  coupon_cost int,                          -- [08 P1] 레거시 — 07 쿠폰 스냅샷. order-create가 기록 중지(신규 항상 null → CONSUME/REFUND skip)
   -- 확정 정보
   measured_kg numeric(8,1),                 -- 라이더 계량
-  final_kg numeric(8,1),                    -- 확정(중재 반영) — 현금/EARN 계산 기준
-  supplier_point int,                       -- 레거시 — 지급된 EARN
-  cash_paid_amount int,                     -- [07 F2] 현장 지급 현금(원) = round(final_kg × snapshot_price_per_kg). COMPLETED 시 기록
+  final_kg numeric(8,1),                    -- 확정(중재 반영) — 지급액/EARN 계산 기준
+  supplier_point int,                       -- 레거시(구모델) — 지급된 EARN
+  payout_method payout_method,              -- [08 P2] 현장 지급수단('CASH'|'POINT'). SUBMIT_MEASURE에서 라이더 선택. null=레거시(완료 시 CASH 간주)
+  cash_paid_amount int,                     -- [08 P3] 확정 지급액 = round(final_kg × snapshot_price_per_kg). POINT 지급도 이 컬럼(1P=1원). COMPLETED 시 기록
   photo_urls text[] not null default '{}',
   cancel_reason text,
   dispute_reason text,
@@ -119,7 +124,9 @@ create table order_events (
 create index idx_order_events_order on order_events (order_id, created_at);
 
 -- ===== 포인트 원장 (append-only) =====
--- 레거시 — 신규 발행 중지(07 D1). 테이블·과거 데이터는 회계 기록으로 보존, 신규 EARN/HOLD/RELEASE/WITHDRAW insert 없음.
+-- [08 P3·P4] 현역 복권 — POINT 지급수단의 EARN(fn_transition_order CONFIRM_MEASURE/FORCE_COMPLETE),
+-- 출금 WITHDRAW_REQUEST/WITHDRAW_CANCEL(fn_request_withdraw/fn_process_withdraw), admin ADJUST(point-adjust).
+-- HOLD/RELEASE는 레거시 전용(신규 발행 없음 — 07 D1 보강 유지). insert는 service_role RPC에만(절대 규칙 1).
 create table point_ledger (
   id bigint generated always as identity primary key,
   user_id uuid not null references profiles(id),
@@ -163,9 +170,10 @@ select
                     else 0 end),0)::int as held
 from point_ledger group by user_id;
 
--- ===== 수거쿠폰 [07 F2] =====
--- 신모델 플랫폼 수익원. 절대 규칙 1 확장: coupon_ledger insert는 service_role RPC
--- (fn_charge_coupon/fn_consume_coupon)에만 존재, 잔액은 v_coupon_balance 뷰로만 조회.
+-- ===== 수거쿠폰 [07 F2] — [08 P1] 레거시(신규 발행 중지) =====
+-- 07 모델의 플랫폼 수익원이었으나 08 피벗으로 폐기. 테이블·뷰·RPC·과거 데이터는 회계 감사용 보존
+-- (삭제 금지). 신규 발행 경로는 order-create의 coupon_cost 중지 + coupon-* Edge Function 삭제로 소멸,
+-- 전환기 잔존 주문(coupon_cost not null)의 CONSUME/REFUND 분기만 fn_transition_order에 잔존.
 
 -- 쿠폰 단가 tick (price_ticks 패턴 미러: 전체 read, admin insert, update/delete 정책 없음=정정 불가·신규 tick만)
 create table coupon_price_ticks (
@@ -251,8 +259,16 @@ from coupon_ledger group by rider_id;
 --   미승인 라이더 신규 콜 수락 차단(최심층 방어). 게이트는 ACCEPT에만; 진행 전이는 무게이트(진행중 완결 허용).
 -- fn_transition_order 레거시 RELEASE 제거(20260709000010_rpc_transition_drop_legacy_release.sql, 07 D1 보강):
 --   DELIVER(레거시 완결) 분기의 fn_post_ledger RELEASE 호출 제거 — 배송 완료는 라이더 지급 이벤트가
---   아니다(라이더는 쿠폰 구매 측). 이로써 point_ledger 신규 insert 경로 0(위 "신규 발행 중지" 주석이
---   문자 그대로 성립). 완결 전이·QR 검증은 유지, 잔존 HOLD는 held 잔존(과거 회계 기록).
+--   아니다(라이더는 쿠폰 구매 측). 완결 전이·QR 검증은 유지, 잔존 HOLD는 held 잔존(과거 회계 기록).
+-- fn_transition_order 현장 지급수단 개정(20260715000002_rpc_transition_payout.sql, 08 G2-②):
+--   SUBMIT_MEASURE가 payload.payoutMethod('CASH'|'POINT')를 검증해 pickup_orders.payout_method 기록
+--   (생략 시 CASH 폴백 — 구버전 호환. 재제출로 수단 변경 가능). CONFIRM_MEASURE/FORCE_COMPLETE는
+--   coalesce(payout_method,'CASH')='POINT'면 같은 트랜잭션에서 fn_post_ledger(supplier,'EARN',
+--   cash_paid_amount, order_id) 발행 — 포인트 복권의 유일한 적립 경로. 멱등은 point_ledger
+--   unique(order_id, entry_type, user_id). ACCEPT/CANCEL의 쿠폰 분기는 전환기 잔존 주문 전용 보존(08 P1).
+-- 출금 RPC 복권(08 P4 — 기존 정의 그대로 현역): fn_request_withdraw(20260704000007, user 단위
+--   FOR UPDATE 직렬화·최소 10,000P·WITHDRAW_REQUEST(-)+withdrawals insert 원자) /
+--   fn_process_withdraw(20260704000008, REQUESTED→APPROVED→PAID / REJECTED 시 WITHDRAW_CANCEL(+) 복구).
 
 -- ===== 쿠폰 구매 확정·환불 RPC [07 F4] — 실 정의는 supabase/migrations/20260709000005_rpc_purchase.sql =====
 -- PG 결제(토스페이먼츠) 경로. 둘 다 SECURITY DEFINER + search_path=public + revoke all/grant service_role.
@@ -369,7 +385,9 @@ from coupon_ledger
 where is_admin()
 group by 1;
 
--- 수거 활동 추이: 일별 COMPLETED 건수/final_kg 합/cash_paid_amount 합(completed_at 기준). 쿠폰 매출과 상관 분석용.
+-- 수거 활동 추이: 일별 COMPLETED 건수/final_kg 합/지급액(completed_at 기준).
+-- [08 G2-③] 수단별 분리 컬럼 append(실 DDL: 20260715000001) — total_cash는 "총 지급액"(현금+포인트)로
+-- 의미 확장(07까지는 전액 현금이라 동치). admin KPI는 cash_amount/point_amount를 사용.
 create view v_pickup_stats_daily
   with (security_invoker = true)
 as
@@ -377,10 +395,30 @@ select
   completed_at::date            as day,
   count(*)                      as completed_count,
   coalesce(sum(final_kg),0)     as total_kg,
-  coalesce(sum(cash_paid_amount),0)::int as total_cash
+  coalesce(sum(cash_paid_amount),0)::int as total_cash,
+  coalesce(sum(cash_paid_amount) filter (where coalesce(payout_method,'CASH')='CASH'),0)::int  as cash_amount,
+  coalesce(sum(cash_paid_amount) filter (where payout_method='POINT'),0)::int                  as point_amount,
+  count(*) filter (where coalesce(payout_method,'CASH')='CASH') as cash_count,
+  count(*) filter (where payout_method='POINT')                 as point_count
 from pickup_orders
 where status='COMPLETED' and completed_at is not null and is_admin()
 group by 1;
+
+-- [08 G2-④] 라이더별 지급 실적(admin 전용, 08 P5) — 포인트 지급분은 플랫폼이 점주에게 부담(EARN)하므로
+-- 라이더-플랫폼 오프라인 정산·청구의 대사 근거. 실 DDL: 20260715000001.
+create view v_rider_payout_daily
+  with (security_invoker = true)
+as
+select
+  rider_id,
+  completed_at::date as day,
+  count(*)           as completed_count,
+  coalesce(sum(final_kg),0) as total_kg,
+  coalesce(sum(cash_paid_amount) filter (where coalesce(payout_method,'CASH')='CASH'),0)::int as cash_amount,
+  coalesce(sum(cash_paid_amount) filter (where payout_method='POINT'),0)::int                 as point_amount
+from pickup_orders
+where status='COMPLETED' and completed_at is not null and rider_id is not null and is_admin()
+group by 1, 2;
 
 -- profiles: 본인 R/W(role 변경 불가는 컬럼 권한으로), admin 전체 R
 -- 성능 advisor(auth_rls_initplan): auth.uid()는 (select auth.uid())로 감싸 행마다 재평가되지 않고

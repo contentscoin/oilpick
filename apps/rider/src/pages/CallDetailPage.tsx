@@ -1,18 +1,16 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { BigButton, ErrorScreen, MapView, PageHeader, colors, elevation, gradient, gray, radius, surface, useToast } from "@oilpick/ui";
-import { INSUFFICIENT_COUPON, estimateCash, formatKg, formatKrw } from "@oilpick/core";
+import { BigButton, ErrorScreen, MapView, PageHeader, colors, elevation, gradient, gray, radius, surface, surfaceDark, useToast } from "@oilpick/ui";
+import { estimateCash, formatKg, formatKrw } from "@oilpick/core";
 import { KAKAO_KEY } from "../lib/env";
 import { invokeEdgeFunction } from "../lib/edgeFunction";
 import { useOpenCalls } from "../hooks/useOpenCalls";
-import { useSession } from "../hooks/useSession";
-import { useCouponBalance } from "../hooks/useCoupons";
 
 /**
- * R3 콜 상세. 03-frontend.md(07 F5): "MapView + 예상 매입 지급액 대형 표시 + 쿠폰 N장 소진 +
- * [수락]". 07 F5 수락 게이트: 잔액 < coupon_cost면 사전에 "쿠폰 부족" + [충전하러 가기] CTA로
- * fail-fast, 수락 API가 INSUFFICIENT_COUPON(409) 반환 시 토스트 + 동일 CTA(동시성 방어는 RPC가
- * 유일 진실, 여기 사전 체크는 UX용).
+ * R3 콜 상세. 03-frontend.md(08 G6-②): "MapView + 예상 매입 지급액 대형 표시 + [수락]".
+ * 08 P1로 쿠폰 게이트가 소멸 — 수락은 무비용이라 잔액 사전 체크·충전 CTA가 없다.
+ * 전환기 레거시 쿠폰 주문의 수락이 409 INSUFFICIENT_COUPON으로 거부되면 코어의 한국어
+ * 메시지를 그대로 토스트하고 목록으로 복귀한다(충전 플로우 자체가 폐기됨).
  *
  * 별도 단건 조회 Edge Function/쿼리를 새로 만들지 않고 useOpenCalls(R2와 동일 목록 쿼리)
  * 캐시에서 id로 찾는다 — RLS p_order_open_calls는 REQUESTED 상태에서만 select를 허용하므로
@@ -21,17 +19,13 @@ import { useCouponBalance } from "../hooks/useCoupons";
 export function CallDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { session } = useSession();
   const { data: calls, isLoading } = useOpenCalls(true);
-  const { data: couponBalance } = useCouponBalance(session?.user.id);
   const call = calls?.find((c) => c.id === id);
 
   // 06 E6: mutation 성공/실패 피드백은 전역 토스트로 통일(원시 <Toast> 인라인 렌더 대체).
   const { showToast } = useToast();
 
   const [accepting, setAccepting] = useState(false);
-  // 409 INSUFFICIENT_COUPON 반환 시 CTA를 띄우고 이 페이지에 머문다(사전 체크를 통과한 경합 상황).
-  const [gateBlocked, setGateBlocked] = useState(false);
 
   async function handleAccept() {
     if (!id) return;
@@ -42,12 +36,8 @@ export function CallDetailPage() {
     setAccepting(false);
 
     if (!result.ok) {
-      if (result.code === INSUFFICIENT_COUPON) {
-        // 쿠폰 부족: 목록으로 튕기지 않고 CTA를 노출해 바로 충전으로 유도.
-        showToast(result.message, { variant: "error" });
-        setGateBlocked(true);
-        return;
-      }
+      // 409 INSUFFICIENT_COUPON(전환기 레거시 주문) 포함 — 코어 매핑 한국어 메시지를 그대로
+      // 토스트하고 목록으로 복귀(08 P1: 충전 CTA 없음, 쿠폰 플로우 폐기).
       showToast(result.message, { variant: "error" });
       setTimeout(() => navigate("/", { replace: true }), 1500);
       return;
@@ -117,22 +107,10 @@ export function CallDetailPage() {
           <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: colors.status.wait }}>예상 수거량</p>
           <p className="oilpick-tabular-nums" style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>{formatKg(call.requestedKg)}</p>
         </div>
-        {/* 07 F5-④: 소진 쿠폰(coupon_cost). 레거시 주문(null)은 생략. */}
-        {call.couponCost != null && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: colors.status.wait }}>소진 쿠폰</p>
-            <p
-              data-testid="call-detail-coupon"
-              className="oilpick-tabular-nums"
-              style={{ margin: 0, fontSize: 16, fontWeight: 600 }}
-            >
-              쿠폰 {call.couponCost}장 소진
-            </p>
-          </div>
-        )}
       </section>
 
-      {/* 07 F5-④: "수거비"→"예상 매입 지급액"(라이더가 점주에게 낼 현금 = requestedKg×시세). 앰버 히어로. */}
+      {/* 08 G6-②: "예상 매입 지급액"(requestedKg×스냅샷 시세) 앰버 히어로 유지 — 지급 수단(현금/포인트)은
+          현장 계량 제출 때 선택하므로 카피는 수단 중립. */}
       <section
         data-testid="call-detail-cash"
         style={{
@@ -146,42 +124,16 @@ export function CallDetailPage() {
           boxShadow: elevation.raised,
         }}
       >
-        <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "rgba(255,255,255,0.85)" }}>예상 매입 지급액</p>
-        <p className="oilpick-tabular-nums" style={{ margin: 0, fontSize: 40, fontWeight: 800, letterSpacing: "-0.02em", color: "#FFFFFF" }}>
+        <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: surfaceDark.textOnDarkMuted }}>예상 매입 지급액</p>
+        <p className="oilpick-tabular-nums" style={{ margin: 0, fontSize: 40, fontWeight: 800, letterSpacing: "-0.02em", color: surfaceDark.textOnDark }}>
           {formatKrw(estimateCash(call.requestedKg, call.snapshotPricePerKg))}
         </p>
-        <p style={{ margin: 0, fontSize: 12, color: "rgba(255,255,255,0.85)" }}>현장 계량 기준으로 확정 · 점주에게 직접 지급</p>
+        <p style={{ margin: 0, fontSize: 12, color: surfaceDark.textOnDarkMuted }}>현장 계량 기준으로 확정 · 현금 또는 포인트로 지급</p>
       </section>
 
-      {/* 07 F5-⑤: 수락 게이트. 잔액 < coupon_cost(사전 체크) 또는 409 반환 시 충전 유도 CTA. */}
-      {call.couponCost != null && ((couponBalance ?? 0) < call.couponCost || gateBlocked) ? (
-        <section
-          data-testid="call-accept-gate"
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 12,
-            padding: 16,
-            borderRadius: radius.card,
-            backgroundColor: colors.accent.light,
-            border: `1px solid ${surface.border}`,
-          }}
-        >
-          <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: colors.status.danger }}>
-            수거쿠폰이 부족해요 (보유 {couponBalance ?? 0}장 / 필요 {call.couponCost}장)
-          </p>
-          <BigButton
-            data-testid="call-charge-cta"
-            onClick={() => navigate("/coupons/purchase")}
-          >
-            충전하러 가기
-          </BigButton>
-        </section>
-      ) : (
-        <BigButton data-testid="call-accept-button" loading={accepting} onClick={handleAccept}>
-          수락
-        </BigButton>
-      )}
+      <BigButton data-testid="call-accept-button" loading={accepting} onClick={handleAccept}>
+        수락
+      </BigButton>
     </main>
   );
 }

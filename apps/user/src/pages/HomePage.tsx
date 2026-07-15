@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   BigButton,
   PriceChart,
+  PriceStatsRow,
   SegmentToggle,
   StatusBadge,
   colors,
@@ -16,7 +17,7 @@ import {
   usePrefersReducedMotion,
   type PriceChartPoint,
 } from "@oilpick/ui";
-import { ORDER_STATUS_LABEL, dailyChange, formatKg, formatKrw, resampleDaily } from "@oilpick/core";
+import { ORDER_STATUS_LABEL, dailyChange, formatKg, formatKrw, formatPoint, resampleDaily } from "@oilpick/core";
 import { useSession } from "../hooks/useSession";
 import { usePriceTicksSince, type PriceTicksSinceDays } from "../hooks/usePriceTicks";
 import { useActiveOrder } from "../hooks/useActiveOrder";
@@ -338,6 +339,9 @@ export function HomePage() {
                 </p>
               )}
 
+              {/* 08 G4-②: 기간 최고/최저/평균/등락률 — 차트와 토글 사이(다크 톤). */}
+              {hasChart && <PriceStatsRow data={daily} onDark />}
+
               <SegmentToggle
                 options={[
                   { value: "7", label: "7일" },
@@ -382,15 +386,15 @@ export function HomePage() {
           </button>
         )}
 
-        {/* 이번 달 현금 수령 요약 1줄 카드 → 수령 이력 */}
+        {/* 08 G5-④: 이번 달 수령 요약 — 현금/포인트 분리 카드 → 지갑. */}
         <button
           type="button"
           data-testid="cash-receipt-summary"
           onClick={() => navigate("/wallet")}
           style={{
             display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
+            flexDirection: "column",
+            gap: 10,
             borderRadius: radius.card,
             padding: "16px 18px",
             backgroundColor: surface.card,
@@ -398,17 +402,34 @@ export function HomePage() {
             boxShadow: elevation.card,
             textAlign: "left",
             cursor: "pointer",
+            width: "100%",
           }}
         >
-          <span style={{ fontSize: typeScale.body, fontWeight: 600, color: colors.status.wait }}>이번 달 수령</span>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <span
-              className="oilpick-tabular-nums"
-              style={{ fontSize: typeScale.title, fontWeight: 800, color: colors.status.done }}
-            >
-              {formatKrw(monthly?.cash ?? 0)}
-            </span>
+          <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+            <span style={{ fontSize: typeScale.body, fontWeight: 600, color: colors.status.wait }}>이번 달 수령</span>
             <span aria-hidden style={{ color: gray[400], fontSize: typeScale.body }}>&gt;</span>
+          </span>
+          <span style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, width: "100%" }}>
+            <span style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <span style={{ fontSize: typeScale.caption, color: colors.status.wait }}>💵 현금</span>
+              <span
+                data-testid="monthly-cash-amount"
+                className="oilpick-tabular-nums"
+                style={{ fontSize: typeScale.title, fontWeight: 800, color: colors.status.done }}
+              >
+                {formatKrw(monthly?.cash ?? 0)}
+              </span>
+            </span>
+            <span style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <span style={{ fontSize: typeScale.caption, color: colors.status.wait }}>🪙 포인트</span>
+              <span
+                data-testid="monthly-point-amount"
+                className="oilpick-tabular-nums"
+                style={{ fontSize: typeScale.title, fontWeight: 800, color: colors.accent.deep }}
+              >
+                {formatPoint(monthly?.point ?? 0)}
+              </span>
+            </span>
           </span>
         </button>
 

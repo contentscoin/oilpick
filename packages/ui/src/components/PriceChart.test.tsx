@@ -87,6 +87,49 @@ describe("PriceChart", () => {
     expect(screen.queryByTestId("price-chart-tooltip")).not.toBeInTheDocument();
   });
 
+  it("[08 G4] v2: 기간 최고/최저 마커와 마지막 값 펄스 도트를 렌더한다", () => {
+    render(<PriceChart data={RISING} />);
+    expect(screen.getByTestId("price-chart-extremes")).toBeInTheDocument();
+    expect(screen.getByTestId("price-chart-pulse")).toBeInTheDocument();
+    // 최고 730 / 최저 700 라벨.
+    expect(screen.getByText("730원")).toBeInTheDocument();
+    expect(screen.getByText("700원")).toBeInTheDocument();
+  });
+
+  it("[08 G4] v2: showExtremes=false·pulse=false로 끌 수 있다(하위호환)", () => {
+    render(<PriceChart data={RISING} showExtremes={false} pulse={false} />);
+    expect(screen.queryByTestId("price-chart-extremes")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("price-chart-pulse")).not.toBeInTheDocument();
+  });
+
+  it("[08 G4] v2: showGrid=true면 y축 가이드 3선을 렌더한다(기본 off)", () => {
+    const { rerender } = render(<PriceChart data={RISING} />);
+    expect(screen.queryByTestId("price-chart-grid")).not.toBeInTheDocument();
+    rerender(<PriceChart data={RISING} showGrid />);
+    expect(screen.getByTestId("price-chart-grid")).toBeInTheDocument();
+  });
+
+  it("[08 G4] v2: 스크럽 툴팁에 전일 대비를 병기한다(첫 점은 생략)", () => {
+    render(<PriceChart data={RISING} />);
+    const svg = screen.getByTestId("price-chart");
+    stubRect(svg, 340);
+
+    // 마지막 점(730): 전일(710) 대비 ▲20원.
+    fireEvent.pointerMove(svg, { clientX: 340 });
+    expect(screen.getByTestId("price-chart-tooltip-diff")).toHaveTextContent("전일 대비 ▲20원");
+
+    // 첫 점: 전일이 없어 diff 미표시.
+    fireEvent.pointerMove(svg, { clientX: 0 });
+    expect(screen.queryByTestId("price-chart-tooltip-diff")).not.toBeInTheDocument();
+  });
+
+  it("[08 G4] v2: 소극 스무딩 기본(on) — 곡선(C) 세그먼트, smooth=false면 폴리라인(L)", () => {
+    const { rerender } = render(<PriceChart data={RISING} />);
+    expect(screen.getByTestId("price-chart-line").getAttribute("d")).toContain("C");
+    rerender(<PriceChart data={RISING} smooth={false} />);
+    expect(screen.getByTestId("price-chart-line").getAttribute("d")).not.toContain("C");
+  });
+
   it("respects prefers-reduced-motion: no draw-in transition, dashoffset 0", () => {
     window.matchMedia = vi.fn().mockImplementation((query: string) => ({
       matches: true,

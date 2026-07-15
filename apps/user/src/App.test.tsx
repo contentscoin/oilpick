@@ -117,7 +117,7 @@ describe("App routing", () => {
     }
   });
 
-  it("renames the 포인트 tab to 수령액 (07 F8)", async () => {
+  it("renames the 수령액 tab to 지갑 (08 G5-①)", async () => {
     authenticate();
     render(
       <MemoryRouter initialEntries={["/"]}>
@@ -126,8 +126,8 @@ describe("App routing", () => {
     );
     await screen.findByTestId("home-page", undefined, WAIT);
     const tabBar = screen.getByTestId("tab-bar");
-    expect(tabBar).toHaveTextContent("수령액");
-    expect(tabBar).not.toHaveTextContent("포인트");
+    expect(tabBar).toHaveTextContent("지갑");
+    expect(tabBar).not.toHaveTextContent("수령액");
   });
 
   it("renders flow screens full-screen without the tab bar (E1)", async () => {

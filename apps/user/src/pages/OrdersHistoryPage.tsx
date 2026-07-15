@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { EmptyState, PageHeader, StatusBadge, colors, gray, radius, surface } from "@oilpick/ui";
+import { EmptyState, PageHeader, PayoutMethodChip, StatusBadge, colors, gray, radius, surface } from "@oilpick/ui";
 import { formatKg, formatKrw, formatPoint } from "@oilpick/core";
 import { useSession } from "../hooks/useSession";
 import { useOrderHistory } from "../hooks/useOrderHistory";
@@ -85,10 +85,16 @@ export function OrdersHistoryPage() {
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ fontSize: 14 }}>{formatKg(order.finalKg ?? order.requestedKg)}</span>
-                  {/* 07 F9: 신모델 완료 주문은 현장 수령 현금. 레거시(supplier_point) 주문은 포인트 표기(레거시 렌더 분기). */}
+                  {/* 08 G5-⑦: 완료 주문은 확정 지급액 + 지급수단 칩(null=레거시 현금 간주). 레거시(supplier_point) 주문은 포인트 표기(레거시 렌더 분기). */}
                   {order.cashPaidAmount != null ? (
-                    <span className="oilpick-tabular-nums" style={{ fontSize: 16, fontWeight: 700, color: colors.primary.dark }}>
-                      {formatKrw(order.cashPaidAmount)}
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      <PayoutMethodChip method={order.payoutMethod ?? "CASH"} />
+                      <span
+                        className="oilpick-tabular-nums"
+                        style={{ fontSize: 16, fontWeight: 700, color: order.payoutMethod === "POINT" ? colors.accent.deep : colors.primary.dark }}
+                      >
+                        {order.payoutMethod === "POINT" ? formatPoint(order.cashPaidAmount) : formatKrw(order.cashPaidAmount)}
+                      </span>
                     </span>
                   ) : (
                     order.supplierPoint != null && (

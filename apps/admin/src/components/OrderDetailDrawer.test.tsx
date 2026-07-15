@@ -35,6 +35,7 @@ function makeOrder(overrides: Partial<AdminOrderDetail> = {}): AdminOrderDetail 
     cancelReason: null,
     snapshotPricePerKg: 900,
     couponCost: 2,
+    payoutMethod: "CASH",
     cashPaidAmount: null,
     completedAt: null,
     refunded: false,
@@ -55,26 +56,41 @@ afterEach(() => {
   mockInvoke.mockReset();
 });
 
-describe("쿠폰/현금 표기 (07 F10-⑤)", () => {
-  it("coupon_cost·환급 여부·cash_paid_amount를 표시한다", () => {
+describe("지급수단/지급액 표기 (08 G7-③)", () => {
+  it("CASH 완료 주문: 현금 뱃지 + 원화 지급액 + 레거시 쿠폰 필드 병기", () => {
     renderDrawer(
       makeOrder({ status: "COMPLETED", finalKg: 25, cashPaidAmount: 22500, refunded: false, disputeReason: null }),
     );
-    expect(screen.getByTestId("order-coupon-cost")).toHaveTextContent("2장");
+    expect(screen.getByTestId("order-payout-method")).toHaveTextContent("현금");
     expect(screen.getByTestId("order-cash-paid")).toHaveTextContent("22,500원");
-    expect(screen.getByTestId("order-coupon-refunded")).toHaveTextContent("-");
-    // 구모델 포인트 표기 부재.
-    expect(screen.queryByText(/포인트/)).not.toBeInTheDocument();
+    // 픽스처는 레거시 쿠폰 주문(couponCost 2) — 소진 쿠폰 필드가 병기된다.
+    expect(screen.getByTestId("order-coupon-cost")).toHaveTextContent("2장");
   });
 
-  it("REFUND 원장이 있는 취소 주문은 '환급됨' 배지를 표시한다", () => {
+  it("POINT 완료 주문: 포인트 뱃지 + P 지급액", () => {
+    renderDrawer(
+      makeOrder({
+        status: "COMPLETED",
+        finalKg: 25,
+        payoutMethod: "POINT",
+        cashPaidAmount: 22500,
+        couponCost: null,
+        refunded: false,
+        disputeReason: null,
+      }),
+    );
+    expect(screen.getByTestId("order-payout-method")).toHaveTextContent("포인트");
+    expect(screen.getByTestId("order-cash-paid")).toHaveTextContent("22,500P");
+  });
+
+  it("REFUND 원장이 있는 레거시 취소 주문은 '환급됨' 배지를 표시한다", () => {
     renderDrawer(makeOrder({ status: "CANCELLED", refunded: true, disputeReason: null, cancelReason: "점주 노쇼" }));
     expect(screen.getByTestId("order-coupon-refunded")).toHaveTextContent("환급됨");
   });
 
-  it("레거시 주문(coupon_cost null)은 '- (레거시)'로 표기한다", () => {
+  it("신규 주문(coupon_cost null)은 쿠폰 필드를 렌더하지 않는다(08 P1)", () => {
     renderDrawer(makeOrder({ couponCost: null }));
-    expect(screen.getByTestId("order-coupon-cost")).toHaveTextContent("- (레거시)");
+    expect(screen.queryByTestId("order-coupon-cost")).not.toBeInTheDocument();
   });
 });
 

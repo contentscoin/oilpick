@@ -28,7 +28,7 @@ const ROLE_LABEL: Record<CsTicketRow["role"], string> = {
 /**
  * 03-frontend.md apps/admin "/cs" (신설, 07 F12): 문의 티켓 상태 큐 + 답변 폼 + 주문 링크.
  * CASH_DISPUTE(현금 지급 후 분쟁, 07 §1-3)는 OrdersPage 드로어의 FORCE_COMPLETE/귀책 취소로 처치,
- * COUPON_PAYMENT는 매출·정산의 쿠폰 환불로 연결한다. 답변은 cs-reply Edge Function(답변+알림 원자 처리).
+ * COUPON_PAYMENT는 레거시 안내만(쿠폰 모델 폐기, 08 P1). 답변은 cs-reply Edge Function(답변+알림 원자 처리).
  */
 export function CsPage() {
   const [statusFilter, setStatusFilter] = useState("OPEN");
@@ -249,15 +249,13 @@ function CsTicketDrawer({ ticket, onClose }: { ticket: CsTicketRow; onClose: () 
           )}
 
           {ticket.category === "COUPON_PAYMENT" && (
-            <button
-              type="button"
-              onClick={() => navigate("/settlement")}
-              className="flex items-center justify-between rounded-card border border-accent/20 bg-white p-4 text-left shadow-card hover:bg-gray-50"
-              data-testid="cs-coupon-refund-link"
-            >
-              <span className="text-sm font-medium text-gray-800">쿠폰 환불은 매출·정산에서 처리</span>
-              <span className="text-sm text-accent-deep">환불 처리 &gt;</span>
-            </button>
+            <section className="rounded-card bg-gray-50 p-4 shadow-card" data-testid="cs-coupon-legacy-note">
+              <p className="text-xs font-medium text-gray-500">레거시 문의(쿠폰 모델 폐기 — 08 P1)</p>
+              <p className="mt-1 text-sm text-gray-700">
+                쿠폰 결제·환불 플로우는 폐기됐어요. 과거 결제 건 보정이 필요하면 쿠폰 원장(DB 감사 기록)을
+                확인하고 답변으로 안내해 주세요.
+              </p>
+            </section>
           )}
 
           {ticket.adminReply && (

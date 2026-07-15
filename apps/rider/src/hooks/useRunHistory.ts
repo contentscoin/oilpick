@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import type { OrderStatus } from "@oilpick/core";
+import type { OrderStatus, PayoutMethod } from "@oilpick/core";
 import { supabase } from "../lib/supabaseClient";
 import { queryKeys } from "../lib/queryClient";
 
@@ -9,9 +9,11 @@ export interface RunHistoryItem {
   pickupAddress: string;
   requestedKg: number;
   finalKg: number | null;
-  /** 완료 시 점주에게 현장 지급한 현금(원). 취소/레거시 주문 null. */
+  /** 확정 지급액(원). POINT 지급도 이 컬럼(1P=1원, 08 P3). 취소/레거시 주문 null. */
   cashPaidAmount: number | null;
-  /** 소진 쿠폰 장수(coupon_cost). 레거시 주문 null. */
+  /** 현장 지급수단(08 P2). 레거시·계량 전 취소 주문 null(완료 표시는 CASH 간주). */
+  payoutMethod: PayoutMethod | null;
+  /** 소진 쿠폰 장수(coupon_cost). 쿠폰 모델 폐기(08 P1) 후 레거시 주문 표시 전용 — 신규 주문 null. */
   couponCost: number | null;
   createdAt: string;
 }
@@ -37,7 +39,9 @@ export function useRunHistory(riderId: string | undefined, page: number) {
 
       const { data, error } = await supabase
         .from("pickup_orders")
-        .select("id, status, pickup_address, requested_kg, final_kg, cash_paid_amount, coupon_cost, created_at")
+        .select(
+          "id, status, pickup_address, requested_kg, final_kg, payout_method, cash_paid_amount, coupon_cost, created_at",
+        )
         .eq("rider_id", riderId)
         .in("status", RUN_HISTORY_STATUSES)
         .order("created_at", { ascending: false })
@@ -53,6 +57,7 @@ export function useRunHistory(riderId: string | undefined, page: number) {
         requestedKg: row.requested_kg,
         finalKg: row.final_kg,
         cashPaidAmount: row.cash_paid_amount,
+        payoutMethod: row.payout_method ?? null,
         couponCost: row.coupon_cost,
         createdAt: row.created_at,
       }));

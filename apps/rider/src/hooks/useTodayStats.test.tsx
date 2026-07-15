@@ -26,31 +26,31 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe("useTodayStats — 오늘 실적(07 F6-⑥)", () => {
-  it("완료 주문 kg/현금 + CONSUME 쿠폰 합", async () => {
-    mockFrom.mockImplementation((table: string) =>
-      table === "pickup_orders"
-        ? chain({
-            data: [
-              { final_kg: 40, measured_kg: 39, cash_paid_amount: 64000 },
-              { final_kg: null, measured_kg: 20, cash_paid_amount: 32000 },
-            ],
-            error: null,
-          })
-        : chain({ data: [{ qty: -2 }, { qty: -1 }], error: null }),
+describe("useTodayStats — 오늘 실적(08 G6-④, 수단 분리)", () => {
+  it("완료 주문 kg + 현금/포인트 지급 분리(레거시 null=CASH)", async () => {
+    mockFrom.mockReturnValue(
+      chain({
+        data: [
+          { final_kg: 40, measured_kg: 39, payout_method: "CASH", cash_paid_amount: 64000 },
+          { final_kg: null, measured_kg: 20, payout_method: "POINT", cash_paid_amount: 32000 },
+          // 레거시(payout_method null) → CASH 간주(08 P3 coalesce).
+          { final_kg: 10, measured_kg: 10, payout_method: null, cash_paid_amount: 7000 },
+        ],
+        error: null,
+      }),
     );
     const { result } = renderHook(() => useTodayStats("rider-1"), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toEqual({
-      completedCount: 2,
-      collectedKg: 60, // 40(final) + 20(measured fallback)
-      cashPaid: 96000,
-      consumedCoupons: 3,
+      completedCount: 3,
+      collectedKg: 70, // 40(final) + 20(measured fallback) + 10
+      cashPaid: 71000, // 64000 + 7000(레거시 CASH 간주)
+      pointPaid: 32000,
     });
   });
 });
 
-describe("useMonthlyPickupStats — 이번 달 실적(07 F6-⑤, completed_at·coalesce)", () => {
+describe("useMonthlyPickupStats — 이번 달 실적(08 G6-④, completed_at·coalesce·수단 분리)", () => {
   it("레거시(DELIVERED)/신규(COMPLETED) 혼합 + coalesce 완료시각 + 월 필터", async () => {
     const now = new Date();
     const inMonth = new Date(now.getFullYear(), now.getMonth(), 2, 10).toISOString();
@@ -59,20 +59,22 @@ describe("useMonthlyPickupStats — 이번 달 실적(07 F6-⑤, completed_at·c
     mockFrom.mockReturnValue(
       chain({
         data: [
-          // 신규 완료: completed_at 기준, cash 기여.
-          { status: "COMPLETED", final_kg: 40, measured_kg: 39, cash_paid_amount: 64000, completed_at: inMonth, delivered_at: null, picked_up_at: null },
-          // 레거시: delivered_at으로 coalesce, cash 없음.
-          { status: "DELIVERED", final_kg: null, measured_kg: 30, cash_paid_amount: null, completed_at: null, delivered_at: inMonth, picked_up_at: null },
+          // 신규 완료(CASH): completed_at 기준, cash 기여.
+          { status: "COMPLETED", final_kg: 40, measured_kg: 39, payout_method: "CASH", cash_paid_amount: 64000, completed_at: inMonth, delivered_at: null, picked_up_at: null },
+          // 신규 완료(POINT): point 기여(08 G6-④ 수단 분리).
+          { status: "COMPLETED", final_kg: 15, measured_kg: 15, payout_method: "POINT", cash_paid_amount: 10500, completed_at: inMonth, delivered_at: null, picked_up_at: null },
+          // 레거시: delivered_at으로 coalesce, 지급 없음.
+          { status: "DELIVERED", final_kg: null, measured_kg: 30, payout_method: null, cash_paid_amount: null, completed_at: null, delivered_at: inMonth, picked_up_at: null },
           // 레거시: picked_up_at으로 coalesce.
-          { status: "DELIVERED", final_kg: null, measured_kg: 20, cash_paid_amount: null, completed_at: null, delivered_at: null, picked_up_at: inMonth },
+          { status: "DELIVERED", final_kg: null, measured_kg: 20, payout_method: null, cash_paid_amount: null, completed_at: null, delivered_at: null, picked_up_at: inMonth },
           // 지난달 완료 — 제외.
-          { status: "COMPLETED", final_kg: 50, measured_kg: 50, cash_paid_amount: 80000, completed_at: lastMonth, delivered_at: null, picked_up_at: null },
+          { status: "COMPLETED", final_kg: 50, measured_kg: 50, payout_method: "CASH", cash_paid_amount: 80000, completed_at: lastMonth, delivered_at: null, picked_up_at: null },
         ],
         error: null,
       }),
     );
     const { result } = renderHook(() => useMonthlyPickupStats("rider-1"), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data).toEqual({ count: 3, kg: 90, cash: 64000 });
+    expect(result.current.data).toEqual({ count: 4, kg: 105, cash: 64000, point: 10500, cashCount: 1, pointCount: 1 });
   });
 });

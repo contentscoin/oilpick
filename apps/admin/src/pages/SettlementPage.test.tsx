@@ -1,284 +1,166 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SettlementPage } from "./SettlementPage";
-import type { CouponLedgerAuditRow, CouponPurchaseRow, PickupStatsDailyRow } from "../hooks/useSalesAdmin";
-import type { CouponSalesDailyRow } from "../lib/couponSales";
+import type {
+  PickupStatsDailyRow,
+  PointLedgerAuditRow,
+  RiderPayoutSummary,
+  WithdrawalRow,
+} from "../hooks/useSettlementAdmin";
 
 /**
- * SettlementPage "매출·정산" 재편(07 F10-③) 검증:
- * - ⓐ 쿠폰 매출 대시 렌더(판매/귀책 환급/PG 환불 구분) + 합계 = mock 뷰 데이터 합 일치
- * - ⓑ 수거 활동 추이 렌더(건수/kg/현금)
- * - ⓒ 쿠폰 원장 감사(entry_type 라벨, PG 환불 구분 배지)
- * - ⓓ 결제 목록 status 필터(EXPIRED 대사 안내 포함) + 환불 흐름(부분 qty·사유 필수·건당 1회 카피)
- * - ⓔ 구모델 출금 큐/포인트 원장 UI 부재
+ * SettlementPage "정산" 재편(08 G7-①) 검증:
+ * - ⓐ 출금 큐: 상태 필터, REQUESTED [승인]/[반려(사유 필수)], APPROVED [지급 완료] → withdraw-process 호출
+ * - ⓑ 수거 활동 추이: 현금/포인트 지급 분리 + 합계 카드
+ * - ⓒ 라이더별 지급 실적(포인트 지급 = 오프라인 정산 근거)
+ * - ⓓ 포인트 원장 감사(entry_type 라벨·부호)
+ * - ⓔ 구모델 쿠폰 매출/결제/원장 UI 부재(08 P1)
  */
 
-const { mockInvoke, mockSales, mockPickup, mockLedger, mockPurchases } = vi.hoisted(() => ({
+const { mockInvoke, mockWithdrawals, mockPickup, mockPayouts, mockLedger } = vi.hoisted(() => ({
   mockInvoke: vi.fn(),
-  mockSales: vi.fn(),
+  mockWithdrawals: vi.fn(),
   mockPickup: vi.fn(),
+  mockPayouts: vi.fn(),
   mockLedger: vi.fn(),
-  mockPurchases: vi.fn(),
 }));
 
 vi.mock("../lib/edgeFunction", () => ({ invokeEdgeFunction: mockInvoke }));
-vi.mock("../hooks/useSalesAdmin", () => ({
-  useCouponSalesDaily: (days: number) => mockSales(days),
-  usePickupStatsDaily: (days: number) => mockPickup(days),
-  useCouponLedgerAudit: (limit: number) => mockLedger(limit),
-  useCouponPurchases: (statusFilter: string) => mockPurchases(statusFilter),
+vi.mock("../hooks/useSettlementAdmin", () => ({
+  useWithdrawals: (statusFilter: string) => mockWithdrawals(statusFilter),
+  usePickupStatsDaily: () => mockPickup(),
+  useRiderPayouts: () => mockPayouts(),
+  usePointLedgerAudit: () => mockLedger(),
 }));
 
-const SALES_ROWS: CouponSalesDailyRow[] = [
-  { day: "2026-07-08", chargedQty: 40, salesAmount: 42000, refundQty: 0, pgRefundQty: 0, manualAdjustQty: 0 },
-  { day: "2026-07-09", chargedQty: 10, salesAmount: 12000, refundQty: 2, pgRefundQty: 4, manualAdjustQty: 20 },
-];
+const ok = (data: unknown) => ({ data, isLoading: false, isError: false, refetch: vi.fn() });
 
-function purchase(overrides: Partial<CouponPurchaseRow> = {}): CouponPurchaseRow {
+function makeWithdrawal(overrides: Partial<WithdrawalRow> = {}): WithdrawalRow {
   return {
-    id: "pu-1",
-    riderId: "r-1",
-    riderName: "김라이더",
-    qty: 30,
-    unitPrice: 1000,
-    amount: 30000,
-    status: "PAID",
-    pgOrderId: "oc_abc",
-    paymentKey: "pay_1",
-    createdAt: "2026-07-09T00:00:00.000Z",
-    paidAt: "2026-07-09T00:01:00.000Z",
+    id: "w-1",
+    userId: "u-1",
+    userName: "데모 기름집",
+    amount: 10000,
+    status: "REQUESTED",
+    bankName: "국민은행",
+    bankAccount: "000-00",
+    bankHolder: "데모 기름집",
+    adminMemo: null,
+    createdAt: new Date().toISOString(),
+    processedAt: null,
     ...overrides,
   };
 }
 
 function setup({
-  sales = SALES_ROWS,
-  pickup = [] as PickupStatsDailyRow[],
-  ledger = [] as CouponLedgerAuditRow[],
-  purchases = [] as CouponPurchaseRow[],
+  withdrawals = [makeWithdrawal()],
+  pickup = [],
+  payouts = [],
+  ledger = [],
+}: {
+  withdrawals?: WithdrawalRow[];
+  pickup?: PickupStatsDailyRow[];
+  payouts?: RiderPayoutSummary[];
+  ledger?: PointLedgerAuditRow[];
 } = {}) {
-  mockSales.mockReturnValue({ data: sales, isLoading: false });
-  mockPickup.mockReturnValue({ data: pickup, isLoading: false });
-  mockLedger.mockReturnValue({ data: ledger, isLoading: false });
-  mockPurchases.mockReturnValue({ data: purchases, isLoading: false, refetch: vi.fn() });
+  mockWithdrawals.mockReturnValue(ok(withdrawals));
+  mockPickup.mockReturnValue(ok(pickup));
+  mockPayouts.mockReturnValue(ok(payouts));
+  mockLedger.mockReturnValue(ok(ledger));
   return render(<SettlementPage />);
 }
 
 afterEach(() => {
-  mockInvoke.mockReset();
-  mockSales.mockReset();
-  mockPickup.mockReset();
-  mockLedger.mockReset();
-  mockPurchases.mockReset();
+  vi.clearAllMocks();
 });
 
-describe("쿠폰 매출 대시 (ⓐ)", () => {
-  it("일별 판매/귀책 환급/PG 환불을 구분해 렌더하고 합계가 mock 데이터 합과 일치한다", () => {
+describe("SettlementPage — 출금 큐(08 P4)", () => {
+  it("REQUESTED 건에 [승인]/[반려] 버튼, 승인 클릭 시 withdraw-process 호출", async () => {
+    mockInvoke.mockResolvedValue({ ok: true, data: { withdrawalId: "w-1", status: "APPROVED" } });
     setup();
-    const table = within(screen.getByTestId("coupon-sales-table"));
-    expect(table.getByText("2026-07-08")).toBeInTheDocument();
-    expect(table.getByText("42,000원")).toBeInTheDocument();
-    expect(table.getByText("12,000원")).toBeInTheDocument();
-
-    // 합계 카드: 판매액 54,000 / 판매 50장 / 귀책 환급 2장 / PG 환불 4장.
-    expect(screen.getByTestId("sales-total-amount")).toHaveTextContent("54,000원");
-    expect(screen.getByTestId("sales-total-qty")).toHaveTextContent("50장");
-    expect(screen.getByTestId("sales-total-refund")).toHaveTextContent("2장");
-    expect(screen.getByTestId("sales-total-pg-refund")).toHaveTextContent("4장");
+    const row = screen.getByTestId("withdraw-row-w-1");
+    expect(row).toHaveTextContent("데모 기름집");
+    expect(row).toHaveTextContent("10,000P");
+    fireEvent.click(screen.getByTestId("withdraw-approve-w-1"));
+    await waitFor(() =>
+      expect(mockInvoke).toHaveBeenCalledWith("withdraw-process", { withdrawalId: "w-1", decision: "APPROVED" }),
+    );
   });
 
-  it("매출 데이터가 없으면 빈 상태 문구를 표시한다", () => {
-    setup({ sales: [] });
-    expect(screen.getByText("최근 14일 매출 데이터가 없어요.")).toBeInTheDocument();
+  it("반려는 사유 필수 — 사유와 함께 REJECTED 호출", async () => {
+    mockInvoke.mockResolvedValue({ ok: true, data: { withdrawalId: "w-1", status: "REJECTED" } });
+    setup();
+    fireEvent.click(screen.getByTestId("withdraw-reject-w-1"));
+    // 사유 없이 제출 → 호출 없음.
+    fireEvent.click(screen.getByTestId("withdraw-reject-submit-w-1"));
+    expect(mockInvoke).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByTestId("withdraw-reject-memo-w-1"), { target: { value: "계좌 불일치" } });
+    fireEvent.click(screen.getByTestId("withdraw-reject-submit-w-1"));
+    await waitFor(() =>
+      expect(mockInvoke).toHaveBeenCalledWith("withdraw-process", {
+        withdrawalId: "w-1",
+        decision: "REJECTED",
+        memo: "계좌 불일치",
+      }),
+    );
   });
 
-  it("로딩 중에도 thead를 유지하고(레이아웃 시프트 방지) SummaryStat은 '-'를 표시한다", () => {
-    mockSales.mockReturnValue({ data: undefined, isLoading: true });
-    mockPickup.mockReturnValue({ data: undefined, isLoading: true });
-    mockLedger.mockReturnValue({ data: undefined, isLoading: true });
-    mockPurchases.mockReturnValue({ data: undefined, isLoading: true, refetch: vi.fn() });
-    render(<SettlementPage />);
-
-    const table = within(screen.getByTestId("coupon-sales-table"));
-    expect(table.getByText("날짜")).toBeInTheDocument(); // thead 유지
-    expect(table.getByText("불러오는 중...")).toBeInTheDocument(); // tbody 로딩 행
-    expect(screen.getByTestId("sales-total-amount")).toHaveTextContent("-"); // 0원으로 점프하지 않음
-  });
-
-  it("쿼리 실패 시 빈 상태 대신 에러 안내 + 다시 시도(refetch)를 표시한다", () => {
-    const refetch = vi.fn();
-    mockSales.mockReturnValue({ data: undefined, isLoading: false, isError: true, refetch });
-    mockPickup.mockReturnValue({ data: [], isLoading: false });
-    mockLedger.mockReturnValue({ data: [], isLoading: false });
-    mockPurchases.mockReturnValue({ data: [], isLoading: false, refetch: vi.fn() });
-    render(<SettlementPage />);
-
-    const table = within(screen.getByTestId("coupon-sales-table"));
-    expect(table.getByText("쿠폰 매출을 불러오지 못했어요")).toBeInTheDocument();
-    expect(table.queryByText("최근 14일 매출 데이터가 없어요.")).not.toBeInTheDocument();
-    fireEvent.click(table.getByTestId("query-error-retry"));
-    expect(refetch).toHaveBeenCalledTimes(1);
+  it("APPROVED 건에는 [지급 완료] 버튼 → PAID 호출", async () => {
+    mockInvoke.mockResolvedValue({ ok: true, data: { withdrawalId: "w-1", status: "PAID" } });
+    setup({ withdrawals: [makeWithdrawal({ status: "APPROVED" })] });
+    fireEvent.click(screen.getByTestId("withdraw-paid-w-1"));
+    await waitFor(() =>
+      expect(mockInvoke).toHaveBeenCalledWith("withdraw-process", { withdrawalId: "w-1", decision: "PAID" }),
+    );
   });
 });
 
-describe("수거 활동 추이 (ⓑ)", () => {
-  it("일별 완료 건수/kg/현금 거래액을 렌더한다", () => {
+describe("SettlementPage — 수거 추이/라이더 실적/포인트 원장", () => {
+  it("수거 추이에 현금/포인트 지급 분리 합계를 렌더한다", () => {
     setup({
       pickup: [
-        { day: "2026-07-08", completedCount: 5, totalKg: 120.5, totalCash: 108450 },
-        { day: "2026-07-09", completedCount: 2, totalKg: 30, totalCash: 27000 },
+        { day: "2026-07-14", completedCount: 2, totalKg: 60, totalPaid: 43000, cashAmount: 22000, pointAmount: 21000, cashCount: 1, pointCount: 1 },
+        { day: "2026-07-15", completedCount: 1, totalKg: 30, totalPaid: 21000, cashAmount: 21000, pointAmount: 0, cashCount: 1, pointCount: 0 },
       ],
     });
-    const table = within(screen.getByTestId("pickup-stats-table"));
-    expect(table.getByText("5건")).toBeInTheDocument();
-    expect(table.getByText("120.5kg")).toBeInTheDocument();
-    expect(table.getByText("108,450원")).toBeInTheDocument();
-    expect(table.getByText("27,000원")).toBeInTheDocument();
+    expect(screen.getByTestId("pickup-total-count")).toHaveTextContent("3건");
+    expect(screen.getByTestId("pickup-total-cash")).toHaveTextContent("43,000원");
+    expect(screen.getByTestId("pickup-total-point")).toHaveTextContent("21,000P");
   });
-});
 
-describe("쿠폰 원장 감사 (ⓒ)", () => {
-  it("entry_type 한글 라벨과 PG 환불 구분 배지를 표시한다", () => {
+  it("라이더별 지급 실적을 렌더한다(포인트 지급 = 정산 대상)", () => {
+    setup({
+      payouts: [
+        { riderId: "r-1", riderName: "데모 라이더1", completedCount: 3, totalKg: 90, cashAmount: 40000, pointAmount: 21000 },
+      ],
+    });
+    const table = screen.getByTestId("rider-payout-table");
+    expect(table).toHaveTextContent("데모 라이더1");
+    expect(table).toHaveTextContent("21,000P");
+    expect(within(table).getByText("포인트 지급(정산 대상)")).toBeInTheDocument();
+  });
+
+  it("포인트 원장 감사에 entry_type 라벨과 부호를 렌더한다", () => {
     setup({
       ledger: [
-        {
-          id: 3,
-          riderId: "r-1",
-          riderName: "김라이더",
-          entryType: "ADJUST",
-          qty: -4,
-          unitPrice: null,
-          orderId: null,
-          purchaseId: "pu-2",
-          memo: "PG 환불 처리",
-          createdAt: "2026-07-09T11:00:00.000Z",
-        },
-        {
-          id: 2,
-          riderId: "r-1",
-          riderName: "김라이더",
-          entryType: "CONSUME",
-          qty: -2,
-          unitPrice: null,
-          orderId: "o-1",
-          purchaseId: null,
-          memo: null,
-          createdAt: "2026-07-09T10:00:00.000Z",
-        },
-        {
-          id: 1,
-          riderId: "r-1",
-          riderName: "김라이더",
-          entryType: "CHARGE",
-          qty: 30,
-          unitPrice: 1000,
-          orderId: null,
-          purchaseId: "pu-1",
-          memo: null,
-          createdAt: "2026-07-08T09:00:00.000Z",
-        },
+        { id: 1, userId: "u-1", userName: "데모 기름집", entryType: "EARN", amount: 21000, orderId: "o-1", withdrawalId: null, memo: null, createdAt: new Date().toISOString() },
+        { id: 2, userId: "u-1", userName: "데모 기름집", entryType: "WITHDRAW_REQUEST", amount: -10000, orderId: null, withdrawalId: "w-1", memo: null, createdAt: new Date().toISOString() },
       ],
     });
-    const table = within(screen.getByTestId("coupon-ledger-audit-table"));
-    expect(table.getByText("충전")).toBeInTheDocument();
-    expect(table.getByText("콜 배정")).toBeInTheDocument();
-    expect(table.getByText("PG 환불")).toBeInTheDocument(); // ADJUST + purchase_id 구분 배지
-    expect(table.getByText("+30장")).toBeInTheDocument();
-    expect(table.getByText("-2장")).toBeInTheDocument();
+    const table = screen.getByTestId("point-ledger-audit-table");
+    expect(table).toHaveTextContent("매각대금 적립");
+    expect(table).toHaveTextContent("+21,000P");
+    expect(table).toHaveTextContent("출금 신청");
+    expect(table).toHaveTextContent("-10,000P");
   });
 });
 
-describe("결제 목록 + 환불 (ⓓ)", () => {
-  it("status 필터 클릭이 useCouponPurchases에 전달된다(EXPIRED 대사 포함)", () => {
+describe("SettlementPage — 쿠폰 UI 부재(08 P1)", () => {
+  it("쿠폰 매출/결제/원장 섹션이 렌더되지 않는다", () => {
     setup();
-    expect(mockPurchases).toHaveBeenLastCalledWith("ALL");
-    fireEvent.click(screen.getByTestId("purchase-filter-EXPIRED"));
-    expect(mockPurchases).toHaveBeenLastCalledWith("EXPIRED");
-    // EXPIRED 대사 안내 노출.
-    expect(screen.getByTestId("expired-reconcile-note")).toHaveTextContent("승인 여부를 확인");
-  });
-
-  it("PAID 건에만 환불 버튼이 노출된다", () => {
-    setup({
-      purchases: [
-        purchase({ id: "pu-paid", status: "PAID" }),
-        purchase({ id: "pu-pending", status: "PENDING" }),
-        purchase({ id: "pu-refunded", status: "REFUNDED" }),
-      ],
-    });
-    expect(screen.getByTestId("refund-open-pu-paid")).toBeInTheDocument();
-    expect(screen.queryByTestId("refund-open-pu-pending")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("refund-open-pu-refunded")).not.toBeInTheDocument();
-    // 상태 한글 라벨.
-    expect(screen.getByTestId("purchase-row-pu-refunded")).toHaveTextContent("환불됨");
-  });
-
-  it("환불 폼: 사유 없이 제출하면 호출 없이 에러, 건당 1회 안내 카피가 보인다", async () => {
-    setup({ purchases: [purchase()] });
-    fireEvent.click(screen.getByTestId("refund-open-pu-1"));
-    expect(screen.getByText(/구매 건당 1회/)).toBeInTheDocument();
-
-    fireEvent.submit(screen.getByTestId("refund-submit-pu-1"));
-    expect(await screen.findByText("환불 사유를 입력해주세요.")).toBeInTheDocument();
-    expect(mockInvoke).not.toHaveBeenCalled();
-  });
-
-  it("부분 qty 환불 시 coupon-refund 페이로드에 qty·reason을 담는다", async () => {
-    mockInvoke.mockResolvedValue({ ok: true, data: { purchaseId: "pu-1", refundedQty: 10, balance: 20 } });
-    setup({ purchases: [purchase()] });
-    fireEvent.click(screen.getByTestId("refund-open-pu-1"));
-    fireEvent.change(screen.getByTestId("refund-qty-pu-1"), { target: { value: "10" } });
-    fireEvent.change(screen.getByTestId("refund-reason-pu-1"), { target: { value: "라이더 요청" } });
-    fireEvent.submit(screen.getByTestId("refund-submit-pu-1"));
-
-    await waitFor(() => expect(mockInvoke).toHaveBeenCalledTimes(1));
-    expect(mockInvoke).toHaveBeenCalledWith("coupon-refund", {
-      purchaseId: "pu-1",
-      qty: 10,
-      reason: "라이더 요청",
-    });
-    expect(await screen.findByText(/쿠폰 10장이 환불되었어요/)).toBeInTheDocument();
-  });
-
-  it("qty를 비우면 전액 환불(qty 미포함 페이로드)로 호출한다", async () => {
-    mockInvoke.mockResolvedValue({ ok: true, data: { purchaseId: "pu-1", refundedQty: 30, balance: 0 } });
-    setup({ purchases: [purchase()] });
-    fireEvent.click(screen.getByTestId("refund-open-pu-1"));
-    fireEvent.change(screen.getByTestId("refund-reason-pu-1"), { target: { value: "전액 환불" } });
-    fireEvent.submit(screen.getByTestId("refund-submit-pu-1"));
-
-    await waitFor(() => expect(mockInvoke).toHaveBeenCalledTimes(1));
-    expect(mockInvoke).toHaveBeenCalledWith("coupon-refund", { purchaseId: "pu-1", reason: "전액 환불" });
-  });
-
-  it("구매 qty를 초과하는 부분 환불은 호출 없이 거부한다", async () => {
-    setup({ purchases: [purchase({ qty: 30 })] });
-    fireEvent.click(screen.getByTestId("refund-open-pu-1"));
-    fireEvent.change(screen.getByTestId("refund-qty-pu-1"), { target: { value: "31" } });
-    fireEvent.change(screen.getByTestId("refund-reason-pu-1"), { target: { value: "초과" } });
-    fireEvent.submit(screen.getByTestId("refund-submit-pu-1"));
-
-    expect(await screen.findByText(/1~30장 사이의 정수/)).toBeInTheDocument();
-    expect(mockInvoke).not.toHaveBeenCalled();
-  });
-
-  it("환불 실패(미사용 잔액 부족 등) 시 서버 메시지를 표시한다", async () => {
-    mockInvoke.mockResolvedValue({ ok: false, message: "수거쿠폰이 부족해요. 충전 후 수락할 수 있어요." });
-    setup({ purchases: [purchase()] });
-    fireEvent.click(screen.getByTestId("refund-open-pu-1"));
-    fireEvent.change(screen.getByTestId("refund-qty-pu-1"), { target: { value: "30" } });
-    fireEvent.change(screen.getByTestId("refund-reason-pu-1"), { target: { value: "환불" } });
-    fireEvent.submit(screen.getByTestId("refund-submit-pu-1"));
-
-    expect(await screen.findByText(/수거쿠폰이 부족해요/)).toBeInTheDocument();
-  });
-});
-
-describe("구모델 UI 제거 (ⓔ)", () => {
-  it("출금 큐/포인트 원장 문자열이 더 이상 렌더되지 않는다", () => {
-    setup();
-    expect(screen.queryByText(/출금/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/포인트/)).not.toBeInTheDocument();
-    expect(screen.getByText("매출·정산")).toBeInTheDocument();
+    expect(screen.queryByTestId("coupon-sales-table")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("coupon-ledger-audit-table")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("purchase-list")).not.toBeInTheDocument();
+    expect(screen.queryByText(/쿠폰/)).not.toBeInTheDocument();
   });
 });

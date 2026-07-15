@@ -11,8 +11,6 @@ export interface OpenCall {
   pickupLng: number;
   /** 주문 생성 시점 시세 스냅샷(원/kg). 예상 매입 지급액 = requestedKg × 이 값(07 F5). */
   snapshotPricePerKg: number;
-  /** 소진 쿠폰 장수(coupon_cost). 레거시 주문은 null(CONSUME/REFUND skip, 쿠폰 표기 생략 — 07 §1-2). */
-  couponCost: number | null;
   /** 레거시 수거비(구모델). 신규 주문은 미기록(null). 표기하지 않음 — 07 F5에서 매입액으로 전환. */
   snapshotRiderFee: number | null;
   createdAt: string;
@@ -51,8 +49,9 @@ export function useOpenCalls(enabled: boolean) {
     queryFn: async (): Promise<OpenCall[]> => {
       const { data, error } = await supabase
         .from("pickup_orders")
+        // 08 G6-②: coupon_cost 조회 중지 — 쿠폰 소진 표기가 사라져 신규 코드 경로에서 미사용.
         .select(
-          "id, requested_kg, pickup_address, pickup_location, snapshot_price_per_kg, coupon_cost, snapshot_rider_fee, created_at",
+          "id, requested_kg, pickup_address, pickup_location, snapshot_price_per_kg, snapshot_rider_fee, created_at",
         )
         .eq("status", "REQUESTED")
         .order("created_at", { ascending: false });
@@ -66,7 +65,6 @@ export function useOpenCalls(enabled: boolean) {
           pickupLat: lat,
           pickupLng: lng,
           snapshotPricePerKg: row.snapshot_price_per_kg,
-          couponCost: row.coupon_cost ?? null,
           snapshotRiderFee: row.snapshot_rider_fee ?? null,
           createdAt: row.created_at,
         };

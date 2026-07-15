@@ -2,17 +2,24 @@
 // 이 파일의 값은 임의 변경 금지 — 스펙 변경 시 스펙 문서를 먼저 갱신할 것.
 
 import type { OrderStatus } from "./orderMachine";
-import type { CsCategory, CsStatus } from "./schemas";
+import type { CsCategory, CsStatus, PayoutMethod } from "./schemas";
 
 /** 통 1개당 예상 kg (18L 통 기준). 00-domain.md "계량/수량 규칙". */
 export const KG_PER_CAN = 15;
 
 /**
  * KG_PER_CAN(15kg)이 기준으로 삼는 말통 용량(L). 00-domain.md "계량/수량 규칙"(18L 통 기준).
- * 07 F9-③ 통 크기 프리셋(18L 말통/10L/기타)의 비례 환산 기준값. 이 상수와 KG_PER_CAN은
- * 임의 변경 금지 — coupon_cost는 서버가 requestedKg 기준으로 산정하므로 kg 환산만 정확하면 된다(07 §1-2).
+ * 통 크기 프리셋(18L 말통/10L/기타 — 08 P6)의 비례 환산 기준값. 이 상수와 KG_PER_CAN은 임의 변경 금지.
  */
 export const CAN_SIZE_L_DEFAULT = 18;
+
+/**
+ * 현장 지급수단 한글 라벨(08 P2). 라이더 계량 제출 세그먼트/주문 카드·상세·admin 드로어 공용.
+ */
+export const PAYOUT_METHOD_LABEL: Record<PayoutMethod, string> = {
+  CASH: "현금",
+  POINT: "포인트",
+};
 
 /** 최소 출금 포인트(P). 00-domain.md "포인트 원장 규칙". */
 export const MIN_WITHDRAW = 10000;
@@ -41,13 +48,14 @@ export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
 };
 
 /**
- * CS 문의 카테고리 한글 라벨(07 F12). CASH_DISPUTE = 현금 지급 후 분쟁(상태머신 밖 수용처, 07 §1-3),
- * COUPON_PAYMENT = 쿠폰 결제/환불 문의(→ admin SettlementPage 환불 연결).
+ * CS 문의 카테고리 한글 라벨(07 F12). CASH_DISPUTE = 지급(현금/포인트) 후 분쟁(상태머신 밖 수용처),
+ * COUPON_PAYMENT = 레거시(쿠폰 모델 폐기, 08 P1) — DB enum 보존 원칙으로 값·라벨 유지, 신규 접수
+ * 폼에서는 노출하지 않는다(과거 티켓 렌더용).
  */
 export const CS_CATEGORY_LABEL: Record<CsCategory, string> = {
   ORDER: "주문/수거",
-  CASH_DISPUTE: "현금 지급 분쟁",
-  COUPON_PAYMENT: "쿠폰 결제/환불",
+  CASH_DISPUTE: "지급 분쟁",
+  COUPON_PAYMENT: "쿠폰 결제/환불(레거시)",
   ACCOUNT: "계정",
   ETC: "기타",
 };

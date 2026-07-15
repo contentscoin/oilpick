@@ -1,4 +1,6 @@
--- pgTAP: 신모델 주문 상태머신 (00-domain.md 전이표, 07 §1-3). fn_transition_order의 role/actor 가드,
+-- pgTAP: 주문 상태머신 (00-domain.md 전이표). [08 피벗 이후] 쿠폰 소진/환급 케이스는 전환기 레거시
+-- 회귀(잔존 쿠폰 주문 전용 — 픽스처가 coupon_cost를 직삽입). 신규 주문의 지급수단 케이스는
+-- 08_payout_method_test.sql 참조. fn_transition_order의 role/actor 가드,
 -- 이중수락 차단, 신 전이(ARRIVED→COMPLETED, DISPUTED→ARRIVED 복귀, FORCE_COMPLETE), admin CANCEL
 -- 귀책(fault) 매트릭스와 쿠폰 환급, 레거시(coupon_cost null) 취소 무환급, 쿠폰 부족 ACCEPT 롤백을 검증한다.
 create extension if not exists pgtap with schema extensions;

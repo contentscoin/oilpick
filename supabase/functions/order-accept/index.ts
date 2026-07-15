@@ -2,10 +2,11 @@
 // - 입력: { orderId }
 // - 가드: verified·online·진행중 주문 없음(ACCEPTED/ARRIVED/PICKED_UP/DISPUTED — idx_rider_single_active_order
 //   와 정합, 07 F3b-②). 아니면 403 RIDER_NOT_ELIGIBLE.
-// - 쿠폰 사전 체크(fail-fast, UX용): v_coupon_balance.balance ≥ coupon_cost 아니면 409 INSUFFICIENT_COUPON.
-//   coupon_cost null(레거시)은 skip. **동시성 방어의 유일한 진실은 RPC(fn_consume_coupon)** — 이 체크는 UX용.
-// - 동시성: fn_transition_order의 ACCEPT 액션(조건부 UPDATE + 쿠폰 CONSUME)이 이미 보장 — 0행/부족이면
-//   예외를 던지고 이 함수는 그 예외를 409(ALREADY_ACCEPTED/INSUFFICIENT_COUPON)로 매핑만 한다.
+// - 쿠폰 사전 체크 삭제(08 P1 — 신규 주문은 coupon_cost null·쿠폰 게이트 소멸). 전환기 잔존 쿠폰
+//   주문(coupon_cost not null)은 RPC의 레거시 CONSUME 분기가 처리하며, 부족 예외는
+//   mapTransitionError의 INSUFFICIENT_COUPON 매핑이 잡는다(전환기 대비 보존).
+// - 동시성: fn_transition_order의 ACCEPT 액션(조건부 UPDATE)이 이미 보장 — 0행이면
+//   예외를 던지고 이 함수는 그 예외를 409(ALREADY_ACCEPTED)로 매핑만 한다.
 // - 부수효과: order_events, supplier 푸시(RPC 내부에서 order_events는 이미 insert됨).
 //
 // CLAUDE.md/태스크 지시: Edge Function은 RPC 결과를 응답으로 변환만 하고 상태머신/원장
@@ -62,29 +63,9 @@ Deno.serve((req) =>
       return errorResponse("RIDER_NOT_ELIGIBLE", 403);
     }
 
-    // 쿠폰 사전 체크(fail-fast). coupon_cost null(레거시)은 skip. 진실은 RPC의 fn_consume_coupon.
-    const { data: orderRow, error: orderErr } = await admin
-      .from("pickup_orders")
-      .select("coupon_cost")
-      .eq("id", orderId)
-      .maybeSingle();
-    if (orderErr) throw orderErr;
-    if (!orderRow) {
-      return errorResponse("NOT_FOUND", 404);
-    }
-    if (orderRow.coupon_cost != null) {
-      const { data: balanceRow, error: balanceErr } = await admin
-        .from("v_coupon_balance")
-        .select("balance")
-        .eq("rider_id", uid)
-        .maybeSingle();
-      if (balanceErr) throw balanceErr;
-      if ((balanceRow?.balance ?? 0) < orderRow.coupon_cost) {
-        return errorResponse("INSUFFICIENT_COUPON", 409);
-      }
-    }
-
-    // 동시성 보장(선착순 조건부 UPDATE + 쿠폰 CONSUME)은 fn_transition_order 내부(ACCEPT 액션)에 이미 구현됨.
+    // 동시성 보장(선착순 조건부 UPDATE)은 fn_transition_order 내부(ACCEPT 액션)에 이미 구현됨.
+    // 08 P1: 쿠폰 사전 체크(fail-fast) 삭제 — 신규 주문은 coupon_cost null. 전환기 잔존 쿠폰
+    // 주문의 CONSUME/부족 예외는 RPC가 처리(아래 mapTransitionError가 409 매핑).
     const { data: order, error: rpcErr } = await admin.rpc("fn_transition_order", {
       p_order_id: orderId,
       p_action: "ACCEPT",
@@ -119,6 +100,7 @@ Deno.serve((req) =>
 function mapTransitionError(rpcErr: { message?: string }): Response {
   const message = rpcErr.message ?? "";
   if (message.includes("ALREADY_ACCEPTED")) return errorResponse("ALREADY_ACCEPTED", 409);
+  // [08 P1 전환기 보존] 잔존 쿠폰 주문(coupon_cost not null)의 레거시 CONSUME 부족 예외 매핑.
   if (message.includes("INSUFFICIENT_COUPON")) return errorResponse("INSUFFICIENT_COUPON", 409);
   // [07 F11] fn_transition_order ACCEPT 게이트(SUSPENDED/미승인) — Edge 사전 가드가 통상 먼저 잡지만
   // RPC까지 온 경우(방어선)도 403으로 매핑.

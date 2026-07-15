@@ -42,12 +42,11 @@ export const orderCreateInputSchema = z.object({
 });
 export type OrderCreateInput = z.infer<typeof orderCreateInputSchema>;
 
-// 07 F3b-①: estimatedPoint→estimatedCash 계약 개정, coupon_cost 스냅샷 추가,
-// snapshotRiderFee 제거(레거시 — rider_fee 신규 미기록, 07 §1-3). 02-api.md "1. order-create" 출력.
+// 08 G3-①: couponCost 필드 삭제(쿠폰 모델 폐기 — coupon_cost 스냅샷 중지, 08 P1).
+// 07 F3b-①의 estimatedCash 계약·snapshotRiderFee 제거는 유지. 02-api.md "1. order-create" 출력.
 export const orderCreateOutputSchema = z.object({
   orderId: uuidSchema,
   snapshotPricePerKg: z.number().int().positive(),
-  couponCost: z.number().int().nonnegative(),
   estimatedCash: z.number().int().nonnegative(),
 });
 export type OrderCreateOutput = z.infer<typeof orderCreateOutputSchema>;
@@ -71,9 +70,18 @@ export type OrderAcceptOutput = z.infer<typeof orderAcceptOutputSchema>;
 /** 02-api.md order-transition action별 payload 스키마. */
 export const arrivePayloadSchema = z.undefined().or(z.object({}).strict());
 
+/**
+ * 현장 지급수단(08 P2). 라이더가 SUBMIT_MEASURE에서 선택 — CASH=현금 직접 지급,
+ * POINT=점주 확인 시 point_ledger EARN 적립(1P=1원). pickup_orders.payout_method와 1:1.
+ */
+export const payoutMethodSchema = z.enum(["CASH", "POINT"]);
+export type PayoutMethod = z.infer<typeof payoutMethodSchema>;
+
+// 08 P2: payoutMethod 필수(신 클라이언트 강제). RPC는 생략 시 CASH 폴백으로 구버전 번들과 호환.
 export const submitMeasurePayloadSchema = z.object({
   measuredKg: kgSchema,
   photoUrls: z.array(z.string().url()).min(1),
+  payoutMethod: payoutMethodSchema,
 });
 
 export const confirmMeasurePayloadSchema = z.undefined().or(z.object({}).strict());
@@ -232,106 +240,9 @@ export const pointAdjustOutputSchema = z.object({
 });
 export type PointAdjustOutput = z.infer<typeof pointAdjustOutputSchema>;
 
-// ===== 14. coupon-adjust (admin) — 07 F3b-⑤ =====
-// 쿠폰 수동 조정(CS 보조/데모 라이더 선지급). point-adjust 패턴 미러 → fn_charge_coupon(ADJUST).
-// qty는 ±(0 불가). 음수 조정이 잔액을 초과하면 RPC가 INSUFFICIENT_COUPON(409)을 raise한다.
-
-export const couponAdjustInputSchema = z.object({
-  riderId: uuidSchema,
-  qty: z.number().int().refine((v) => v !== 0, { message: "조정 수량은 0이 될 수 없어요." }),
-  memo: z.string().min(1),
-});
-export type CouponAdjustInput = z.infer<typeof couponAdjustInputSchema>;
-
-export const couponAdjustOutputSchema = z.object({
-  riderId: uuidSchema,
-  qty: z.number().int(),
-});
-export type CouponAdjustOutput = z.infer<typeof couponAdjustOutputSchema>;
-
-// ===== 15. coupon-price-set (admin) — 07 F3b-⑤ =====
-// 쿠폰 단가 tick 등록(price-set 패턴 미러 → coupon_price_ticks insert). unitPrice > 0.
-
-export const couponPriceSetInputSchema = z.object({
-  unitPrice: z.number().int().positive(),
-});
-export type CouponPriceSetInput = z.infer<typeof couponPriceSetInputSchema>;
-
-export const couponPriceSetOutputSchema = z.object({
-  id: z.number().int(),
-  unitPrice: z.number().int().positive(),
-  effectiveAt: z.string(),
-});
-export type CouponPriceSetOutput = z.infer<typeof couponPriceSetOutputSchema>;
-
-// ===== 11. coupon-purchase-intent (rider) — 07 F4 =====
-// 쿠폰 구매 신청(PG 결제위젯 진입 전). qty 1~200 → 최신 coupon_price_ticks 스냅샷 →
-// coupon_purchases(PENDING) 생성. 단가 미설정 시 409 COUPON_PRICE_NOT_SET.
-
-export const couponPurchaseIntentInputSchema = z.object({
-  qty: z.number().int().min(1).max(200),
-});
-export type CouponPurchaseIntentInput = z.infer<typeof couponPurchaseIntentInputSchema>;
-
-export const couponPurchaseIntentOutputSchema = z.object({
-  purchaseId: uuidSchema,
-  /** PG 주문번호(pg_order_id). 토스 requestPayment()의 orderId / 코엠 orderno(20자 이내). */
-  pgOrderId: z.string().min(1),
-  /** 결제 금액(원) = qty × unitPrice. 위젯 setAmount·confirm amount 검증 기준. */
-  amount: z.number().int().positive(),
-  unitPrice: z.number().int().positive(),
-  /** 코엠(PG_PROVIDER=koem) 결제창 진입 정보(07 F14). 클라이언트는 params를 수정 없이
-      hidden form으로 payUrl에 POST한다(checkHash 포함 — 서버 생성). 토스 모드에서는 없음. */
-  koem: z
-    .object({
-      payUrl: z.string().min(1),
-      params: z.record(z.string()),
-    })
-    .optional(),
-  /** 데모 결제(PG_PROVIDER=demo, 07 F14 데모 운영 — 코엠 실연결 전). 클라이언트는 결제창 없이
-      곧장 confirm(paymentKey=`demo_${purchaseId}`)을 호출한다. 실 PG 모드에서는 없음. */
-  demo: z.literal(true).optional(),
-});
-export type CouponPurchaseIntentOutput = z.infer<typeof couponPurchaseIntentOutputSchema>;
-
-// ===== 12. coupon-purchase-confirm (rider) — 07 F4 =====
-// 토스 successUrl 파라미터를 그대로 받아 승인 확정 + 쿠폰 충전(멱등 3중, 07 §1-4).
-// 출력은 충전 후 잔액 {balance}. 재호출 안전(orphan 재시도).
-
-export const couponPurchaseConfirmInputSchema = z.object({
-  purchaseId: uuidSchema,
-  paymentKey: z.string().min(1),
-  pgOrderId: z.string().min(1),
-  amount: z.number().int().positive(),
-});
-export type CouponPurchaseConfirmInput = z.infer<typeof couponPurchaseConfirmInputSchema>;
-
-export const couponPurchaseConfirmOutputSchema = z.object({
-  /** 충전 후 쿠폰 잔액(장). v_coupon_balance 재조회. */
-  balance: z.number().int().nonnegative(),
-});
-export type CouponPurchaseConfirmOutput = z.infer<typeof couponPurchaseConfirmOutputSchema>;
-
-// ===== 13. coupon-refund (admin) — 07 F4 =====
-// 쿠폰 구매 건 환불(구매 건 단위, 건당 1회). qty 생략=전액, 지정=부분 1회. reason 필수.
-// 미사용 잔액 부족 시 409 INSUFFICIENT_COUPON, 토스 취소 실패 시 402 PAYMENT_FAILED.
-
-export const couponRefundInputSchema = z.object({
-  purchaseId: uuidSchema,
-  /** 환불 수량(장). 생략 시 구매 전액. 1 이상, 구매 qty 이하(RPC가 상한 검증). */
-  qty: z.number().int().positive().optional(),
-  reason: z.string().min(1),
-});
-export type CouponRefundInput = z.infer<typeof couponRefundInputSchema>;
-
-export const couponRefundOutputSchema = z.object({
-  purchaseId: uuidSchema,
-  /** 실제 환불된 수량(장). */
-  refundedQty: z.number().int().positive(),
-  /** 환불 후 라이더 쿠폰 잔액(장). */
-  balance: z.number().int().nonnegative(),
-});
-export type CouponRefundOutput = z.infer<typeof couponRefundOutputSchema>;
+// ===== 11~15. coupon-* — 삭제됨(08 P1·G3-⑥) =====
+// 수거쿠폰 모델 폐기로 coupon-adjust/coupon-price-set/coupon-purchase-intent·confirm·refund
+// zod 계약을 제거했다. DB 테이블·RPC는 레거시 보존(01-db-schema.sql). 구계약은 git 이력 참조.
 
 // ===== U2 supplier 가입 (profiles + supplier_profiles row 생성) =====
 // 이 입력은 Edge Function이 아니라 클라이언트가 anon key로 profiles/supplier_profiles에

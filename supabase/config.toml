@@ -415,9 +415,7 @@ import_map = "./functions/import_map.json"
 verify_jwt = true
 import_map = "./functions/import_map.json"
 
-# T5: price-set/rider-verify/rider-location. (withdraw-request/withdraw-process/point-adjust는
-# F13 레거시 일몰로 함수 디렉터리와 함께 엔트리 삭제 — 엔트리만 남기면 supabase functions deploy가
-# "Entrypoint path does not exist" 400으로 실패한다. 실측: 2026-07-10 프로덕션 배포에서 확인.)
+# T5: price-set/rider-verify/rider-location.
 [functions.price-set]
 verify_jwt = true
 import_map = "./functions/import_map.json"
@@ -430,10 +428,19 @@ import_map = "./functions/import_map.json"
 verify_jwt = true
 import_map = "./functions/import_map.json"
 
-# F14: 코엠페이먼츠 rUrl 콜백(PG 서버가 호출) — JWT가 없으므로 verify_jwt=false가 필수.
-# 요청 검증은 함수 내부에서(orderno→구매건 대조·금액 대조, 07 F14 확정 설계).
-[functions.coupon-purchase-return]
-verify_jwt = false
+# 08 G3-⑤: 출금·포인트 조정 부활(F13이 삭제했던 엔트리 복원 — 함수 디렉터리와 짝 유지.
+# 엔트리만 있고 디렉터리가 없으면 functions deploy가 400으로 실패한다: 2026-07-10 실측).
+# coupon-* 엔트리(coupon-purchase-return verify_jwt=false 포함)는 08 P1 일몰로 디렉터리와 함께 삭제.
+[functions.withdraw-request]
+verify_jwt = true
+import_map = "./functions/import_map.json"
+
+[functions.withdraw-process]
+verify_jwt = true
+import_map = "./functions/import_map.json"
+
+[functions.point-adjust]
+verify_jwt = true
 import_map = "./functions/import_map.json"
 
 # [edge_runtime.secrets]

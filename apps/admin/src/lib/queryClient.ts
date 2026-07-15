@@ -24,20 +24,18 @@ export const queryKeys = {
   dashboardKpi: (day: string) => ["admin", "dashboard", "kpi", day] as const,
   priceLatest: () => ["admin", "price", "latest"] as const,
   priceHistory: (limit: number) => ["admin", "price", "history", limit] as const,
-  couponPriceHistory: (limit: number) => ["admin", "price", "coupon", "history", limit] as const,
   orders: (statusFilter: string) => ["admin", "orders", statusFilter] as const,
   orderDetail: (orderId: string) => ["admin", "orders", "detail", orderId] as const,
   orderEvents: (orderId: string) => ["admin", "orders", "events", orderId] as const,
   suppliers: () => ["admin", "users", "suppliers"] as const,
   riders: (statusFilter: string) => ["admin", "users", "riders", statusFilter] as const,
-  couponBalances: () => ["admin", "users", "couponBalances"] as const,
-  riderCouponLedger: (riderId: string) => ["admin", "users", "couponLedger", riderId] as const,
-  // [07 F13] withdrawals/ledgerAudit 키 제거 — 구모델 출금 큐·point_ledger 감사(useSettlementAdmin)
-  // 소멸(D1). 매출·정산은 couponSalesDaily/couponLedgerAudit(useSalesAdmin)로 대체됨.
-  couponSalesDaily: (days: number) => ["admin", "sales", "couponDaily", days] as const,
-  pickupStatsDaily: (days: number) => ["admin", "sales", "pickupDaily", days] as const,
-  couponLedgerAudit: (limit: number) => ["admin", "sales", "couponLedger", limit] as const,
-  couponPurchases: (statusFilter: string) => ["admin", "sales", "couponPurchases", statusFilter] as const,
+  // [08 G7] 쿠폰 키(couponPriceHistory/couponBalances/riderCouponLedger/couponSalesDaily/
+  // couponLedgerAudit/couponPurchases) 제거 — 쿠폰 모델 폐기(08 P1).
+  // 출금 큐·포인트 원장 감사 키 부활(07 F13이 제거했던 축 — 08 P4).
+  withdrawals: (statusFilter: string) => ["admin", "settlement", "withdrawals", statusFilter] as const,
+  pointLedgerAudit: (limit: number) => ["admin", "settlement", "pointLedger", limit] as const,
+  riderPayouts: (days: number) => ["admin", "settlement", "riderPayouts", days] as const,
+  pickupStatsDaily: (days: number) => ["admin", "settlement", "pickupDaily", days] as const,
   depots: () => ["admin", "depots"] as const,
   csTickets: (statusFilter: string) => ["admin", "cs", statusFilter] as const,
 };

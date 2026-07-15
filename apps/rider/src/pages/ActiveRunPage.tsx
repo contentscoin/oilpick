@@ -5,6 +5,7 @@ import {
   EmptyState,
   MapView,
   OrderTimeline,
+  PayoutMethodChip,
   PhotoUploader,
   colors,
   elevation,
@@ -15,7 +16,16 @@ import {
   useToast,
   type PhotoAsset,
 } from "@oilpick/ui";
-import { estimateCash, formatKg, formatKrw, humanizeSupabaseError, type OrderStatus } from "@oilpick/core";
+import {
+  PAYOUT_METHOD_LABEL,
+  estimateCash,
+  formatKg,
+  formatKrw,
+  formatPoint,
+  humanizeSupabaseError,
+  type OrderStatus,
+  type PayoutMethod,
+} from "@oilpick/core";
 import { KAKAO_KEY } from "../lib/env";
 import { invokeEdgeFunction } from "../lib/edgeFunction";
 import { supabase } from "../lib/supabaseClient";
@@ -87,13 +97,19 @@ export function ActiveRunPage() {
           measuredKg={run.measuredKg}
           finalKg={run.finalKg}
           snapshotPricePerKg={run.snapshotPricePerKg}
+          submittedPayoutMethod={run.payoutMethod}
+          existingPhotoUrls={run.photoUrls}
         />
       )}
       {run.status === "DISPUTED" && (
         <DisputedPanel orderId={run.id} measuredKg={run.measuredKg} photoUrls={run.photoUrls} />
       )}
       {run.status === "COMPLETED" && (
-        <CompletedPanel cashPaidAmount={run.cashPaidAmount} finalKg={run.finalKg} />
+        <CompletedPanel
+          cashPaidAmount={run.cashPaidAmount}
+          finalKg={run.finalKg}
+          payoutMethod={run.payoutMethod}
+        />
       )}
       {/* 레거시 전용: 신모델은 CONFIRM_MEASURE가 COMPLETED로 직행해 PICKED_UP에 도달하지 않는다.
           프로덕션 잔존분(구모델 PICKED_UP)만 이 QR 배송 경로를 탄다(07 F6-②). */}
@@ -138,9 +154,10 @@ export function ActiveRunPage() {
  */
 const RIDER_HEADLINE: Partial<Record<OrderStatus, { title: string; hint: string }>> = {
   ACCEPTED: { title: "매장으로 이동해주세요", hint: "도착하면 도착 버튼을 눌러주세요." },
-  ARRIVED: { title: "현장에서 계량해주세요", hint: "무게를 재고 현금을 지급한 뒤 사장님 확인을 받아요." },
+  // 08 P2: 지급 수단(현금/포인트)은 계량 제출 시 라이더가 선택한다 — 수단 중립 카피.
+  ARRIVED: { title: "현장에서 계량해주세요", hint: "무게를 재고 지급 수단을 선택한 뒤 사장님 확인을 받아요." },
   DISPUTED: { title: "사장님이 이의신청했어요", hint: "관리자 중재 결과를 기다리는 중이에요." },
-  COMPLETED: { title: "수거를 완료했어요", hint: "현금 지급이 확인됐어요." },
+  COMPLETED: { title: "수거를 완료했어요", hint: "지급 확인이 끝났어요." },
   // 레거시 전용(구모델 PICKED_UP 잔존분).
   PICKED_UP: { title: "집하장으로 이동해주세요", hint: "QR로 배송을 완료하세요." },
 };
@@ -277,29 +294,96 @@ function AcceptedPanel({ orderId, pickupAddress }: { orderId: string; pickupAddr
  * - 계량 제출 후(measuredKg not null): "현금 지급 후 사장님 확인 요청" 대기 배너.
  * - 그 외: kg 입력 + 사진(필수) + 예상 지급 현금 + [계량 제출 → 사장님 확인 요청].
  */
+/**
+ * 08 P2 — 지급수단 세그먼트(현금/포인트). 계량 제출 전 필수 선택.
+ * 48px 터치 타깃 2버튼 카드, 선택 시 브랜드 그린 테두리(라디오 시맨틱).
+ */
+const PAYOUT_OPTIONS: Array<{ value: PayoutMethod; icon: string; description: string }> = [
+  { value: "CASH", icon: "💵", description: "현장에서 직접 현금을 드려요" },
+  { value: "POINT", icon: "🪙", description: "사장님 확인 시 포인트로 적립돼요" },
+];
+
+function PayoutMethodSelect({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: PayoutMethod | null;
+  onChange: (v: PayoutMethod) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div role="radiogroup" aria-label="지급 수단" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+      {PAYOUT_OPTIONS.map((option) => {
+        const selected = value === option.value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            data-testid={`payout-option-${option.value.toLowerCase()}`}
+            disabled={disabled}
+            onClick={() => onChange(option.value)}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "flex-start",
+              gap: 4,
+              minHeight: 48,
+              padding: "12px 14px",
+              borderRadius: radius.button,
+              border: `2px solid ${selected ? colors.primary.DEFAULT : gray[200]}`,
+              backgroundColor: selected ? colors.primary.light : "#fff",
+              cursor: disabled ? "default" : "pointer",
+              textAlign: "left",
+            }}
+          >
+            <span style={{ fontSize: 15, fontWeight: 800, color: selected ? colors.primary.dark : gray[900] }}>
+              {option.icon} {PAYOUT_METHOD_LABEL[option.value]} 지급
+            </span>
+            <span style={{ fontSize: 12, color: colors.status.wait, lineHeight: 1.4 }}>{option.description}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function ArrivedPanel({
   orderId,
   measuredKg,
   finalKg,
   snapshotPricePerKg,
+  submittedPayoutMethod,
+  existingPhotoUrls,
 }: {
   orderId: string;
   measuredKg: number | null;
   finalKg: number | null;
   snapshotPricePerKg: number;
+  /** 이미 제출된 지급수단(payout_method). 재제출 프리필 + 대기 배너 카피 분기(08 P2). */
+  submittedPayoutMethod: PayoutMethod | null;
+  /** 이미 제출된 현장 사진 — 재제출 시 새 사진이 없으면 재사용(서버는 매 제출 ≥1장 요구). */
+  existingPhotoUrls: string[];
 }) {
   const [kg, setKg] = useState("");
+  const [payout, setPayout] = useState<PayoutMethod | null>(submittedPayoutMethod);
   const [photos, setPhotos] = useState<PhotoAsset[]>([]);
   const [submitting, setSubmitting] = useState(false);
-  // 제출 전 검증(계량값/사진 누락)은 인라인 에러 유지 — 서버/업로드 실패는 토스트(06 E6).
+  // 08 P2: 재제출(수단 변경) 모드 — 대기 배너 대신 폼을 다시 연다(중재 확정 전까지 허용).
+  const [resubmitting, setResubmitting] = useState(false);
+  // 제출 전 검증(계량값/사진/수단 누락)은 인라인 에러 유지 — 서버/업로드 실패는 토스트(06 E6).
   const [error, setError] = useState<string | null>(null);
   // 06 E8-③: 순차 업로드 진행 카운트("사진 N/M 업로드 중"). 업로드 중이 아니면 null.
   const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null);
   const { showToast } = useToast();
 
   // 07 §1-3: 중재로 kg가 확정된(final_kg) 주문은 SUBMIT_MEASURE 재제출이 서버에서 거부된다.
-  // 폼을 숨기고 확정 무게 + 지급할 현금 + 사장님 수령 확인 대기를 안내한다.
+  // 폼을 숨기고 확정 무게 + 지급 안내 + 사장님 확인 대기를 안내한다(수단별 카피 — 08 §1-5).
   if (finalKg != null) {
+    const arbitratedAmount = estimateCash(finalKg, snapshotPricePerKg);
+    const arbitratedPoint = (submittedPayoutMethod ?? "CASH") === "POINT";
     return (
       <Card
         testId="run-arbitration-complete"
@@ -324,13 +408,17 @@ function ArrivedPanel({
           중재 확정 무게 {formatKg(finalKg)}
         </p>
         <p style={{ margin: 0, fontSize: 14, color: colors.status.wait }}>
-          사장님께 현금 {formatKrw(estimateCash(finalKg, snapshotPricePerKg))}을 지급한 뒤 앱에서 수령 확인을 받아주세요.
+          {arbitratedPoint
+            ? `사장님이 확인하면 포인트 ${formatPoint(arbitratedAmount)}가 적립돼요 — 앱에서 확인을 요청하세요.`
+            : `사장님께 현금 ${formatKrw(arbitratedAmount)}을 지급한 뒤 앱에서 수령 확인을 받아주세요.`}
         </p>
       </Card>
     );
   }
 
-  if (measuredKg != null) {
+  if (measuredKg != null && !resubmitting) {
+    const submittedAmount = estimateCash(measuredKg, snapshotPricePerKg);
+    const submittedPoint = (submittedPayoutMethod ?? "CASH") === "POINT";
     return (
       <Card
         testId="measure-wait-banner"
@@ -352,10 +440,38 @@ function ArrivedPanel({
           <ClockIcon />
         </span>
         <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: colors.primary.dark }}>사장님 확인 대기</p>
-        <p style={{ margin: 0, fontSize: 14, color: colors.status.wait }}>
-          제출한 계량 {formatKg(measuredKg)} · 사장님께 현금{" "}
-          {formatKrw(estimateCash(measuredKg, snapshotPricePerKg))}을 지급하고 앱에서 수령 확인을 요청하세요.
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <PayoutMethodChip method={submittedPayoutMethod ?? "CASH"} />
+          <span className="oilpick-tabular-nums" style={{ fontSize: 14, color: gray[900], fontWeight: 600 }}>
+            {formatKg(measuredKg)}
+          </span>
+        </span>
+        <p data-testid="measure-wait-copy" style={{ margin: 0, fontSize: 14, color: colors.status.wait }}>
+          {submittedPoint
+            ? `사장님이 확인하면 포인트 ${formatPoint(submittedAmount)}가 적립돼요 — 확인을 요청하세요.`
+            : `사장님께 현금 ${formatKrw(submittedAmount)}을 지급하고 앱에서 수령 확인을 요청하세요.`}
         </p>
+        <button
+          type="button"
+          data-testid="measure-resubmit-button"
+          onClick={() => {
+            setKg(String(measuredKg));
+            setPayout(submittedPayoutMethod);
+            setResubmitting(true);
+          }}
+          style={{
+            background: "none",
+            border: "none",
+            color: colors.primary.DEFAULT,
+            fontSize: 14,
+            fontWeight: 700,
+            cursor: "pointer",
+            padding: "8px 4px",
+            minHeight: 44,
+          }}
+        >
+          계량·지급 수단 다시 제출
+        </button>
       </Card>
     );
   }
@@ -369,7 +485,13 @@ function ArrivedPanel({
       setError("계량값을 확인해주세요.");
       return;
     }
-    if (photos.length === 0) {
+    // 08 P2: 지급수단 미선택 시 제출 불가(서버 zod도 필수 강제).
+    if (!payout) {
+      setError("지급 수단(현금/포인트)을 선택해주세요.");
+      return;
+    }
+    // 재제출은 기존 사진 재사용 허용(서버는 매 제출 photoUrls ≥1장 요구).
+    if (photos.length === 0 && existingPhotoUrls.length === 0) {
       setError("현장 사진을 1장 이상 첨부해주세요.");
       return;
     }
@@ -403,10 +525,20 @@ function ArrivedPanel({
       const result = await invokeEdgeFunction("order-transition", {
         orderId,
         action: "SUBMIT_MEASURE",
-        payload: { measuredKg: parsedKg, photoUrls: uploadedUrls },
+        payload: {
+          measuredKg: parsedKg,
+          photoUrls: uploadedUrls.length > 0 ? uploadedUrls : existingPhotoUrls,
+          payoutMethod: payout,
+        },
       });
       if (result.ok) {
-        showToast("계량을 제출했어요 — 사장님 확인을 기다려요", { variant: "success" });
+        showToast(
+          payout === "POINT"
+            ? "계량을 제출했어요 — 사장님이 확인하면 포인트가 적립돼요"
+            : "계량을 제출했어요 — 현금을 지급하고 사장님 확인을 받아요",
+          { variant: "success" },
+        );
+        setResubmitting(false);
       } else {
         showToast(result.message, { variant: "error" });
       }
@@ -420,8 +552,9 @@ function ArrivedPanel({
     }
   }
 
-  const cashPayout = kg ? estimateCash(Number(kg), snapshotPricePerKg) : 0;
+  const payoutAmount = kg ? estimateCash(Number(kg), snapshotPricePerKg) : 0;
   const showEstimate = Boolean(kg) && !Number.isNaN(Number(kg));
+  const isPointSelected = payout === "POINT";
 
   return (
     <form data-testid="run-arrived-panel" onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -444,7 +577,13 @@ function ArrivedPanel({
           />
         </div>
 
-        {/* 07 F6-①: 점주에게 지급할 현금(원화). 앰버(accent) 강조 배너. */}
+        {/* 08 P2: 지급 수단 선택(필수) — 현금/포인트 세그먼트. */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <span style={{ fontSize: 14, fontWeight: 600, color: gray[800] }}>지급 수단 (필수)</span>
+          <PayoutMethodSelect value={payout} onChange={setPayout} disabled={submitting} />
+        </div>
+
+        {/* 08 G6-③: 지급액 미리보기 — 수단별 라벨/단위 분기. 앰버(accent) 강조 배너. */}
         {showEstimate && (
           <div
             data-testid="run-cash-payout"
@@ -458,25 +597,29 @@ function ArrivedPanel({
               backgroundColor: colors.accent.light,
             }}
           >
-            <span style={{ fontSize: 13, fontWeight: 600, color: colors.status.wait }}>점주에게 지급할 현금</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: colors.status.wait }}>
+              {isPointSelected ? "점주에게 적립될 포인트" : "점주에게 지급할 현금"}
+            </span>
             {/* 05 폴리시: 밝은 배경(accent.light) 위 앰버 "텍스트"는 accent.deep(대비 4.5:1). */}
             <span
               className="oilpick-tabular-nums"
               style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-0.01em", color: colors.accent.deep }}
             >
-              {formatKrw(cashPayout)}
+              {isPointSelected ? formatPoint(payoutAmount) : formatKrw(payoutAmount)}
             </span>
           </div>
         )}
         {showEstimate && (
           <p style={{ margin: 0, fontSize: 12, color: colors.status.wait, textAlign: "right" }}>
-            현장 계량 기준으로 확정 · 점주에게 직접 지급
+            {isPointSelected ? "현장 계량 기준으로 확정 · 사장님 확인 시 적립" : "현장 계량 기준으로 확정 · 점주에게 직접 지급"}
           </p>
         )}
       </Card>
 
       <Card style={{ gap: 10 }}>
-        <span style={{ fontSize: 14, fontWeight: 600, color: gray[800] }}>현장 사진 (필수)</span>
+        <span style={{ fontSize: 14, fontWeight: 600, color: gray[800] }}>
+          현장 사진 {existingPhotoUrls.length > 0 ? "(기존 사진 재사용 가능)" : "(필수)"}
+        </span>
         <PhotoUploader photos={photos} onChange={setPhotos} maxCount={3} />
       </Card>
 
@@ -576,12 +719,22 @@ function DisputedPanel({
 }
 
 /**
- * 완료 요약 패널(07 F6-④). CONFIRM_MEASURE/FORCE_COMPLETE로 COMPLETED에 도달한 직후,
- * 현장 지급 현금(cash_paid_amount)을 요약하고 콜 홈으로 복귀시킨다. 오래된 완료분은
+ * 완료 요약 패널(08 G6-③). CONFIRM_MEASURE/FORCE_COMPLETE로 COMPLETED에 도달한 직후,
+ * 확정 지급액(cash_paid_amount)을 수단별로 요약하고 콜 홈으로 복귀시킨다. 오래된 완료분은
  * useActiveRun이 걸러내므로(창 경과) 이 패널은 "완료 직후"에만 노출된다.
  */
-function CompletedPanel({ cashPaidAmount, finalKg }: { cashPaidAmount: number | null; finalKg: number | null }) {
+function CompletedPanel({
+  cashPaidAmount,
+  finalKg,
+  payoutMethod,
+}: {
+  cashPaidAmount: number | null;
+  finalKg: number | null;
+  payoutMethod: PayoutMethod | null;
+}) {
   const navigate = useNavigate();
+  // payout_method null = 레거시/전환기 → CASH 간주(08 P3 coalesce).
+  const isPoint = payoutMethod === "POINT";
   return (
     <Card
       testId="run-completed-panel"
@@ -603,10 +756,13 @@ function CompletedPanel({ cashPaidAmount, finalKg }: { cashPaidAmount: number | 
         <CheckMarkIcon />
       </span>
       <p style={{ margin: 0, fontSize: 18, fontWeight: 800, color: colors.primary.dark }}>수거 완료</p>
-      <p className="oilpick-tabular-nums" style={{ margin: 0, fontSize: 15, color: gray[900] }}>
-        현금 {formatKrw(cashPaidAmount ?? 0)} 지급
-        {finalKg != null ? ` · ${formatKg(finalKg)}` : ""}
-      </p>
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+        <PayoutMethodChip method={payoutMethod ?? "CASH"} />
+        <p className="oilpick-tabular-nums" style={{ margin: 0, fontSize: 15, color: gray[900] }}>
+          {isPoint ? `포인트 ${formatPoint(cashPaidAmount ?? 0)} 지급` : `현금 ${formatKrw(cashPaidAmount ?? 0)} 지급`}
+          {finalKg != null ? ` · ${formatKg(finalKg)}` : ""}
+        </p>
+      </span>
       <BigButton data-testid="completed-go-home" onClick={() => navigate("/")}>
         콜 홈으로
       </BigButton>

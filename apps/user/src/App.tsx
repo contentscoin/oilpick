@@ -30,6 +30,9 @@ const OrdersHistoryPage = lazy(() =>
   import("./pages/OrdersHistoryPage").then((m) => ({ default: m.OrdersHistoryPage })),
 );
 const WalletPage = lazy(() => import("./pages/WalletPage").then((m) => ({ default: m.WalletPage })));
+const WithdrawPage = lazy(() =>
+  import("./pages/WithdrawPage").then((m) => ({ default: m.WithdrawPage })),
+);
 const NotificationsPage = lazy(() =>
   import("./pages/NotificationsPage").then((m) => ({ default: m.NotificationsPage })),
 );
@@ -46,8 +49,8 @@ const DevUiPage = lazy(() => import("./pages/DevUiPage").then((m) => ({ default:
  * 06-enhancement-plan.md E1: 하단 탭이 필요한 화면(홈/이력/수령액/알림/마이)을 한 레이아웃 라우트로
  * 묶어 `UserShell`(탭바)을 일괄 적용한다. 이전에는 홈에 탭바가 없어 다른 섹션으로 이동하지 못했다.
  * 온보딩 게이트(첫 실행)와 AuthGuard(미인증 → /auth)는 셸 진입 전에 통과해야 한다.
- * 플로우 화면(/request, /orders/:id, /my/edit)은 탭 없이 풀스크린으로 유지한다.
- * (07 F8/D1: /wallet/withdraw 출금 화면은 제거 — /wallet은 "수령 이력"으로 대체.)
+ * 플로우 화면(/request, /orders/:id, /wallet/withdraw, /my/edit)은 탭 없이 풀스크린으로 유지한다.
+ * (08 G5-②: /wallet/withdraw 출금 화면 부활 — 07 F8/D1의 제거를 되돌린다.)
  */
 function AppShell() {
   const onboardingDone = localStorage.getItem(ONBOARDING_DONE_KEY) === "1";
@@ -131,6 +134,14 @@ export function App() {
             element={
               <AuthGuard>
                 <OrderDetailPage />
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/wallet/withdraw"
+            element={
+              <AuthGuard>
+                <WithdrawPage />
               </AuthGuard>
             }
           />

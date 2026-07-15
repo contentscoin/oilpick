@@ -14,7 +14,7 @@ const NAV_ITEMS = [
   { to: "/price", label: "시세 관리" },
   { to: "/orders", label: "주문 관리" },
   { to: "/users", label: "회원 관리" },
-  { to: "/settlement", label: "매출·정산" }, // 07 F10-③ 재편
+  { to: "/settlement", label: "정산" }, // 08 G7-① 재편(출금 큐·포인트 정산)
   { to: "/cs", label: "CS" }, // 07 F12 신설
   // [07 F13] 집하장(/depots) 내비 제거 — 집하장/QR 배송 소멸(07 §0). 라우트도 App.tsx에서 제거.
   { to: "/notify", label: "공지" },

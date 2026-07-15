@@ -44,25 +44,11 @@ export const NO_BANK_ACCOUNT = "NO_BANK_ACCOUNT";
 export const INSUFFICIENT_BALANCE = "INSUFFICIENT_BALANCE";
 
 /**
- * 라이더의 수거쿠폰 잔액이 주문 coupon_cost보다 작을 때 반환. HTTP 409.
- * order-accept 사전 체크(fail-fast) + fn_consume_coupon/fn_charge_coupon(음수 ADJUST)/
- * coupon-refund가 raise하는 'INSUFFICIENT_COUPON' 예외의 매핑 코드.
- * 02-api.md `order-accept`/`coupon-adjust`/`coupon-refund`, 07 §1-1·§1-4.
+ * [08 P1 레거시] 전환기 잔존 쿠폰 주문(coupon_cost not null) 수락 시 fn_consume_coupon이 raise하는
+ * 'INSUFFICIENT_COUPON' 예외의 매핑 코드. HTTP 409. 신규 주문은 쿠폰 게이트가 없어 발생하지 않는다.
+ * order-accept mapTransitionError가 전환기 대비로 보존(02-api.md `order-accept`).
  */
 export const INSUFFICIENT_COUPON = "INSUFFICIENT_COUPON";
-
-/**
- * 쿠폰 단가 tick(coupon_price_ticks)이 아직 하나도 없을 때 coupon-purchase-intent가 반환. HTTP 409.
- * (F4 intent용 — F3b에서 에러 상수만 선등록.) 02-api.md `coupon-purchase-intent`, 07 §1-4.
- */
-export const COUPON_PRICE_NOT_SET = "COUPON_PRICE_NOT_SET";
-
-/**
- * 토스페이먼츠 결제 승인/취소 API 호출 실패 시 coupon-purchase-confirm/coupon-refund가 반환. HTTP 402.
- * (07/02에 PG 실패 전용 코드가 없어 F4에서 최소 신설 — 승인 거절·네트워크 오류 등 PG측 실패를
- * amount 위변조(VALIDATION_ERROR)와 구분한다.) 02-api.md `coupon-purchase-confirm`.
- */
-export const PAYMENT_FAILED = "PAYMENT_FAILED";
 
 /**
  * 30분 무수락으로 order-expire cron이 자동 취소할 때의 cancel_reason 값
@@ -92,8 +78,6 @@ export const ERROR_CODES = {
   NO_BANK_ACCOUNT,
   INSUFFICIENT_BALANCE,
   INSUFFICIENT_COUPON,
-  COUPON_PRICE_NOT_SET,
-  PAYMENT_FAILED,
   NO_RIDER,
   VALIDATION_ERROR,
   UNAUTHORIZED,
@@ -112,9 +96,7 @@ export const ERROR_MESSAGE_KO: Record<ErrorCode, string> = {
   INVALID_QR: "QR 코드가 일치하지 않아요.",
   NO_BANK_ACCOUNT: "먼저 출금 계좌를 등록해주세요.",
   INSUFFICIENT_BALANCE: "출금 가능 잔액이 부족해요.",
-  INSUFFICIENT_COUPON: "수거쿠폰이 부족해요. 충전 후 수락할 수 있어요.",
-  COUPON_PRICE_NOT_SET: "쿠폰 단가가 아직 설정되지 않았어요. 관리자 설정 후 이용할 수 있어요.",
-  PAYMENT_FAILED: "결제 승인에 실패했어요. 다시 시도해 주세요.",
+  INSUFFICIENT_COUPON: "이 주문은 이전 방식(수거쿠폰) 주문이라 지금은 수락할 수 없어요.",
   NO_RIDER: "수락한 라이더가 없어 자동 취소되었어요.",
   VALIDATION_ERROR: "입력값을 확인해주세요.",
   UNAUTHORIZED: "로그인이 필요해요.",

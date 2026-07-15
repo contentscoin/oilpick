@@ -13,10 +13,12 @@ import {
   OfflineBanner,
   OrderTimeline,
   PhotoUploader,
+  PayoutMethodChip,
   PointBalanceCard,
   PointHeroAction,
   PriceCard,
   PriceChart,
+  PriceStatsRow,
   QtyStepper,
   SegmentToggle,
   StatusBadge,
@@ -159,20 +161,40 @@ export function DevUiPage() {
           distanceKm={3.2}
           estimatedKg={45}
           estimatedCash={72000}
-          couponCost={3}
           address="서울시 강남구 테헤란로 123"
           onClick={() => {}}
         />
       </section>
 
       <section>
-        {/* 07 F5로 쿠폰 잔액 히어로로 일반화(label/formatValue). 07 F13: 구모델 "출금 신청" 액션 라벨 제거. */}
-        <h2>PointBalanceCard</h2>
+        {/* 08 G5-①: 포인트 지갑 부활 — 잔액 히어로 + [출금 신청] 목업. */}
+        <h2>PointBalanceCard (포인트 지갑)</h2>
         <PointBalanceCard
-          available={20}
-          label="보유 수거쿠폰"
-          formatValue={(n) => `${n}장`}
-          action={<PointHeroAction>충전하기</PointHeroAction>}
+          available={21000}
+          held={0}
+          action={<PointHeroAction>출금 신청</PointHeroAction>}
+        />
+      </section>
+
+      <section>
+        {/* 08 G4-③: 지급수단 뱃지 — 주문 카드/상세/드로어 공용. */}
+        <h2>PayoutMethodChip</h2>
+        <div style={{ display: "flex", gap: 8 }}>
+          <PayoutMethodChip method="CASH" />
+          <PayoutMethodChip method="POINT" />
+        </div>
+      </section>
+
+      <section>
+        {/* 08 G4-②: 기간 시세 통계 행(라이트 변형 — 다크는 홈 히어로에서). */}
+        <h2>PriceStatsRow</h2>
+        <PriceStatsRow
+          data={[
+            { date: "2026-07-11", price: 700 },
+            { date: "2026-07-12", price: 760 },
+            { date: "2026-07-13", price: 640 },
+            { date: "2026-07-14", price: 720 },
+          ]}
         />
       </section>
 
@@ -263,14 +285,14 @@ export function DevUiPage() {
       </section>
 
       <section>
-        {/* 07 F5 쿠폰 변형(현행). 레거시 point 변형(EARN/WITHDRAW_REQUEST 라벨)은 admin 원장 감사에서만 잔존. */}
-        <h2>LedgerList (쿠폰)</h2>
+        {/* 08 G5-①: point 변형 복권 — 지갑 포인트 내역(EARN/출금/조정). */}
+        <h2>LedgerList (포인트)</h2>
         <LedgerList
-          variant="coupon"
+          variant="point"
           entries={[
-            { id: 1, entryType: "CHARGE", amount: 30, createdAt: new Date() },
-            { id: 2, entryType: "CONSUME", amount: -2, createdAt: new Date() },
-            { id: 3, entryType: "REFUND", amount: 2, createdAt: new Date() },
+            { id: 1, entryType: "EARN", amount: 21000, createdAt: new Date() },
+            { id: 2, entryType: "WITHDRAW_REQUEST", amount: -10000, createdAt: new Date() },
+            { id: 3, entryType: "WITHDRAW_CANCEL", amount: 10000, createdAt: new Date() },
           ]}
         />
       </section>

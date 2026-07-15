@@ -4,7 +4,7 @@ import { CallCard } from "./CallCard";
 
 describe("CallCard", () => {
   it("renders distance, estimated kg, and 예상 매입 지급액", () => {
-    render(<CallCard distanceKm={3.2} estimatedKg={45} estimatedCash={72000} couponCost={3} />);
+    render(<CallCard distanceKm={3.2} estimatedKg={45} estimatedCash={72000} />);
     // 리치 레이아웃: 거리 숫자와 단위(km)는 별도 노드로 분리되어 카드 전체 텍스트에 함께 나타난다.
     expect(screen.getByTestId("call-card")).toHaveTextContent("3.2km");
     expect(screen.getByText(/45\.0kg/)).toBeInTheDocument();
@@ -12,15 +12,10 @@ describe("CallCard", () => {
     expect(screen.getByText("예상 매입 지급액")).toBeInTheDocument();
   });
 
-  it("[07 F5] shows 쿠폰 N장 소진 chip from coupon_cost", () => {
-    render(<CallCard distanceKm={1} estimatedKg={30} estimatedCash={48000} couponCost={2} />);
-    expect(screen.getByTestId("call-card-coupon")).toHaveTextContent("쿠폰 2장 소진");
-  });
-
-  it("[07 F5] omits coupon chip for legacy orders (couponCost null)", () => {
-    render(<CallCard distanceKm={1} estimatedKg={30} estimatedCash={48000} couponCost={null} />);
+  it("[08 G6-②] 쿠폰 칩 없음 — 쿠폰 모델 폐기", () => {
+    render(<CallCard distanceKm={1} estimatedKg={30} estimatedCash={48000} />);
     expect(screen.queryByTestId("call-card-coupon")).not.toBeInTheDocument();
-    // 매입액은 레거시에도 표시.
+    expect(screen.getByTestId("call-card")).not.toHaveTextContent("쿠폰");
     expect(screen.getByTestId("call-card-cash")).toHaveTextContent("48,000원");
   });
 
@@ -30,7 +25,6 @@ describe("CallCard", () => {
         distanceKm={1}
         estimatedKg={15}
         estimatedCash={24000}
-        couponCost={1}
         address="서울시 강남구 테헤란로 123"
       />,
     );
@@ -39,9 +33,7 @@ describe("CallCard", () => {
 
   it("calls onClick when tapped", () => {
     const onClick = vi.fn();
-    render(
-      <CallCard distanceKm={1} estimatedKg={15} estimatedCash={24000} couponCost={1} onClick={onClick} />,
-    );
+    render(<CallCard distanceKm={1} estimatedKg={15} estimatedCash={24000} onClick={onClick} />);
     screen.getByTestId("call-card").click();
     expect(onClick).toHaveBeenCalledOnce();
   });
