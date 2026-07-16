@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# OilPick 08 신모델(현장 지급수단 — 현금·포인트) 프로덕션 컷오버 — Supabase 단계 원샷 실행.
-# 08-payout-pivot.md §배포 체크리스트 / DEPLOY.md §1-0 기준. CEO 로컬 터미널에서 실행한다:
+# OilPick 08 신모델(현장 지급수단 — 현금·포인트) + 09 레퍼럴 프로덕션 컷오버 — Supabase 단계 원샷 실행.
+# 08-payout-pivot.md·09-referral.md §배포 / DEPLOY.md §1-0 기준. CEO 로컬 터미널에서 실행한다:
 #
 #   supabase login          # 최초 1회(브라우저 인증)
 #   bash scripts/deploy-cutover.sh
@@ -29,10 +29,10 @@ if [[ "${yn,,}" != "y" ]]; then
   exit 1
 fi
 
-echo "── 3/4 DB 마이그레이션 적용 (supabase db push — payout_method + fn_transition_order 개정 포함)"
+echo "── 3/4 DB 마이그레이션 적용 (supabase db push — 08 payout_method·fn_transition_order + 09 referrals·RPC·뷰 포함)"
 supabase db push
 
-echo "── 4/4 Edge Functions 배포 (order-* + withdraw-request/withdraw-process/point-adjust 부활 동시 배포)"
+echo "── 4/4 Edge Functions 배포 (order-* + withdraw-*/point-adjust + 09 referral-code/referral-attach 동시 배포)"
 supabase functions deploy
 
 cat <<'NEXT'
@@ -55,7 +55,11 @@ cat <<'NEXT'
    supabase functions delete coupon-price-set
    (DB의 쿠폰 RPC·테이블·원장 데이터는 회계 기록으로 보존 — 내리지 않는다.)
 
-ⓕ 데모 시나리오: 요청 → 수락 → 계량+지급수단 선택 → 점주 확인(포인트 적립) → 지갑 출금 신청 → admin 처리.
+ⓕ 데모 시나리오: ① 요청 → 수락 → 계량+지급수단 선택 → 점주 확인(포인트 적립) → 지갑 출금 신청 → admin 처리.
+   ② (09) 라이더 "내 추천" 링크 복사 → 신규 점주 /ref/:code 가입 → 첫 수거 완료 → 점주 REFERRAL +5,000P
+      적립·라이더 실적 활성화·admin /referrals 퍼널 반영.
 
+(선택, 09) 레퍼럴 링크 도메인이 app.oilpick.kr이 아니면:
+   supabase secrets set REFERRAL_BASE_URL="https://<user 앱 도메인>"
 (선택) PG 시크릿 정리: supabase secrets unset PG_PROVIDER TOSS_SECRET_KEY KOEM_MID KOEM_API_KEY
 NEXT

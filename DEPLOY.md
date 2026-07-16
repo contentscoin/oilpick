@@ -19,32 +19,41 @@
 supabase login
 supabase link --project-ref <PROJECT_REF>
 
-# 마이그레이션 적용(29개) — Storage 버킷·RLS·RPC·권한가드·payout_method(08)까지 전부 포함.
+# 마이그레이션 적용(31개) — Storage 버킷·RLS·RPC·권한가드·payout_method(08)·referrals(09)까지 전부 포함.
 # seed.sql은 로컬 전용이라 프로덕션엔 적용되지 않는다(아래 3-1에서 admin 수동 생성).
 supabase db push
 
-# Edge Functions 배포(12개 — 08에서 coupon-* 6종 삭제, withdraw-request/withdraw-process/
-# point-adjust 부활). verify_jwt 등은 supabase/config.toml을 따른다.
+# Edge Functions 배포(14개 — 08에서 coupon-* 6종 삭제·withdraw-request/withdraw-process/
+# point-adjust 부활, 09에서 referral-code/referral-attach 추가). verify_jwt 등은 supabase/config.toml을 따른다.
 supabase functions deploy
 
 # 시크릿 설정
 #  - FCM_SERVICE_ACCOUNT: 미설정 시 푸시는 no-op(알림 테이블 기록은 됨). 키 발급 후 설정.
 supabase secrets set FCM_SERVICE_ACCOUNT="$(cat fcm-service-account.json)"
+#  - REFERRAL_BASE_URL(선택, 09): 라이더 추천 공유 링크의 웹 랜딩 베이스. 미설정 시 core 기본값
+#    https://app.oilpick.kr 사용 — 실제 user 앱 도메인이 다르면 반드시 설정(referral-code가 조립).
+# supabase secrets set REFERRAL_BASE_URL="https://app.oilpick.kr"
 #  - PG 시크릿(TOSS_SECRET_KEY / PG_PROVIDER / KOEM_*)은 08 피벗(쿠폰 결제 폐기)으로 불필요 —
 #    기존 설정돼 있어도 참조하는 함수가 없다(잔존 시 secrets unset으로 정리 가능. 07 F4/F14 이력 참조).
 ```
 
-### 1-0. 08 컷오버 절차 (현금·포인트 지급수단 피벗 — 순서 엄수, 08-payout-pivot.md §배포 체크리스트)
-ⓐ `supabase db push` — 20260715000001(payout_method — 순수 추가)·20260715000002(fn_transition_order 개정) 적용.
+### 1-0. 08·09 컷오버 절차 (지급수단 피벗 + 레퍼럴 — 순서 엄수, 08-payout-pivot.md·09-referral.md §배포)
+ⓐ `supabase db push` — 08: 20260715000001(payout_method — 순수 추가)·20260715000002(fn_transition_order 개정)
+   + 09: 20260715000003(ledger REFERRAL enum)·20260715000004(referrals·RPC·뷰 — 전부 순수 추가) 적용.
 ⓑ **REQUESTED·진행중(ACCEPTED/ARRIVED/DISPUTED) 잔존 주문 0건 확인** — coupon_cost 있는 잔존 주문이
    신 플로우와 섞이는 전환기 최소화(잔존분의 완결·환급은 RPC 레거시 분기가 처리하므로 강제는 아님).
 ⓒ Edge Functions **같은 릴리즈로 동시 배포**: order-create/order-accept/order-transition +
-   withdraw-request/withdraw-process/point-adjust (`supabase functions deploy`).
+   withdraw-request/withdraw-process/point-adjust + **referral-code/referral-attach(09)**
+   (`supabase functions deploy`). ⚠️ order-transition이 완료 시 fn_activate_referral을 호출하므로
+   ⓐ(마이그레이션)가 반드시 선행 — 순서가 뒤집히면 활성화가 조용히 실패(best-effort 로그만)한다.
+   09 링크 도메인이 app.oilpick.kr이 아니면 `REFERRAL_BASE_URL` 시크릿을 이 단계 전에 설정.
 ⓓ 앱 순차 배포: rider→user→admin (Vercel 재빌드 — main 병합 시 자동).
 ⓔ coupon-* 6종 undeploy — ⓓ 완료 후(가동 중 구버전 앱 파손 방지):
    `supabase functions delete coupon-purchase-intent coupon-purchase-confirm coupon-purchase-return coupon-refund coupon-adjust coupon-price-set`
    DB의 fn_charge_coupon/fn_consume_coupon/fn_confirm_purchase/fn_refund_purchase·쿠폰 테이블은 **보존**(회계 기록).
-ⓕ 데모 시나리오 재기록: 수거 요청 → 수락 → 계량+지급수단 선택 → 점주 확인(포인트 적립) → 지갑 출금 신청 → admin 처리.
+ⓕ 데모 시나리오 재기록: ① 수거 요청 → 수락 → 계량+지급수단 선택 → 점주 확인(포인트 적립) → 지갑 출금
+   신청 → admin 처리. ② (09) 라이더 "내 추천"에서 링크 복사 → 신규 점주 /ref/:code 가입 → 첫 수거 완료
+   → 점주 지갑 REFERRAL +5,000P·라이더 실적 활성화·admin /referrals 퍼널 반영.
 
 ### 1-1. 프로덕션 초기 데이터(수동 — seed.sql은 로컬 전용)
 프로덕션 DB에는 admin·시세 tick·쿠폰 단가가 없다. 대시보드 SQL Editor 또는 psql로 최소 1회 생성:
@@ -110,6 +119,8 @@ supabase secrets set FCM_SERVICE_ACCOUNT="$(cat fcm-service-account.json)"
   - `VITE_SUPABASE_URL` = `https://<ref>.supabase.co`
   - `VITE_SUPABASE_ANON_KEY` = anon(publishable) key
   - `VITE_KAKAO_KEY` = 카카오 JS 앱 키(선택 — 없으면 MapView는 일러스트 프리뷰, 주소검색 수동입력 폴백)
+  - (user만, 선택 — 09) `VITE_APP_STORE_URL` / `VITE_PLAY_STORE_URL` = 추천 랜딩(/ref/:code)의 스토어
+    버튼 링크. 미설정 시 버튼 비노출(스토어 출시 후 설정).
   - (rider `VITE_PG_PROVIDER`는 08 피벗 — 쿠폰 결제 폐기 — 으로 불필요. 남아 있어도 무시된다.)
 
 ### 도메인/서브도메인 연결
@@ -131,7 +142,9 @@ supabase secrets set FCM_SERVICE_ACCOUNT="$(cat fcm-service-account.json)"
 - admin 로그인(생성한 admin 계정) → 대시보드/시세 설정 + 출금 큐 확인. (집하장·쿠폰 단가는 일몰 — 설정 불필요.)
 - user 앱: 가입(실 SMS) → 홈 실시세 표시 → 수거 요청 → 상태 Realtime 반영.
 - rider 앱: 가입 → 서류 제출 → admin 승인 → 콜 수락 → 운행.
-- Edge Functions 로그(대시보드 → Functions)로 order-transition/withdraw 등 정상 동작 확인.
+- (09) 레퍼럴 루프: 라이더 마이 → "내 추천" 코드 발급·shareUrl 도메인 확인(REFERRAL_BASE_URL 반영 여부)
+  → /ref/:code 랜딩 접속 → 신규 점주 가입 → 첫 수거 완료 후 점주 지갑 REFERRAL 적립·admin /referrals 반영.
+- Edge Functions 로그(대시보드 → Functions)로 order-transition/withdraw/referral-* 등 정상 동작 확인.
 
 ## 참고
 - `docs/spec/qa-checklist.md` 🔴 항목(실 푸시/딥링크/카메라 QR 등)은 실기기에서 재검증.
