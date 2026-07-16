@@ -1,13 +1,18 @@
-# QA 체크리스트 (T13 자체 점검)
+# QA 체크리스트
 
-역할 × 핵심 플로우 × 예외 케이스 매트릭스와 이번 마감(T13) 자체 점검 결과를 기록한다.
+역할 × 핵심 플로우 × 예외 케이스 매트릭스와 자체 점검 결과를 기록한다.
+(T13 최초 작성 → 2026-07-16 **08 지급수단 피벗·09 레퍼럴 반영 전면 갱신**. 07 이전 결과 중
+현행 모델에서 소멸한 플로우는 표에서 제거하고 "레거시" 절로 이동.)
 
-**범례**: ✅ 통과(자동 테스트 또는 로컬 브라우저/스택 실측) · ⚠️ 부분/폴백만 검증 ·
+**범례**: ✅ 통과(자동 테스트 또는 로컬 실측) · ⚠️ 부분/폴백만 검증 ·
 🔴 이 환경에서 검증 불가 → **런칭 전 실기기/CI 검증 필요**
 
 > 이 문서는 "이 개발 환경에서 무엇을 실제로 검증했고 무엇을 검증하지 못했는지"를 정직하게
-> 남기는 것이 목적이다. 미검증 항목은 숨기지 않고 🔴로 명시한다. 자세한 환경 제약 사유는
-> `04-tasks.md`의 "질문 목록"에 태스크별로 기록돼 있다.
+> 남기는 것이 목적이다. 미검증 항목은 숨기지 않고 🔴로 명시한다. 검증 수단 표기:
+> [단위]=vitest, [pgTAP]=DB 하네스(CI 포함), [실측]=브라우저/스택 실구동, [정적]=코드 리뷰만.
+> ⚠️ 08/09 시점의 이 환경은 **docker/Supabase 로컬 스택 불가** — T9~T13의 "2-브라우저 실측"
+> 방식은 재현 불가라, 08/09 플로우는 pgTAP(로컬 Postgres 하네스)+단위테스트+헤드리스 브라우저
+> 렌더로 검증 수준을 대체했다(아래 각 행에 명시).
 
 ---
 
@@ -15,54 +20,64 @@
 
 | 플로우 | 정상 | 예외 케이스 | 상태 |
 |---|---|---|---|
-| 온보딩 | 슬라이드 3장, localStorage 1회 플래그 | 재방문 시 스킵 | ✅ |
-| 가입/로그인(U2) | 전화 OTP → profiles+supplier_profiles | 잘못된 코드/형식 400, E.164 변환 | ✅ (test_otp) |
+| 온보딩 | 슬라이드 3장, localStorage 1회 플래그 | 재방문 시 스킵 | ✅ [단위] |
+| 가입/로그인(U2) | 전화 OTP → profiles+supplier_profiles | 잘못된 코드/형식 400, E.164 변환 | ✅ [단위, test_otp] |
+| **가입 후 추천 attach(09)** | 저장된 코드로 referral-attach(best-effort) + 키 소비 | 형식 위반 스킵·실패해도 가입 성립(비차단)·무코드 무호출 | ✅ [단위 4케이스] |
+| **추천 랜딩 /ref/:code(09)** | 코드 정규화·localStorage 저장·보너스 카드·가입 CTA | 무효 코드 폴백 카드(저장 안 함), 로그인 시 홈 CTA | ✅ [단위 4 + **헤드리스 Chromium 실측**] |
 | 주소 등록 | 카카오 주소검색 → lat/lng | 키 없으면 수동 텍스트 입력 폴백 | ⚠️ 폴백만(실 SDK 🔴) |
-| 홈(U3) | PriceCard(Realtime) + 예상 포인트 실시간 | 진행중 주문 상단 카드 고정 | ✅ |
-| 시세 상세(U4) | recharts + 최근 30 tick 테이블 | 데이터 없음 시 스켈레톤/빈 표 | ✅ |
-| 수거 요청(U5) | 3스텝 → order-create → /orders/:id | "현장 계량 기준" 고지 | ✅ |
-| 주문 상태(U6~U9) | status 분기, Realtime 자동 갱신 | REQUESTED 취소, 콜 무수락 자동취소 표시 | ✅ |
-| 계량 확인 | 사진 뷰어 + 확정 kg + 포인트 미리보기 | [확인]/[이의신청] 분기 | ✅ |
-| 이력(U10) | 페이지네이션 리스트 | **빈 상태 EmptyState** | ✅ |
-| 지갑(U11) | PointBalanceCard + LedgerList | **원장 없음 EmptyState**, 잔액 스켈레톤 | ✅ |
-| 출금(U12) | 계좌 등록 + 금액(최소 1만P 검증) | 잔액 부족 400, 최소액 미만 거부 | ✅ |
-| 알림함(U14) | Realtime 구독 + 읽음 처리 | **알림 없음 EmptyState** | ✅ |
+| 홈(U3, 08) | PriceChart v2 + 이번 달 수령 요약 **현금/포인트 분리** + 포인트 잔액 칩 | 진행중 주문 상단 고정 | ✅ [단위] |
+| 시세 상세(U4, 08) | PriceChart v2(마커/눈금/스크럽) + PriceStatsRow | 데이터 없음 스켈레톤/빈 표 | ✅ [단위] |
+| 수거 요청(U5, 08) | 18L 말통/10L/직접 kg 프리셋 → order-create | "현장 계량 기준 확정"·"예상 수령액"(수단 중립) 고지 | ✅ [단위] |
+| 주문 상태(U6~U9) | status 분기, Realtime 자동 갱신 | REQUESTED 취소, 무수락 자동취소 표시 | ✅ [단위] |
+| 계량 확인(08) | 사진 뷰어 + 확정 kg + **지급수단별 확인 카피**(현금 수령/포인트 적립) | [확인]/[이의신청] 분기. POINT면 CONFIRM과 원자 EARN 발행 | ✅ [단위 + pgTAP(EARN 멱등·CASH 무발행)] |
+| 이력(U10) | 페이지네이션 리스트 | 빈 상태 EmptyState | ✅ [단위] |
+| 지갑(U11, 08·09) | 잔액 히어로+[출금 신청] + 포인트 내역(**REFERRAL "추천 보너스" 라벨**) + 수령 이력(PayoutMethodChip) | 원장 없음 EmptyState, 최소액 미만 CTA 비활성 | ✅ [단위] |
+| 출금(U12, 08 부활) | 계좌 등록 + 금액(최소 1만P) → withdraw-request | 잔액 부족 400, 반려 시 WITHDRAW_CANCEL 복구 표시 | ✅ [단위 + pgTAP(신청→반려 왕복 잔액 원복)] |
+| 알림함(U14) | Realtime 구독 + 읽음 처리 | 알림 없음 EmptyState | ✅ [단위] |
 
 ## 2. 라이더(rider / apps/rider)
 
 | 플로우 | 정상 | 예외 케이스 | 상태 |
 |---|---|---|---|
-| 서류 제출(R1) | 3종 업로드 → PENDING 대기 | Realtime로 승인 자동 전환 | ✅ |
-| 콜 홈(R2) | 온라인 토글 + 오늘 실적 + 콜 목록(거리순) | **콜 없음 EmptyState**, 오프라인 안내 | ✅ |
-| 콜 상세(R3) | 수거비 대형 표시 + [수락] | 409 "다른 라이더 수락" 토스트 후 목록 복귀 | ✅ |
-| 운행(R4~R6) | 도착 → 계량+사진 → QR 배송완료 | 잘못된 QR `INVALID_QR` 토스트 | ✅ (QR 수동입력 폴백) |
-| 위치 업로드 | 운행 중 15초 간격 rider-location | 진행중 주문 없으면 400 거부 | ✅ |
-| 정산(R7/R8) | PointBalanceCard(held 강조) + 일/주 합계 | **원장 없음 EmptyState** | ✅ |
-| 인증 카드(R9) | 사진/이름/차량 + rider_id QR | — | ✅ |
-| 알림함(R11) | Realtime 구독 + 읽음 | **알림 없음 EmptyState** | ✅ |
+| 서류 제출(R1) | 3종 업로드 → PENDING 대기 | Realtime로 승인 자동 전환 | ✅ [단위] |
+| 콜 홈(R2, 08) | 온라인 토글 + 오늘 실적(**현금/포인트 분리**) + 콜 목록(거리순) | 콜 없음 EmptyState, 오프라인 안내 | ✅ [단위] |
+| 콜 상세(R3, 08) | "예상 매입 지급액" 대형 표시 + [수락](쿠폰 게이트 없음) | 409 "다른 라이더 수락" 토스트 후 복귀, SUSPENDED 수락 차단 | ✅ [단위 + pgTAP(verify 게이트·동시수락)] |
+| 운행(R4~R6, 08) | 도착 → 계량+사진+**지급수단 세그먼트(필수)** → 제출 후 수단별 안내 | 재제출 수단 변경 가능(중재 확정 전), DISPUTED 안내 패널 | ✅ [단위 + pgTAP(payoutMethod 검증·CASH 폴백)] |
+| 위치 업로드 | 운행 중 15초 간격 rider-location | 진행중 주문 없으면 400 거부 | ✅ [단위] |
+| 실적(R7, 08) | 이번 달 **현금 지급/포인트 지급 분리**(건수/kg/금액) | 데이터 없음 0 표기 | ✅ [단위] |
+| **내 추천(/referrals, 09)** | 코드·공유 링크(복사/공유) + 실적(가입/활성화/전환율/누적 보상 — 원 단위) | 코드 로드 실패 재시도, 실적 없음 0, referrals Realtime 갱신 | ✅ [단위: 화면 3 + 훅 6] |
+| 인증 카드(R9) | 사진/이름/차량 + rider_id QR | — | ✅ [단위] |
+| 알림함(R11) | Realtime 구독 + 읽음 + **링크 rider 라우트 재매핑**(/orders/:id→/calls/:id, /wallet→/earnings) | raw 링크 캐치올 낙하 회귀 방지 | ✅ [단위 — 교차 이음새 감사 수정] |
 
 ## 3. 관리자(admin / apps/admin)
 
 | 플로우 | 정상 | 예외 케이스 | 상태 |
 |---|---|---|---|
-| 로그인 | 이메일/비밀번호(시드 admin) | role≠admin 접근 차단 | ✅ |
-| 대시보드 | 진행 주문·온라인 라이더 핀 + 오늘 KPI 4개 | 빈 목록 안내, KPI 집계(null 방어) | ✅ (KPI 집계 단위테스트) |
-| 시세 관리 | 현재값 + price-set + tick 이력/차트 | — | ✅ |
-| 주문 관리 | 상태 필터 테이블 + 상세 드로어 | DISPUTED RESOLVE_DISPUTE(finalKg), CANCEL | ✅ (필터/라벨/kg 표시 단위테스트) |
-| 회원 관리 | supplier/rider 탭, PENDING 승인/반려 | 빈 큐 안내 | ✅ |
-| 정산 | 출금 큐(승인/반려/이체완료) + 원장 감사 | 상태별 버튼 노출, 상태 라벨 | ✅ (출금 상태전이 단위테스트) |
-| 집하장 | CRUD + QR 인쇄 뷰 | 빈 목록 안내 | ✅ |
+| 로그인 | 아이디/비밀번호(내부 @oilpick.local 매핑) | role≠admin 접근 차단 | ✅ [단위] |
+| 대시보드(08) | 지도 핀 + KPI(주문/kg/**현금 지급/포인트 지급/출금 대기**/활성 라이더) | 빈 목록 안내, null 방어 | ✅ [단위(KPI 집계)] |
+| 시세 관리(08) | 현재값 + price-set + tick 이력/미니 차트(v2) | — | ✅ [단위] |
+| 주문 관리 | 상태 필터 테이블 + 상세 드로어(지급수단 칩·귀책 취소·FORCE_COMPLETE) | DISPUTED RESOLVE_DISPUTE(finalKg), ARRIVED 24h 하이라이트 | ✅ [단위] |
+| 회원 관리 | supplier/rider 탭, PENDING 승인/반려, 정지/해제 | 빈 큐 안내 | ✅ [단위] |
+| 정산(08) | 출금 큐(승인/반려/지급) + 수거 추이 + **라이더별 지급 실적** + 원장 감사 + CSV | 상태별 버튼, 쿼리 실패 에러 표면화 | ✅ [단위] |
+| **레퍼럴(/referrals, 09)** | KPI(가입/활성화/전환율/보너스) + 퍼널 테이블 + 일별 추이 + CSV 2종 | 실적 없음 안내, referrals Realtime 갱신 | ✅ [단위: 화면 4 + 훅 2] |
+| **알림 벨(신설)** | 미읽음 배지 + 패널, 행 클릭 → 읽음 + /orders?order=<id> 드로어 딥링크 | 미지 경로 no-op(캐치올 방지), 빈 안내 | ✅ [단위: 벨 6 + 재매퍼 3 — 교차 이음새 감사 수정] |
 | 공지 | 전체/역할별 푸시 발송 폼 | notify-broadcast(FCM 없으면 로그+notifications만) | ⚠️ 실 발송 🔴 |
 
-## 4. 크로스 역할 E2E (2-브라우저 로컬 실측)
+## 4. 크로스 역할 시나리오 (08/09 — 검증 수단 명시)
+
+> T9~T13의 2-브라우저 실측은 07 이전 모델 기준이다. 08/09 시점 이 환경은 로컬 Supabase 스택
+> 불가(docker 부재) — 아래 시나리오는 **DB 하네스(pgTAP, RPC 레벨 실구동)** + 단위테스트로
+> 검증했고, 스택 전제 E2E는 🔴로 남긴다.
 
 | 시나리오 | 상태 |
 |---|---|
-| user 요청 → rider 수락 → 계량+사진 → user 확인 → QR 배송완료 → 양쪽 포인트 반영 | ✅ (T9 브라우저 실측) |
-| 동시 수락 레이스: 두 rider 동시 수락 → 하나만 성공(409) | ✅ (조건부 update 검증) |
-| 출금 신청 → admin 승인/반려 → 원장 Realtime 반영 | ✅ (T10 브라우저 실측) |
-| 이의신청 → admin RESOLVE_DISPUTE(finalKg) → 포인트 재지급 | ✅ |
-| 30분 무수락 → 시스템 자동취소(NO_RIDER) | ✅ (order-expire RPC) |
+| 요청 → 수락 → 계량+지급수단(POINT) → 점주 확인 → **EARN 원자 발행(멱등)** → 출금 신청→처리 | ✅ [pgTAP: 상태머신+원장+출금 왕복] / 스택 E2E 🔴 |
+| CASH 완료 주문은 point_ledger 무변경 | ✅ [pgTAP] |
+| 동시 수락 레이스: 두 rider 동시 수락 → 하나만 성공(409) | ✅ [pgTAP(조건부 update)] |
+| 이의신청 → RESOLVE_DISPUTE(finalKg 고정) → 일반 CONFIRM 경로로 완료 | ✅ [pgTAP] |
+| 30분 무수락 → 자동취소(NO_RIDER) | ✅ [pgTAP(order-expire RPC)] |
+| **레퍼럴 루프(09)**: attach(오코드/미승인/자기추천/중복 거부) → 첫 수거 완료 → ACTIVATED + REFERRAL 5000 발행(멱등) → 통계 뷰 집계 | ✅ [pgTAP 22 asserts] / order-transition Edge 훅은 Deno 부재로 [정적] + 시그니처 교차검증 — 스택 E2E 🔴 |
+| 레퍼럴 어뷰즈: 다른 코드 재-attach → ALREADY_REFERRED, 재활성화 no-op, 추천 없는 점주 no-op | ✅ [pgTAP] |
 
 ---
 
@@ -70,33 +85,26 @@
 
 | 항목 | 구현 | 상태 |
 |---|---|---|
-| **오프라인 배너** | `packages/ui` `OfflineBanner`(navigator.onLine + online/offline 이벤트), user/rider App 루트에 고정 마운트 | ✅ (단위테스트 + 브라우저) |
-| **네트워크 재시도** | TanStack Query `retry: 1` + `refetchOnReconnect: true`(3앱), 공통 `Toast` 재시도 버튼 | ✅ |
-| **에러 표시** | errorCodes → 한글 메시지 맵(`ERROR_MESSAGE_KO`), Edge Function envelope 파싱 | ✅ |
-| **빈 상태** | 주요 리스트(이력/콜/알림/원장/큐)에 EmptyState 또는 안내 문구 | ✅ (전 앱 전수 확인) |
+| **오프라인 배너** | `packages/ui` `OfflineBanner`, user/rider App 루트 고정 마운트 | ✅ [단위+실측(T13)] |
+| **네트워크 재시도** | TanStack Query `retry: 1` + `refetchOnReconnect: true`(3앱), Toast 재시도 | ✅ |
+| **에러 표시** | errorCodes → 한글 메시지 맵(`ERROR_MESSAGE_KO`), Edge envelope 파싱 | ✅ |
+| **빈 상태** | 주요 리스트(이력/콜/알림/원장/큐/레퍼럴)에 EmptyState 또는 안내 | ✅ |
 | **로딩 스켈레톤** | 시세/잔액 카드·리스트는 스켈레톤(스피너 금지) | ✅ |
-| **콜 만료/무수락** | order-expire 자동취소 + user 화면 "자동 취소" 표시, rider 콜 사라짐 | ✅ |
+| **쿼리 실패 표면화** | 실패를 빈 상태로 위장하지 않음 — QueryError/재시도 버튼(3앱) | ✅ [단위] |
 
 ---
 
 ## 6. Supabase advisors (보안/성능)
 
-로컬 스택(Supabase CLI 2.109.0, Postgres 17)에 대해 advisor lint를 직접 SQL로 점검·수정했다.
-(로컬 CLI에는 hosted `advisors` 서브커맨드가 없어, 동일 lint 규칙을 카탈로그 쿼리로 재현.)
+T13에서 로컬 스택 advisor lint를 점검·수정했다(상세는 이력 참조). 08/09 신규 객체도 동일
+원칙을 따른다:
 
-| Lint | 결과 | 조치 |
-|---|---|---|
-| `security_definer_view` | ✅ 0 (앱 객체) | `v_point_balance`는 `security_invoker=true`(T10) — RLS 위임 정상 |
-| `function_search_path_mutable` | ✅ 0 (앱 함수) | `is_admin`·`forbid_ledger_mutation`·`fn_is_assigned_rider_of_caller`에 `search_path=public` 고정 → `20260704000014_function_search_path.sql` |
-| `auth_rls_initplan` (성능) | ✅ 0 | 14개 정책의 직접 `auth.uid()`를 `(select auth.uid())`로 감쌈 → `20260704000015_rls_initplan.sql`. RLS 의미 불변(본인 uid) — psql 실측으로 본인 조회 성공/타인 조회 0행 재확인 |
-| `rls_disabled_in_public` | ⚠️ PostGIS `spatial_ref_sys` 1건 | **의도적 잔존**: PostGIS 확장 소유 참조 테이블. 앱이 소유하지 않아 수정 대상 아님(Supabase 공식 문서상 무시 가능) |
-| `unindexed_foreign_keys` (성능, INFO) | ⚠️ 감사/관리 FK 6건 | **의도적 잔존**: `created_by`/`processed_by`/`actor_id`/`depot_id` 등 저빈도 관리 컬럼. 데이터 볼륨이 생긴 후 실제 쿼리 패턴 기준으로 인덱싱 판단(현 시점 투기적 인덱스 지양). advisor도 INFO 레벨 |
-
-`geography_columns`/`geometry_columns`(PostGIS 시스템 뷰)도 `security_definer_view`로 잡히나
-동일하게 확장 소유 객체라 잔존. **앱이 소유한 객체 기준 보안/성능 WARN은 0건.**
-
-> 마이그레이션은 실행 중 로컬 DB에 적용해 재검증했고(양쪽 exit 0), 단일 진실
-> `01-db-schema.sql`도 동기화했다(CLAUDE.md 규칙 6).
+| 항목 | 결과 |
+|---|---|
+| 08/09 신규 뷰(v_pickup_stats_daily 확장·v_rider_payout_daily·v_referral_stats·v_referral_daily) | ✅ 전부 `security_invoker=true`(+admin 게이트는 is_admin()) — security_definer_view 0 |
+| 08/09 신규 함수(fn_transition_order 개정·fn_attach_referral·fn_activate_referral) | ✅ `search_path=public` 고정 + revoke all/grant service_role |
+| referrals RLS | ✅ select 정책만(referrer/referred/admin) — insert/update 정책 부재 = service_role RPC 전용. pgTAP로 비소유 read 0행·클라이언트 write 거부 실측 |
+| `rls_disabled_in_public`(PostGIS `spatial_ref_sys`)·`unindexed_foreign_keys`(관리 FK, INFO) | ⚠️ 의도적 잔존(T13 판단 유지) |
 
 ---
 
@@ -106,28 +114,33 @@
 
 | 항목 | 사유 | 런칭 전 필요 검증 |
 |---|---|---|
-| **실제 FCM 푸시 수신** | `FCM_SERVICE_ACCOUNT` 자격증명 없음. 서버는 로그만 남기고 스킵(notifications 기록은 항상 수행). 토큰 발급은 네이티브 런타임에서만 | 서비스 계정 키 발급 → secret 등록 → 실기기/디바이스팜 수신 확인 |
-| **에뮬레이터/시뮬레이터 실행** | 머신 부하로 부팅 금지(태스크 지시) | Android/iOS 실기기 또는 CI에서 앱 기동 |
-| **딥링크 탭 이동** | 네이티브 앱 미기동 | `oilpick-user://orders/:id` 등 실제 라우팅(정규화 로직은 단위테스트 ✅) |
-| **카카오맵 실렌더** | `VITE_KAKAO_KEY` 없음(폴백 UI만 렌더) | 실 키 주입 후 지도/마커 육안 확인 |
-| ~~**카메라 QR 스캔**~~ | **제외 (07 F13)** — 피벗으로 대상 플로우(집하장 QR 배송)가 소멸. 레거시 잔존분(PICKED_UP) 완결용 코드만 보존되며 신규 검증 불필요 | — |
-| **부하 상 일부 E2E** | Docker 리소스 경합(Postgres 다운 이력) | CI에서 안정 리소스로 전체 시나리오 재실행 |
+| **실제 FCM 푸시 수신** | `FCM_SERVICE_ACCOUNT` 자격증명 없음(notifications 기록은 항상 수행) | 키 발급 → secret 등록 → 실기기 수신 확인(레퍼럴 활성화 푸시 포함) |
+| **Edge Functions 런타임 실행** | 08/09 시점 Deno·Supabase 스택 부재 — referral-code/referral-attach/order-transition 활성화 훅은 정적 검증 + RPC 시그니처 교차검증 + vendor 번들 확인만 | `supabase functions serve`로 curl 시나리오(02-api.md §16·§17) 실행 |
+| **스택 전제 E2E**(08/09 플로우) | docker 부재로 2-브라우저 실측 불가 — pgTAP+단위로 대체 | CI/스테이징에서 요청→지급→출금, 레퍼럴 가입→활성화 전 구간 |
+| **딥링크 탭 이동** | 네이티브 앱 미기동 | `oilpick-user://ref/:code` 포함 실제 라우팅(정규화·재매핑 로직은 단위 ✅) |
+| **카카오맵 실렌더** | `VITE_KAKAO_KEY` 없음(폴백 UI만) | 실 키 주입 후 지도/마커 육안 확인 |
 | **실 SMS OTP** | Twilio 등 미연동(test_otp만) | 프로덕션 SMS 프로바이더 연동 후 실 발송 |
+| **레퍼럴 공유 시트** | navigator.share는 실기기 전용(폴백=클립보드 복사, 단위 ✅) | 실기기에서 공유 시트 노출 확인 |
 | **브랜드 아이콘/스플래시** | 임시 placeholder | 실 로고 교체 후 재생성 |
+
+### 레거시(현행 모델에서 소멸 — 신규 검증 불필요)
+- ~~카메라 QR 스캔·집하장 배송~~ (07 F13 소멸. 잔존분 완결 코드만 보존 — pgTAP 04_legacy_flow가 회귀 커버)
+- ~~쿠폰 구매/충전/환불 UI~~ (08 P1 폐기. DB 레거시 보존은 pgTAP 05가 회귀 커버)
+- ~~구모델 라이더 포인트 지갑(R7/R8 출금)~~ (07 F6 재정의 — 라이더 지갑 없음, 08 P5)
 
 ---
 
-## 8. 자동 테스트 현황
+## 8. 자동 테스트 현황 (2026-07-16)
 
 `pnpm test` 전체 통과. (커밋 전 `pnpm lint && pnpm test && pnpm build` 필수)
 
 | 패키지 | 테스트 파일 | 테스트 수 |
 |---|---|---|
-| @oilpick/core | 5 | 289 |
-| @oilpick/ui | 16 | 34 |
-| @oilpick/user | 18 | 70 |
-| @oilpick/rider | 2 | 10 |
-| @oilpick/admin | 5 | 19 |
+| @oilpick/core | 10 | 379 |
+| @oilpick/ui | 27 | 104 |
+| @oilpick/user | 25 | 135 |
+| @oilpick/rider | 19 | 99 |
+| @oilpick/admin | 17 | 103 |
 
-T13에서 추가: `OfflineBanner`(ui, 6) + admin 회귀 안전망 17개(대시보드 KPI 집계 2 · 주문
-필터/라벨/kg 표시 4 · 출금 상태전이 5 · 분쟁 중재/취소 드로어 6).
+DB 계층: pgTAP **9스위트 151 asserts**(supabase/tests/README.md 커버리지 참조 — CI에서 실행).
+숫자가 바뀌면 이 표와 supabase/tests/README.md를 함께 갱신할 것.
