@@ -27,7 +27,8 @@
 | H7 | 활성화 트리거 지점 | **order-transition Edge Function**이 완료 전이 성공 후 `fn_activate_referral(supplier_id, order_id)` 호출(멱등 no-op). fn_transition_order 본체는 무변경(레퍼럴은 순수 추가 — 상태머신 오염 방지). 활성화 시 점주·라이더 푸시 |
 
 ### 안티 어뷰즈 (모두 서버 강제)
-- 점주 1인 1회: `referrals.referred_supplier_id unique`. 재-attach는 기존 행 반환(선착순 최초 확정, 멱등).
+- 점주 1인 1회: `referrals.referred_supplier_id unique`. 재-attach는 **같은 코드면 기존 행 반환(멱등)**,
+  **다른 코드면 RPC가 `ALREADY_REFERRED` raise**(선착순 최초 확정 — 서버 단일 정규화 판정, H5 품질 패스 ⓔ).
 - 자기추천 불가: 라이더≠점주(역할 상이) + RPC에서 `referrer_rider_id <> referred_supplier_id` 확인.
 - 보너스는 **활성화 시에만**: SIGNED_UP→ACTIVATED 원자 전이가 유일한 발행 트리거. status 가드로 중복 발행 불가.
 - 발행 멱등: `point_ledger unique(order_id, entry_type, user_id)` — 활성화 order_id를 dedup 축으로 사용.
@@ -63,7 +64,8 @@ referrals(
 
 ### 1-3. 통계 뷰
 - `v_referral_stats`(security_invoker=true — referrals RLS 의존): 라이더별 집계
-  (signed_up / activated / conversion / supplier_bonus_paid / rider_reward_earned). 라이더는 본인 1행,
+  (signed_up / activated / supplier_bonus_paid / rider_reward_earned — 전환율은 뷰 컬럼이 아니라
+  core `referralConversionRate`로 클라이언트 파생 계산). 라이더는 본인 1행,
   admin은 전체를 본다(RLS가 자동 스코프).
 - `v_referral_daily`(admin 게이트 — is_admin() + security_invoker): 일별 가입/활성화 추이.
 
@@ -92,8 +94,9 @@ referrals(
   REFERRAL 발행·멱등·이미 활성화 no-op), 통계 뷰 집계, RLS 격리.
 - DoD: db reset + pgTAP green. 01 동기화.
 - [x] 완료: 20260715000003(ledger REFERRAL) + 20260715000004(referral_status/referral_code/referrals/RLS/Realtime/
-  v_referral_stats/v_referral_daily/fn_attach_referral/fn_activate_referral). pgTAP 09_referral_test.sql 17 asserts green
-  (하네스 9스위트 146 asserts). 01-db-schema.sql 동기화 완료(enum·컬럼·테이블·뷰2·RLS·publication·RPC 계약).
+  v_referral_stats/v_referral_daily/fn_attach_referral/fn_activate_referral). pgTAP 09_referral_test.sql green —
+  당시 17 asserts, 이후 H5 ①(교차일 버킷 +3)·품질 패스 ⓔ(ALREADY_REFERRED +2)로 **최종 22 asserts**(하네스
+  9스위트 151). 01-db-schema.sql 동기화 완료(enum·컬럼·테이블·뷰2·RLS·publication·RPC 계약).
 
 ### H3. 【core】【API】 계약 + Edge
 - core: `referralCodeOutputSchema`/`referralAttachInputSchema`, 상수 `REFERRAL_SUPPLIER_BONUS/REFERRAL_RIDER_REWARD/
@@ -104,7 +107,8 @@ referrals(
 - [x] 완료: core에 referralStatusSchema/referralCodeSchema/referralCode·Attach·Stats 스키마 + 상수
   REFERRAL_SUPPLIER_BONUS(5000)/REFERRAL_RIDER_REWARD(3000)/REFERRAL_CODE_STORAGE_KEY/REFERRAL_LINK_BASE/
   REFERRAL_STATUS_LABEL + errorCodes INVALID_REFERRAL_CODE/ALREADY_REFERRED + referral.ts(generateReferralCode/
-  normalizeReferralCode/buildReferralShareUrl, 알파벳·길이). referral.test.ts 14케이스. Edge: referral-code(rider
+  normalizeReferralCode/buildReferralShareUrl, 알파벳·길이). referral.test.ts 당시 14케이스(품질 패스 ⓐ
+  referralConversionRate 2건 추가로 최종 16). Edge: referral-code(rider
   코드 발급/멱등·충돌 재시도), referral-attach(supplier best-effort·ALREADY_REFERRED 감지), order-transition에
   activateReferralIfAny 훅(COMPLETED 도달 시 fn_activate_referral + 점주/라이더 알림). config.toml 2엔드포인트 등록.
   vendor 재빌드(referral 모듈 포함). lint/test green.

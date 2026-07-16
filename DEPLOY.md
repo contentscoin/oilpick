@@ -10,9 +10,10 @@
 전제: Supabase 대시보드에서 프로젝트 생성 완료 → **Project Ref**(예: `abcd1234...`), **Project URL**
 (`https://<ref>.supabase.co`), **anon(publishable) key**, **service_role key** 확보.
 
-> **원샷 실행**: 아래 1장(링크→마이그레이션→함수→PG_PROVIDER)은 `bash scripts/deploy-cutover.sh`가
-> 순서대로 실행한다(프로젝트 ref 기본값 dbvgxuevhmyoprafarnh, `PROJECT_REF` env로 재정의).
-> 수동 단계(초기 데이터·Vercel·구모델 함수 삭제)는 스크립트가 끝에서 다시 안내한다.
+> **원샷 실행**: 아래 1장(링크→마이그레이션 확인→`db push`→`functions deploy`)은
+> `bash scripts/deploy-cutover.sh`가 순서대로 실행한다(프로젝트 ref 기본값 dbvgxuevhmyoprafarnh,
+> `PROJECT_REF` env로 재정의). 수동 단계(초기 데이터·Vercel·coupon-* 삭제·REFERRAL_BASE_URL/
+> PG 시크릿 정리)는 스크립트가 끝에서 다시 안내한다.
 
 ```bash
 # CLI 로그인 & 링크

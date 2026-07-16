@@ -179,6 +179,16 @@ Realtime: `pickup_orders` 자기 행 UPDATE 구독으로 상태 자동 갱신 (�
 > - **레퍼럴(`/referrals`, 신설)** [H4]: 사이드바 "레퍼럴" 내비 추가. 요약 KPI(총 가입/활성화/전환율/지급 보너스)
 >   + 라이더별 추천 퍼널 테이블(v_referral_stats — 가입→활성화→전환율+보너스/보상) + 일별 추이(v_referral_daily)
 >   + CSV 2종(BOM). referrals Realtime로 갱신. 라이더 보상은 오프라인 정산 근거(08 P5).
+
+> **교차 이음새 감사 개정 (2026-07-16)**
+> - **admin 알림 벨(AdminShell, 신설)**: 이의신청·무수락 자동 취소 등 admin 대상 notifications의 소비 지면
+>   (00-domain 알림 매트릭스 "admin 웹 알림" — 기존엔 소비처가 없어 데드레터였던 확정 결함 수정). 사이드바
+>   벨 + 미읽음 배지 + 패널(useAdminNotifications, notifications 본인 행 + Realtime INSERT invalidate).
+>   행 클릭 시 read_at 갱신 후 `remapToAdminRoute`로 이동 — 서버 공용 표기 `/orders/:id`는 admin 드로어
+>   딥링크 `/orders?order=<id>`로 재매핑(rider deeplink 재매핑과 동일 계층), 미지 경로는 no-op.
+> - **rider 알림함(`/notifications`)**: 행 클릭 navigate가 raw link 대신 `normalizeDeepLink`를 경유하도록
+>   수정 — `/orders/:id`→`/calls/:id`, `/wallet`→`/earnings` 재매핑이 푸시 탭과 동일하게 적용된다(기존엔
+>   캐치올로 홈에 떨어지던 확정 결함).
 - 플러그인: @capacitor/push-notifications, geolocation, camera, app, splash-screen,
   @capacitor-community/barcode-scanner (rider만)
 - 딥링크: `oilpick-user://orders/:id`, `oilpick-user://ref/:code`(09 H3 추천 랜딩), `oilpick-rider://calls/:id` — 푸시 link 필드와 매핑

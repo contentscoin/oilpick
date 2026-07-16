@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
+import { NotificationsBell } from "./NotificationsBell";
 
 /**
  * 03-frontend.md apps/admin: "사이드바 내비, shadcn/ui + TanStack Table".
@@ -41,6 +42,8 @@ export function AdminShell({ children }: { children: ReactNode }) {
             <p className="text-xs text-gray-500">관리자</p>
           </div>
         </div>
+        {/* admin 알림 벨(이의신청·무수락 취소 통지 소비 지면 — 00-domain 알림 매트릭스 "admin 웹 알림"). */}
+        <NotificationsBell />
         <nav className="flex flex-1 flex-col gap-1 px-3">
           {NAV_ITEMS.map((item) => (
             <NavLink

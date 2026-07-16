@@ -9,6 +9,7 @@ describe("LedgerList", () => {
         entries={[
           { id: 1, entryType: "EARN", amount: 54000, createdAt: new Date() },
           { id: 2, entryType: "WITHDRAW_REQUEST", amount: -20000, createdAt: new Date() },
+          { id: 3, entryType: "REFERRAL", amount: 5000, createdAt: new Date() },
         ]}
       />,
     );
@@ -16,6 +17,9 @@ describe("LedgerList", () => {
     expect(screen.getByText("+54,000P")).toBeInTheDocument();
     expect(screen.getByText("출금 신청")).toBeInTheDocument();
     expect(screen.getByText("-20,000P")).toBeInTheDocument();
+    // [09 H4] 추천 보너스 — 라벨 맵에서 REFERRAL이 빠지면 raw enum으로 폴백해 조용히 깨진다.
+    expect(screen.getByText("추천 보너스")).toBeInTheDocument();
+    expect(screen.getByText("+5,000P")).toBeInTheDocument();
   });
 
   it("[07 F5] renders coupon variant with 장 units and coupon labels (4 entry types)", () => {
