@@ -1,4 +1,4 @@
-# OilPick 배포 가이드 (Supabase + Vercel)
+# 오반장(OBJ) 배포 가이드 (Supabase + Vercel)
 
 두 배포는 순서가 있다: **Supabase 먼저**(백엔드·DB·인증), 그 다음 **Vercel**(앱). 앱은 Supabase
 프로젝트의 URL·anon key가 있어야 동작하므로 Supabase가 선행이다.

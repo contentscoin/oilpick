@@ -10,6 +10,7 @@ import {
   InfoStatCard,
   LedgerList,
   MapView,
+  Mascot,
   OfflineBanner,
   OrderTimeline,
   PhotoUploader,
@@ -359,6 +360,16 @@ export function DevUiPage() {
           confirmLabel="요청 취소"
           danger
         />
+      </section>
+
+      <section>
+        {/* 10-brand.md B3 — 오반장(OBJ) 마스코트(순수 SVG, 정식 아트 전 1차 캐릭터). */}
+        <h2>Mascot (오반장 캐릭터)</h2>
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 16 }}>
+          <Mascot size={48} />
+          <Mascot size={96} />
+          <Mascot size={140} />
+        </div>
       </section>
 
       <section>

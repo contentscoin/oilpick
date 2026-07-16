@@ -32,3 +32,4 @@ export * from "./components/StatusHeadline";
 export * from "./components/DriverCard";
 export * from "./components/InfoStatCard";
 export * from "./components/LedgerList";
+export * from "./components/Mascot";
