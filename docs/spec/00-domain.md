@@ -112,7 +112,8 @@
   호출 → referrals `SIGNED_UP→ACTIVATED` + 점주 `REFERRAL` 보너스 발행. 멱등 no-op(추천 없음/이미 활성).
 - **보상 구조**: 점주 = `point_ledger REFERRAL(+REFERRAL_SUPPLIER_BONUS=5000)`(출금 가능). 라이더 =
   `referrals.rider_reward(REFERRAL_RIDER_REWARD=3000)` 스냅샷 — **라이더 지갑 없음(08 P5)**, admin 통계·
-  오프라인 정산 청구 근거로만 기록.
+  오프라인 정산 청구 근거로만 기록. **정산 이력(09 H8)**: admin이 오프라인 지급 후 `referral-settle`로
+  `reward_settled_at/by` 마킹(ACTIVATED만, 멱등, 해제 지원) — 통계 뷰가 settled/unsettled 분리 집계.
 - **통계**: `v_referral_stats`(라이더별 가입/활성화/전환/보너스/보상, RLS 본인 1행·admin 전체),
   `v_referral_daily`(admin 게이트 — 일별 추이). 쓰기는 service_role RPC에만(절대 규칙 1 확장).
 - 불변식(테스트로 검증): 오코드·미승인 라이더 코드 거부, 점주 1인 1회(재-attach 멱등), 활성화 1회당 REFERRAL 1행

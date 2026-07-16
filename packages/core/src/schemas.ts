@@ -374,5 +374,22 @@ export const referralStatsSchema = z.object({
   activated: z.number().int().nonnegative(),
   supplier_bonus_paid: z.number().int().nonnegative(),
   rider_reward_earned: z.number().int().nonnegative(),
+  // [09 H8] 보상 정산 분리 합계(20260716000001에서 뷰에 append).
+  rider_reward_settled: z.number().int().nonnegative(),
+  rider_reward_unsettled: z.number().int().nonnegative(),
 });
 export type ReferralStats = z.infer<typeof referralStatsSchema>;
+
+/** referral-settle (admin): 보상 정산 마킹/해제 — 09 H8. settle=false는 오기록 정정(해제). */
+export const referralSettleInputSchema = z.object({
+  referralId: uuidSchema,
+  settle: z.boolean(),
+});
+export type ReferralSettleInput = z.infer<typeof referralSettleInputSchema>;
+
+export const referralSettleOutputSchema = z.object({
+  referralId: uuidSchema,
+  settled: z.boolean(),
+  settledAt: z.string().nullable(),
+});
+export type ReferralSettleOutput = z.infer<typeof referralSettleOutputSchema>;

@@ -44,6 +44,8 @@ describe("ReferralsPage (09 H4 rider)", () => {
         activated: 3,
         supplier_bonus_paid: 15000,
         rider_reward_earned: 9000,
+        rider_reward_settled: 3000,
+        rider_reward_unsettled: 6000,
       }),
     );
   });
@@ -71,5 +73,28 @@ describe("ReferralsPage (09 H4 rider)", () => {
     renderPage();
     expect(screen.getByTestId("referral-signed-up").textContent).toContain("0");
     expect(screen.getByTestId("referral-conversion").textContent).toContain("0");
+  });
+
+  it("[09 H8] 정산 이력이 있으면 완료/대기 분리 표기, 없으면 안내 문구", () => {
+    renderPage();
+    expect(screen.getByTestId("referral-reward-settle").textContent).toBe(
+      "정산 완료 3,000원 · 대기 6,000원",
+    );
+
+    mockUseReferralStats.mockReturnValue(
+      ok({
+        referrer_rider_id: "rider-1",
+        signed_up: 1,
+        activated: 1,
+        supplier_bonus_paid: 5000,
+        rider_reward_earned: 3000,
+        rider_reward_settled: 0,
+        rider_reward_unsettled: 3000,
+      }),
+    );
+    renderPage();
+    expect(screen.getAllByTestId("referral-reward-settle")[1]?.textContent).toBe(
+      "정산 시 지급 (오프라인 정산)",
+    );
   });
 });

@@ -25,6 +25,9 @@ export interface ReferralStatRow {
   conversion: number;
   supplierBonusPaid: number;
   riderRewardEarned: number;
+  /** [09 H8] 보상 정산 분리 합계 — settled+unsettled=earned. */
+  riderRewardSettled: number;
+  riderRewardUnsettled: number;
 }
 
 /** 라이더별 추천 퍼널(v_referral_stats). 활성화 많은 순 정렬. referrals Realtime으로 갱신. */
@@ -36,7 +39,9 @@ export function useReferralStatsAdmin() {
     queryFn: async (): Promise<ReferralStatRow[]> => {
       const { data, error } = await supabase
         .from("v_referral_stats")
-        .select("referrer_rider_id, signed_up, activated, supplier_bonus_paid, rider_reward_earned");
+        .select(
+          "referrer_rider_id, signed_up, activated, supplier_bonus_paid, rider_reward_earned, rider_reward_settled, rider_reward_unsettled",
+        );
       if (error) throw error;
 
       const nameMap = await fetchDisplayNameMap((data ?? []).map((r) => r.referrer_rider_id as string));
@@ -53,6 +58,8 @@ export function useReferralStatsAdmin() {
             conversion: referralConversionRate(activated, signedUp),
             supplierBonusPaid: Number(row.supplier_bonus_paid ?? 0),
             riderRewardEarned: Number(row.rider_reward_earned ?? 0),
+            riderRewardSettled: Number(row.rider_reward_settled ?? 0),
+            riderRewardUnsettled: Number(row.rider_reward_unsettled ?? 0),
           };
         })
         .sort((a, b) => b.activated - a.activated || b.signedUp - a.signedUp);
@@ -100,6 +107,52 @@ export function useReferralDaily(days = 30) {
         day: row.day as string,
         signedUp: Number(row.signed_up ?? 0),
         activated: Number(row.activated ?? 0),
+      }));
+    },
+  });
+}
+
+// ===== [09 H8] 보상 정산 큐 =====
+
+export interface UnsettledReferralRow {
+  id: string;
+  riderId: string;
+  riderName: string;
+  supplierId: string;
+  supplierName: string;
+  riderReward: number;
+  activatedAt: string;
+}
+
+/**
+ * 미정산 보상 큐 — ACTIVATED이면서 reward_settled_at이 null인 추천(오래된 활성화 순).
+ * referrals 직접 조회는 admin RLS(p_referral_read)로 허용되는 read 전용 — 정산 마킹은
+ * referral-settle Edge(fn_settle_referral_reward)로만 쓴다(절대 규칙 1 확장).
+ */
+export function useUnsettledReferrals() {
+  return useQuery({
+    queryKey: queryKeys.referralUnsettled(),
+    queryFn: async (): Promise<UnsettledReferralRow[]> => {
+      const { data, error } = await supabase
+        .from("referrals")
+        .select("id, referrer_rider_id, referred_supplier_id, rider_reward, activated_at")
+        .eq("status", "ACTIVATED")
+        .is("reward_settled_at", null)
+        .order("activated_at", { ascending: true })
+        .limit(200);
+      if (error) throw error;
+
+      const ids = (data ?? []).flatMap((r) => [r.referrer_rider_id as string, r.referred_supplier_id as string]);
+      const nameMap = await fetchDisplayNameMap(ids);
+      return (data ?? []).map((row) => ({
+        id: row.id as string,
+        riderId: row.referrer_rider_id as string,
+        riderName: nameMap.get(row.referrer_rider_id as string) ?? (row.referrer_rider_id as string).slice(0, 8),
+        supplierId: row.referred_supplier_id as string,
+        supplierName:
+          nameMap.get(row.referred_supplier_id as string) ?? (row.referred_supplier_id as string).slice(0, 8),
+        riderReward: Number(row.rider_reward ?? 0),
+        activatedAt: row.activated_at as string,
       }));
     },
   });

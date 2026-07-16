@@ -364,7 +364,10 @@ create table referrals (
   rider_reward int not null check (rider_reward >= 0),      -- 라이더 오프라인 정산 보상(스냅샷, admin 통계 전용)
   signed_up_at timestamptz not null default now(),
   activated_at timestamptz,                                 -- 활성화(첫 수거 완료) 시각
-  activating_order_id uuid references pickup_orders(id)     -- 활성화 유발 주문
+  activating_order_id uuid references pickup_orders(id),    -- 활성화 유발 주문
+  -- [09 H8] 라이더 보상 오프라인 지급 이력(실 DDL: 20260716000001). null=미정산. 원장 발행 없음(08 P5).
+  reward_settled_at timestamptz,
+  reward_settled_by uuid references profiles(id)
 );
 create index idx_referrals_referrer on referrals (referrer_rider_id, signed_up_at desc);
 -- RLS: referrer 본인 or referred 본인 or admin(select). insert/update 정책 부재 = service_role RPC만(아래 RLS 절).
@@ -382,6 +385,10 @@ create index idx_referrals_referrer on referrals (referrer_rider_id, signed_up_a
 --       SIGNED_UP→ACTIVATED 전이 + fn_post_ledger(supplier,'REFERRAL',supplier_bonus,order_id) 발행.
 --       order-transition Edge가 완료 전이 성공 후 호출(fn_transition_order 본체 무변경, 09 H7). 멱등은
 --       point_ledger unique(order_id,'REFERRAL',user_id).
+--   fn_settle_referral_reward(p_referral_id uuid, p_admin_id uuid, p_settle boolean) returns referrals  -- [09 H8]
+--     - FOR UPDATE. 없으면 raise 'NOT_FOUND', ACTIVATED 아니면 raise 'INVALID_TRANSITION'.
+--       p_settle=true: reward_settled_at/by 기록(이미 정산이면 멱등 no-op). false: 해제(오기록 정정, 멱등).
+--       원장 발행 없음(라이더 지갑 없음, 08 P5) — referral-settle Edge(admin)가 호출.
 
 -- ===== RLS =====
 alter table profiles enable row level security;
@@ -469,7 +476,10 @@ select
   count(*)::int                                                          as signed_up,
   count(*) filter (where status = 'ACTIVATED')::int                      as activated,
   coalesce(sum(supplier_bonus) filter (where status='ACTIVATED'),0)::int as supplier_bonus_paid,
-  coalesce(sum(rider_reward)   filter (where status='ACTIVATED'),0)::int as rider_reward_earned
+  coalesce(sum(rider_reward)   filter (where status='ACTIVATED'),0)::int as rider_reward_earned,
+  -- [09 H8] 정산 분리 합계(20260716000001 append — settled+unsettled=earned)
+  coalesce(sum(rider_reward)   filter (where status='ACTIVATED' and reward_settled_at is not null),0)::int as rider_reward_settled,
+  coalesce(sum(rider_reward)   filter (where status='ACTIVATED' and reward_settled_at is null),0)::int     as rider_reward_unsettled
 from referrals
 group by referrer_rider_id;
 

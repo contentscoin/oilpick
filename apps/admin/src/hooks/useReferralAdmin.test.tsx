@@ -50,8 +50,8 @@ describe("useReferralStatsAdmin", () => {
       select: () =>
         Promise.resolve({
           data: [
-            { referrer_rider_id: "rider-aaaa-1111", signed_up: "2", activated: "0", supplier_bonus_paid: "0", rider_reward_earned: "0" },
-            { referrer_rider_id: "rider-bbbb-2222", signed_up: "4", activated: "3", supplier_bonus_paid: "15000", rider_reward_earned: "9000" },
+            { referrer_rider_id: "rider-aaaa-1111", signed_up: "2", activated: "0", supplier_bonus_paid: "0", rider_reward_earned: "0", rider_reward_settled: "0", rider_reward_unsettled: "0" },
+            { referrer_rider_id: "rider-bbbb-2222", signed_up: "4", activated: "3", supplier_bonus_paid: "15000", rider_reward_earned: "9000", rider_reward_settled: "3000", rider_reward_unsettled: "6000" },
           ],
           error: null,
         }),
@@ -73,6 +73,8 @@ describe("useReferralStatsAdmin", () => {
       conversion: 75,
       supplierBonusPaid: 15000,
       riderRewardEarned: 9000,
+      riderRewardSettled: 3000,
+      riderRewardUnsettled: 6000,
     });
     // 이름 폴백 + 전환율 0(분모 가드).
     const second = rows[1]!;

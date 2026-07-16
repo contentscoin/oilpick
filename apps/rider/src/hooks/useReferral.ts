@@ -37,7 +37,9 @@ export function useReferralStats(riderId: string | undefined) {
       if (!riderId) return null;
       const { data, error } = await supabase
         .from("v_referral_stats")
-        .select("referrer_rider_id, signed_up, activated, supplier_bonus_paid, rider_reward_earned")
+        .select(
+          "referrer_rider_id, signed_up, activated, supplier_bonus_paid, rider_reward_earned, rider_reward_settled, rider_reward_unsettled",
+        )
         .eq("referrer_rider_id", riderId)
         .maybeSingle();
       if (error) throw error;

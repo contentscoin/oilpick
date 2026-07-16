@@ -6,7 +6,7 @@
 create extension if not exists pgtap with schema extensions;
 
 begin;
-select plan(22);
+select plan(28);
 
 -- ── 픽스처: 라이더 2(승인/미승인) + 점주 2 + admin 1 ──────────────────────
 insert into auth.users (id, instance_id, aud, role, email, created_at, updated_at) values
@@ -115,6 +115,39 @@ select is((select activated from v_referral_daily where day = current_date),
 -- 회귀 방지: 가입일 버킷에 활성화가 잡히면 안 된다(기존 same-day 필터 결함).
 select is((select coalesce((select activated from v_referral_daily where day = (current_date - 2)), 0)),
   0, 'v_referral_daily: 가입일에는 활성화가 0(교차일 결함 회귀 방지)');
+
+-- ============ 보상 정산 마킹(09 H8 — fn_settle_referral_reward) ============
+-- 위 픽스처: 점주1의 추천은 ACTIVATED 상태(rider_reward 3000). admin 컨텍스트 무관(service_role RPC 직호출).
+-- 1) 정산 전: unsettled=3000, settled=0
+select is((select rider_reward_unsettled from v_referral_stats where referrer_rider_id='99000000-0000-0000-0000-0000000000b1'),
+  3000, '정산 전: unsettled=3000');
+
+-- 2) 정산 마킹 → settled_at/by 기록 + 통계 이동
+select fn_settle_referral_reward(
+  (select id from referrals where referred_supplier_id='99000000-0000-0000-0000-0000000000a1'),
+  '99000000-0000-0000-0000-0000000000c1', true);
+select ok((select reward_settled_at is not null and reward_settled_by='99000000-0000-0000-0000-0000000000c1'
+  from referrals where referred_supplier_id='99000000-0000-0000-0000-0000000000a1'),
+  '정산 마킹: settled_at·settled_by 기록');
+select is((select rider_reward_settled from v_referral_stats where referrer_rider_id='99000000-0000-0000-0000-0000000000b1'),
+  3000, '정산 후: settled=3000');
+select is((select rider_reward_unsettled from v_referral_stats where referrer_rider_id='99000000-0000-0000-0000-0000000000b1'),
+  0, '정산 후: unsettled=0');
+
+-- 3) 재정산 → 멱등(settled_at 불변, 예외 없음)
+select lives_ok(
+  $$ select fn_settle_referral_reward(
+       (select id from referrals where referred_supplier_id='99000000-0000-0000-0000-0000000000a1'),
+       '99000000-0000-0000-0000-0000000000c1', true) $$,
+  '재정산은 멱등 no-op(예외 없음)');
+
+-- 4) 미활성(SIGNED_UP) 추천 정산 → INVALID_TRANSITION. 점주2를 SIGNED_UP으로 attach해 검증.
+select fn_attach_referral('99000000-0000-0000-0000-0000000000a2','ABCD2345',5000,3000);
+select throws_ok(
+  $$ select fn_settle_referral_reward(
+       (select id from referrals where referred_supplier_id='99000000-0000-0000-0000-0000000000a2'),
+       '99000000-0000-0000-0000-0000000000c1', true) $$,
+  'INVALID_TRANSITION', 'SIGNED_UP 추천 정산은 거부(보상 미확정)');
 
 select * from finish();
 rollback;

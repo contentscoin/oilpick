@@ -25,6 +25,7 @@
 | H5 | 보너스 구조 | **점주 보너스**: 활성화 시 `point_ledger REFERRAL(+supplier_bonus)` 적립(출금 가능, EARN과 동일 취급). **라이더 보상**: `referrals.rider_reward` 스냅샷 — 라이더 지갑 없음(08), admin 통계·오프라인 정산 근거로만 기록. 금액은 core 상수 `REFERRAL_SUPPLIER_BONUS=5000` / `REFERRAL_RIDER_REWARD=3000`, **가입 시점 스냅샷**(이후 상수 변경 무영향) |
 | H6 | 활성화 조건 | **추천 점주의 첫 수거 완료**(CONFIRM_MEASURE/FORCE_COMPLETE로 COMPLETED 도달). referrals.status `SIGNED_UP→ACTIVATED` 원자 전이 + 보너스 발행. 가짜 설치·가입 파밍 차단 |
 | H7 | 활성화 트리거 지점 | **order-transition Edge Function**이 완료 전이 성공 후 `fn_activate_referral(supplier_id, order_id)` 호출(멱등 no-op). fn_transition_order 본체는 무변경(레퍼럴은 순수 추가 — 상태머신 오염 방지). 활성화 시 점주·라이더 푸시 |
+| H8 | 라이더 보상 정산 처리(후속 확정 2026-07-16) | 오프라인 정산의 **지급 이력 마킹**: `referrals.reward_settled_at/reward_settled_by`(admin 기록). Edge `referral-settle`(admin) → `fn_settle_referral_reward` RPC(service_role — ACTIVATED만 허용, 멱등, 해제 지원). `v_referral_stats`에 settled/unsettled 합계 append. admin 레퍼럴 화면에 "보상 정산 큐"(미지급 목록+[지급 완료]+미지급 KPI). **원장 발행 없음** — 라이더 지갑 없음(08 P5) 원칙 유지, 실 지급은 오프라인·이 마킹은 그 이력이다 |
 
 ### 안티 어뷰즈 (모두 서버 강제)
 - 점주 1인 1회: `referrals.referred_supplier_id unique`. 재-attach는 **같은 코드면 기존 행 반환(멱등)**,
@@ -142,7 +143,24 @@ referrals(
   (서버 단일 정규화 판정, INVALID_REFERRAL_CODE와 일관 + pgTAP 2건) ⓕ 공유 링크 base는 Edge `REFERRAL_BASE_URL`
   단일 소스임을 문서·상수 주석 정정(허상 VITE_ env 제거). 전 게이트 재-green.
 
+### H6. 【후속】 라이더 보상 정산 처리 (H8 결정)
+- 【DB】 `referrals.reward_settled_at timestamptz / reward_settled_by uuid fk profiles` + `fn_settle_referral_reward
+  (p_referral_id, p_admin_id, p_settle boolean)`(SECURITY DEFINER·service_role 전용 — ACTIVATED 아니면
+  raise 'INVALID_TRANSITION', 재정산 멱등, p_settle=false로 해제) + `v_referral_stats`에
+  `rider_reward_settled`/`rider_reward_unsettled` append(교체 뷰 — 기존 컬럼 순서 불변). pgTAP.
+- 【core】【API】 `referralSettleInputSchema({referralId, settle})`/출력. Edge `referral-settle`(admin role
+  검증 → RPC 위임, INVALID_TRANSITION/NOT_FOUND 매핑). 02-api.md §18. vendor 재빌드.
+- 【A】 레퍼럴 화면에 "보상 정산 큐" 섹션: ACTIVATED·미정산 목록(라이더/점주/보상액/활성화일) + [지급 완료]
+  (+실행 취소) + 미지급 합계 KPI. 퍼널 테이블에 정산/미정산 컬럼. referrals Realtime이 기존 채널로 갱신.
+- 【R】 rider "내 추천" 누적 보상에 "정산 완료 N원" 보조 표기(선택 — 뷰 컬럼 추가로 무료).
+- DoD: pgTAP + zod/화면 vitest, lint/test/build + 하네스 green, 01/00/02/03 동기화.
+- [x] 완료(2026-07-16): 20260716000001(reward_settled_at/by + v_referral_stats settled/unsettled append +
+  fn_settle_referral_reward — NOT_FOUND/INVALID_TRANSITION raise·멱등·해제). pgTAP +6(총 28, 하네스 157).
+  core referralSettleInput/Output + referralStatsSchema 확장. Edge referral-settle(admin) + config.toml +
+  vendor 재빌드.【A】보상 정산 큐(미지급 목록+[지급 완료]+미지급 합계, useUnsettledReferrals) + 퍼널
+  정산/미지급 컬럼·CSV 확장(테스트 +4).【R】누적 보상 "정산 완료·대기" 분리 표기(테스트 +1).
+  01/00/02(§18)/03 동기화. lint 7/7·test 7/7(admin 107·rider 100)·build 5/5·하네스 9스위트 green.
+
 ## 스코프 밖
 - 실 앱스토어/플레이스토어 URL·유니버설 링크(Branch 등) 인프라 — 랜딩이 env 스토어 링크 플레이스홀더로 대체.
-- 라이더 보상의 실 지급(오프라인 정산) — admin 통계가 청구 근거(08 P5 승계).
 - 다단계(2-tier) 추천·추천 유효기간·부정탐지 고도화 — 필요 시 후속.

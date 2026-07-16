@@ -21,6 +21,8 @@ export function ReferralsPage() {
   const activated = stats?.activated ?? 0;
   const conversion = referralConversionRate(activated, signedUp);
   const rewardEarned = stats?.rider_reward_earned ?? 0;
+  const rewardSettled = stats?.rider_reward_settled ?? 0;
+  const rewardUnsettled = stats?.rider_reward_unsettled ?? 0;
 
   async function handleCopy() {
     if (!codeData) return;
@@ -134,7 +136,12 @@ export function ReferralsPage() {
             >
               <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                 <span style={{ fontSize: 13, fontWeight: 600, color: colors.status.wait }}>누적 추천 보상</span>
-                <span style={{ fontSize: 12, color: colors.status.wait }}>정산 시 지급 (오프라인 정산)</span>
+                {/* [09 H8] 정산 분리 표기 — 정산 이력이 생기면 완료/대기를 보여준다. */}
+                <span data-testid="referral-reward-settle" style={{ fontSize: 12, color: colors.status.wait }}>
+                  {rewardSettled > 0
+                    ? `정산 완료 ${formatKrw(rewardSettled)} · 대기 ${formatKrw(rewardUnsettled)}`
+                    : "정산 시 지급 (오프라인 정산)"}
+                </span>
               </div>
               <span className="oilpick-tabular-nums" style={{ fontSize: 22, fontWeight: 800, color: colors.accent.deep }}>
                 {formatKrw(rewardEarned)}

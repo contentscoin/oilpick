@@ -201,7 +201,19 @@ var referralStatsSchema = z.object({
   signed_up: z.number().int().nonnegative(),
   activated: z.number().int().nonnegative(),
   supplier_bonus_paid: z.number().int().nonnegative(),
-  rider_reward_earned: z.number().int().nonnegative()
+  rider_reward_earned: z.number().int().nonnegative(),
+  // [09 H8] 보상 정산 분리 합계(20260716000001에서 뷰에 append).
+  rider_reward_settled: z.number().int().nonnegative(),
+  rider_reward_unsettled: z.number().int().nonnegative()
+});
+var referralSettleInputSchema = z.object({
+  referralId: uuidSchema,
+  settle: z.boolean()
+});
+var referralSettleOutputSchema = z.object({
+  referralId: uuidSchema,
+  settled: z.boolean(),
+  settledAt: z.string().nullable()
 });
 export {
   arrivePayloadSchema,
@@ -236,6 +248,8 @@ export {
   referralAttachOutputSchema,
   referralCodeOutputSchema,
   referralCodeSchema,
+  referralSettleInputSchema,
+  referralSettleOutputSchema,
   referralStatsSchema,
   referralStatusSchema,
   resolveDisputePayloadSchema,

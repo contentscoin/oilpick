@@ -130,6 +130,14 @@ ACCEPTED 이후 모든 전이 단일 엔드포인트.
   코드로 연결된 점주면 409 `ALREADY_REFERRED`. 원장·referrals 쓰기는 RPC(service_role)에만(절대 규칙 1 확장).
 - 출력: `{ status, supplierBonus }`(`referralAttachOutputSchema`).
 
+## 18. `referral-settle` (admin) — 09 H8
+> 라이더 추천 보상의 오프라인 지급 완료 마킹(해제 지원 — 오기록 정정). 원장 발행 없음(08 P5).
+- 입력: `{ referralId, settle }`(`referralSettleInputSchema`). role=admin 필수.
+- 처리: `fn_settle_referral_reward(referral_id, admin_id, settle)` — ACTIVATED 아니면 409
+  `INVALID_TRANSITION`, 대상 없음 404 `NOT_FOUND`, 재정산/재해제는 멱등. referrals 쓰기는 RPC(service_role)에만.
+- 출력: `{ referralId, settled, settledAt }`(`referralSettleOutputSchema`). v_referral_stats의
+  `rider_reward_settled`/`rider_reward_unsettled`가 admin 정산 큐·rider 실적 표기에 쓰인다.
+
 ## 11~15. `coupon-*` (coupon-purchase-intent/confirm/return, coupon-refund, coupon-adjust, coupon-price-set)
 > ⚠️ **삭제됨 (08 P1·G3-⑥)** — 수거쿠폰 모델 폐기. Edge Function 코드 6종 저장소에서 삭제.
 > **프로덕션 undeploy는 08 배포 체크리스트 ⓔ**(앱 배포 완료 후 — 가동 중 구버전 앱 파손 방지).

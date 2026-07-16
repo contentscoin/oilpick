@@ -180,6 +180,11 @@ Realtime: `pickup_orders` 자기 행 UPDATE 구독으로 상태 자동 갱신 (�
 >   + 라이더별 추천 퍼널 테이블(v_referral_stats — 가입→활성화→전환율+보너스/보상) + 일별 추이(v_referral_daily)
 >   + CSV 2종(BOM). referrals Realtime로 갱신. 라이더 보상은 오프라인 정산 근거(08 P5).
 
+> **09 H8 보상 정산 개정 (2026-07-16)**
+> - **레퍼럴(`/referrals`)**: "보상 정산 큐" 섹션 신설 — ACTIVATED·미정산 목록(라이더/점주/보상액/활성화일)
+>   + [지급 완료](referral-settle Edge) + 미지급 합계. 퍼널 테이블에 정산 완료/미지급 컬럼·CSV 확장.
+> - **rider 내 추천**: 누적 보상 아래 "정산 완료 N원 · 대기 N원" 분리 표기(정산 이력 있을 때).
+
 > **교차 이음새 감사 개정 (2026-07-16)**
 > - **admin 알림 벨(AdminShell, 신설)**: 이의신청·무수락 자동 취소 등 admin 대상 notifications의 소비 지면
 >   (00-domain 알림 매트릭스 "admin 웹 알림" — 기존엔 소비처가 없어 데드레터였던 확정 결함 수정). 사이드바

@@ -41,6 +41,7 @@ export const queryKeys = {
   // 09 H4 레퍼럴 실적분석 — 라이더별 퍼널(v_referral_stats) + 일별 추이(v_referral_daily).
   referralStats: () => ["admin", "referral", "stats"] as const,
   referralDaily: (days: number) => ["admin", "referral", "daily", days] as const,
+  referralUnsettled: () => ["admin", "referral", "unsettled"] as const,
   // admin 알림 벨 — 본인(notifications.user_id=auth.uid) 행. 이의신청·무수락 취소 등 admin 통지 소비 지면.
   adminNotifications: (userId: string) => ["admin", "notifications", userId] as const,
 };

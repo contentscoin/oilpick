@@ -94,6 +94,8 @@ describe("useReferralStats", () => {
       activated: 3,
       supplier_bonus_paid: 15000,
       rider_reward_earned: 9000,
+      rider_reward_settled: 3000,
+      rider_reward_unsettled: 6000,
     };
     mockStatsRow(row);
     const { wrapper } = makeWrapper();

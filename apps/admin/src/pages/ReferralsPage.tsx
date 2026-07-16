@@ -1,11 +1,15 @@
-import { formatKrw, formatPoint, referralConversionRate } from "@oilpick/core";
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { formatKrw, formatPoint, referralConversionRate, type ReferralSettleOutput } from "@oilpick/core";
 import {
   useReferralDaily,
   useReferralStatsAdmin,
+  useUnsettledReferrals,
   type ReferralDailyRow,
   type ReferralStatRow,
 } from "../hooks/useReferralAdmin";
 import { downloadCsv, toCsv } from "../lib/csv";
+import { invokeEdgeFunction } from "../lib/edgeFunction";
 import { QueryError } from "../components/QueryError";
 
 /** 부모가 1회 마운트한 퍼널 쿼리를 자식에 내려준다(다중 마운트=중복 채널 회피, useReferralAdmin 주석). */
@@ -29,9 +33,106 @@ export function ReferralsPage() {
       </div>
 
       <SummarySection stats={stats} />
+      <SettlementQueueSection />
       <RiderFunnelSection stats={stats} />
       <DailyTrendSection />
     </div>
+  );
+}
+
+/** [09 H8] ⓐ-2 보상 정산 큐 — ACTIVATED·미정산 추천 목록 + [지급 완료](referral-settle Edge). */
+function SettlementQueueSection() {
+  const queryClient = useQueryClient();
+  const { data: rows, isLoading, isError, refetch } = useUnsettledReferrals();
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const loadFailed = isError && rows === undefined;
+  const totalUnsettled = (rows ?? []).reduce((s, r) => s + r.riderReward, 0);
+
+  async function handleSettle(referralId: string) {
+    setBusyId(referralId);
+    setActionError(null);
+    const res = await invokeEdgeFunction<ReferralSettleOutput>("referral-settle", {
+      referralId,
+      settle: true,
+    });
+    setBusyId(null);
+    if (!res.ok) {
+      setActionError(res.message);
+      return;
+    }
+    queryClient.invalidateQueries({ queryKey: ["admin", "referral"] });
+  }
+
+  return (
+    <section className="rounded-card bg-white p-6 shadow-card">
+      <div className="mb-4 flex items-center justify-between gap-2">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900">보상 정산 큐</h2>
+          <p className="text-xs text-gray-500">
+            활성화된 추천의 라이더 보상(오프라인 지급)을 지급 완료로 마킹해요 — 원장 발행 없음(08 P5).
+          </p>
+        </div>
+        <span data-testid="settle-unsettled-total" className="shrink-0 text-sm font-bold tabular-nums text-accent-deep">
+          미지급 {formatKrw(totalUnsettled)}
+        </span>
+      </div>
+      {actionError && (
+        <p role="alert" data-testid="settle-error" className="mb-3 text-sm text-red-600">
+          {actionError}
+        </p>
+      )}
+      <div className="overflow-x-auto">
+        <table className="w-full whitespace-nowrap text-left text-sm" data-testid="settle-queue-table">
+          <thead>
+            <tr className="border-b border-gray-100 text-gray-500">
+              <th className="py-2 font-medium">라이더</th>
+              <th className="py-2 font-medium">추천 점주</th>
+              <th className="py-2 font-medium">보상액</th>
+              <th className="py-2 font-medium">활성화일</th>
+              <th className="py-2 font-medium">처리</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loadFailed ? (
+              <QueryError colSpan={5} onRetry={refetch} message="정산 큐를 불러오지 못했어요" />
+            ) : isLoading ? (
+              <tr>
+                <td colSpan={5} className="py-6 text-center text-gray-500">
+                  불러오는 중...
+                </td>
+              </tr>
+            ) : (rows ?? []).length === 0 ? (
+              <tr>
+                <td colSpan={5} className="py-6 text-center text-gray-500">
+                  미정산 보상이 없어요.
+                </td>
+              </tr>
+            ) : (
+              (rows ?? []).map((r) => (
+                <tr key={r.id} className="border-b border-gray-50">
+                  <td className="py-2 text-gray-800">{r.riderName}</td>
+                  <td className="py-2 text-gray-700">{r.supplierName}</td>
+                  <td className="py-2 font-semibold tabular-nums text-accent-deep">{formatKrw(r.riderReward)}</td>
+                  <td className="py-2 text-gray-500">{new Date(r.activatedAt).toLocaleDateString("ko-KR")}</td>
+                  <td className="py-2">
+                    <button
+                      type="button"
+                      data-testid={`settle-button-${r.id}`}
+                      onClick={() => handleSettle(r.id)}
+                      disabled={busyId === r.id}
+                      className="h-8 rounded-button bg-primary px-3 text-xs font-semibold text-white hover:bg-primary-dark disabled:opacity-40"
+                    >
+                      지급 완료
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 
@@ -72,7 +173,7 @@ function RiderFunnelSection({ stats }: { stats: StatsQuery }) {
 
   function handleCsv() {
     const csv = toCsv(
-      ["라이더", "가입", "활성화", "전환율(%)", "지급 보너스(P)", "추천 보상(정산 대상)"],
+      ["라이더", "가입", "활성화", "전환율(%)", "지급 보너스(P)", "추천 보상 누적", "정산 완료", "미지급"],
       (rows ?? []).map((r: ReferralStatRow) => [
         r.riderName,
         r.signedUp,
@@ -80,6 +181,8 @@ function RiderFunnelSection({ stats }: { stats: StatsQuery }) {
         r.conversion,
         r.supplierBonusPaid,
         r.riderRewardEarned,
+        r.riderRewardSettled,
+        r.riderRewardUnsettled,
       ]),
     );
     downloadCsv("레퍼럴_실적", csv);
@@ -113,21 +216,23 @@ function RiderFunnelSection({ stats }: { stats: StatsQuery }) {
               <th className="py-2 font-medium">활성화</th>
               <th className="py-2 font-medium">전환율</th>
               <th className="py-2 font-medium">지급 보너스</th>
-              <th className="py-2 font-medium">추천 보상(정산 대상)</th>
+              <th className="py-2 font-medium">보상 누적</th>
+              <th className="py-2 font-medium">정산 완료</th>
+              <th className="py-2 font-medium">미지급</th>
             </tr>
           </thead>
           <tbody>
             {loadFailed ? (
-              <QueryError colSpan={6} onRetry={refetch} message="추천 실적을 불러오지 못했어요" />
+              <QueryError colSpan={8} onRetry={refetch} message="추천 실적을 불러오지 못했어요" />
             ) : isLoading ? (
               <tr>
-                <td colSpan={6} className="py-6 text-center text-gray-500">
+                <td colSpan={8} className="py-6 text-center text-gray-500">
                   불러오는 중...
                 </td>
               </tr>
             ) : (rows ?? []).length === 0 ? (
               <tr>
-                <td colSpan={6} className="py-6 text-center text-gray-500">
+                <td colSpan={8} className="py-6 text-center text-gray-500">
                   아직 추천 실적이 없어요.
                 </td>
               </tr>
@@ -139,8 +244,10 @@ function RiderFunnelSection({ stats }: { stats: StatsQuery }) {
                   <td className="py-2 tabular-nums text-gray-800">{r.activated}명</td>
                   <td className="py-2 tabular-nums text-gray-700">{r.conversion}%</td>
                   <td className="py-2 tabular-nums text-gray-700">{formatPoint(r.supplierBonusPaid)}</td>
+                  <td className="py-2 tabular-nums text-gray-700">{formatKrw(r.riderRewardEarned)}</td>
+                  <td className="py-2 tabular-nums text-gray-500">{formatKrw(r.riderRewardSettled)}</td>
                   <td className="py-2 font-semibold tabular-nums text-accent-deep">
-                    {formatKrw(r.riderRewardEarned)}
+                    {formatKrw(r.riderRewardUnsettled)}
                   </td>
                 </tr>
               ))
