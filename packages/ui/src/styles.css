@@ -107,3 +107,28 @@ body {
   transform: scale(0.99);
   filter: brightness(0.97);
 }
+
+/* 08 G4 — PriceChart v2 마지막 값 펄스 도트(링 확산). reduced-motion 시 정지. */
+@keyframes oilpick-chart-pulse {
+  0% {
+    stroke-opacity: 0.9;
+    r: 4;
+  }
+  70% {
+    stroke-opacity: 0;
+    r: 11;
+  }
+  100% {
+    stroke-opacity: 0;
+    r: 11;
+  }
+}
+.oilpick-chart-pulse {
+  animation: oilpick-chart-pulse 2.2s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .oilpick-chart-pulse {
+    animation: none;
+    stroke-opacity: 0;
+  }
+}

@@ -1,5 +1,5 @@
 import { MapView, type MapMarker } from "@oilpick/ui";
-import { ORDER_STATUS_LABEL, formatKrw, type OrderStatus } from "@oilpick/core";
+import { ORDER_STATUS_LABEL, formatKrw, formatPoint, type OrderStatus } from "@oilpick/core";
 import { KAKAO_KEY } from "../lib/env";
 import { useDashboardKpi, useDashboardOrders, useDashboardRiders } from "../hooks/useDashboard";
 import { OrderStatusPill } from "../components/OrderStatusPill";
@@ -59,7 +59,7 @@ export function DashboardPage() {
         <p className="text-sm text-gray-500">오늘의 현황과 진행 중인 주문을 한눈에 확인해요.</p>
       </div>
 
-      {/* 07 F10-④ KPI 교체: "오늘 발행 포인트" 제거(D1), 쿠폰 판매액/소진 쿠폰/현금 거래액 추가. */}
+      {/* 08 G7-② KPI 교체: 쿠폰 판매액/소진 쿠폰 제거(쿠폰 모델 폐기) → 현금/포인트 지급 분리 + 출금 대기. */}
       {kpiLoadFailed ? (
         <div className="rounded-card bg-white p-5 shadow-card">
           <QueryError onRetry={refetchKpi} message="오늘 지표를 불러오지 못했어요" />
@@ -68,14 +68,10 @@ export function DashboardPage() {
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
         <KpiCard label="오늘 주문 수" value={kpiLoading ? "-" : `${kpi?.orderCount ?? 0}건`} />
         <KpiCard label="오늘 수거 kg" value={kpiLoading ? "-" : `${(kpi?.collectedKg ?? 0).toFixed(1)}kg`} />
-        <KpiCard
-          label="오늘 쿠폰 판매액"
-          value={kpiLoading ? "-" : formatKrw(kpi?.couponSalesAmount ?? 0)}
-          accent
-        />
-        <KpiCard label="오늘 소진 쿠폰" value={kpiLoading ? "-" : `${kpi?.consumedCoupons ?? 0}장`} />
+        <KpiCard label="오늘 현금 지급" value={kpiLoading ? "-" : formatKrw(kpi?.cashPaidAmount ?? 0)} accent />
+        <KpiCard label="오늘 포인트 지급" value={kpiLoading ? "-" : formatPoint(kpi?.pointPaidAmount ?? 0)} accent />
+        <KpiCard label="출금 대기" value={kpiLoading ? "-" : `${kpi?.pendingWithdrawals ?? 0}건`} />
         <KpiCard label="활성 라이더" value={kpiLoading ? "-" : `${kpi?.activeRiderCount ?? 0}명`} />
-        <KpiCard label="오늘 현금 거래액" value={kpiLoading ? "-" : formatKrw(kpi?.cashPaidAmount ?? 0)} accent />
       </div>
       )}
 

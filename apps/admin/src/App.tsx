@@ -29,6 +29,9 @@ const NotifyPage = lazy(() =>
   import("./pages/NotifyPage").then((m) => ({ default: m.NotifyPage })),
 );
 const CsPage = lazy(() => import("./pages/CsPage").then((m) => ({ default: m.CsPage })));
+const ReferralsPage = lazy(() =>
+  import("./pages/ReferralsPage").then((m) => ({ default: m.ReferralsPage })),
+);
 const NotFoundPage = lazy(() =>
   import("./pages/NotFoundPage").then((m) => ({ default: m.NotFoundPage })),
 );
@@ -96,6 +99,14 @@ export function App() {
             element={
               <Protected>
                 <CsPage />
+              </Protected>
+            }
+          />
+          <Route
+            path="/referrals"
+            element={
+              <Protected>
+                <ReferralsPage />
               </Protected>
             }
           />

@@ -1,4 +1,7 @@
--- pgTAP: 신모델(수거쿠폰 피벗) 자금 불변식 (00-domain.md 상태머신 + 쿠폰 원장 규칙, 07 F3a).
+-- pgTAP: 07 쿠폰 모델 자금 불변식 — [08 피벗 이후] 전환기 레거시 회귀 스위트.
+-- 08이 쿠폰 게이트를 폐기했지만(신규 주문 coupon_cost null) 잔존 쿠폰 주문(coupon_cost not null)의
+-- CONSUME/REFUND 분기는 fn_transition_order에 보존된다 — 이 파일이 그 보존을 증명한다.
+-- 신모델(지급수단·EARN 부활) 불변식은 08_payout_method_test.sql 참조.
 -- 주문 1건 완주(ACCEPT→ARRIVE→SUBMIT_MEASURE→CONFIRM_MEASURE) 동안:
 --   - CONFIRM_MEASURE는 COMPLETED 직행 + cash_paid_amount=round(final_kg×snapshot_price) + completed_at,
 --     EARN/HOLD 신규 발행 없음(신모델).

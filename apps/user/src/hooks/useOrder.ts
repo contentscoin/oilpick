@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { OrderStatus } from "@oilpick/core";
+import type { OrderStatus, PayoutMethod } from "@oilpick/core";
 import { supabase } from "../lib/supabaseClient";
 import { queryKeys } from "../lib/queryClient";
 
@@ -20,6 +20,8 @@ export interface OrderDetail {
   finalKg: number | null;
   supplierPoint: number | null;
   couponCost: number | null;
+  /** [08 P2] 현장 지급수단 — 라이더가 SUBMIT_MEASURE에서 선택. null=계량 제출 전 또는 레거시(CASH 간주). */
+  payoutMethod: PayoutMethod | null;
   cashPaidAmount: number | null;
   photoUrls: string[];
   cancelReason: string | null;
@@ -47,6 +49,7 @@ function mapRow(row: {
   final_kg: number | null;
   supplier_point: number | null;
   coupon_cost: number | null;
+  payout_method: PayoutMethod | null;
   cash_paid_amount: number | null;
   photo_urls: string[];
   cancel_reason: string | null;
@@ -73,6 +76,7 @@ function mapRow(row: {
     finalKg: row.final_kg,
     supplierPoint: row.supplier_point,
     couponCost: row.coupon_cost,
+    payoutMethod: row.payout_method,
     cashPaidAmount: row.cash_paid_amount,
     photoUrls: row.photo_urls ?? [],
     cancelReason: row.cancel_reason,
@@ -86,7 +90,7 @@ function mapRow(row: {
 }
 
 const ORDER_DETAIL_COLUMNS =
-  "id, status, supplier_id, rider_id, depot_id, requested_cans, requested_kg, pickup_address, preferred_time, snapshot_price_per_kg, snapshot_rider_fee, measured_kg, final_kg, supplier_point, coupon_cost, cash_paid_amount, photo_urls, cancel_reason, dispute_reason, created_at, accepted_at, picked_up_at, delivered_at, completed_at";
+  "id, status, supplier_id, rider_id, depot_id, requested_cans, requested_kg, pickup_address, preferred_time, snapshot_price_per_kg, snapshot_rider_fee, measured_kg, final_kg, supplier_point, coupon_cost, payout_method, cash_paid_amount, photo_urls, cancel_reason, dispute_reason, created_at, accepted_at, picked_up_at, delivered_at, completed_at";
 
 /**
  * 단일 주문 상세 조회 + Realtime 구독. 03-frontend.md U6~U9 "/orders/:id":

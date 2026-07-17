@@ -3,10 +3,10 @@
 // 그대로 코드로 옮긴 것. Edge Function(order-create/order-accept/order-transition)과
 // 클라이언트 UI(버튼 노출)가 반드시 이 파일의 canTransition/TRANSITIONS만 참조한다.
 //
-// [07 피벗] 신 상태머신(§1-3): CONFIRM_MEASURE는 ARRIVED→COMPLETED 직행(EARN/HOLD 폐기),
-// RESOLVE_DISPUTE는 DISPUTED→ARRIVED 복귀(중재는 kg 확정까지만), FORCE_COMPLETE(admin, D6)
-// 신설, admin CANCEL은 {ACCEPTED|ARRIVED|DISPUTED}로 확장. 구모델의 PICKED_UP/DELIVERED 경로는
-// LEGACY_TRANSITIONS로 분리해 프로덕션 잔존 주문(coupon_cost null·이미 PICKED_UP) 완결용으로만 보존한다.
+// [08 피벗] 상태 경로는 07과 동일(REQUESTED→ACCEPTED→ARRIVED→COMPLETED). 부수효과 개정:
+// ACCEPT의 쿠폰 게이트 소멸(신규 주문 coupon_cost null — 08 P1), SUBMIT_MEASURE에 지급수단
+// (payoutMethod: CASH|POINT) 필수(08 P2), CONFIRM_MEASURE/FORCE_COMPLETE는 POINT면 supplier
+// EARN 발행(08 P3). 구모델의 PICKED_UP/DELIVERED 경로는 LEGACY_TRANSITIONS로 분리 보존.
 //
 // 표에 없는 (from, action, role) 조합은 전부 거부되어야 한다 (전수 테스트 대상).
 
@@ -81,14 +81,14 @@ export const TRANSITIONS: readonly OrderTransitionRule[] = [
     action: "CREATE",
     role: "supplier",
     to: "REQUESTED",
-    guard: "진행중 주문(REQUESTED~PICKED_UP) 3건 미만. coupon_cost 스냅샷",
+    guard: "진행중 주문(REQUESTED~PICKED_UP) 3건 미만. 시세 스냅샷(coupon_cost 스냅샷 중지 — 08 P1)",
   },
   {
     from: "REQUESTED",
     action: "ACCEPT",
     role: "rider",
     to: "ACCEPTED",
-    guard: "rider verified & online & 진행중 주문 없음 + 쿠폰 잔액 ≥ coupon_cost. 선착순 1명(조건부 update 락). 쿠폰 CONSUME",
+    guard: "rider verified(APPROVED) & online & 진행중 주문 없음. 선착순 1명(조건부 update 락). 쿠폰 게이트 소멸(08 P1)",
   },
   {
     from: "ACCEPTED",
@@ -102,14 +102,14 @@ export const TRANSITIONS: readonly OrderTransitionRule[] = [
     action: "SUBMIT_MEASURE",
     role: "rider",
     to: "ARRIVED",
-    guard: "배정 rider 본인. measuredKg + photoUrls(>=1) 필수. 상태는 ARRIVED 유지. 중재 완료(final_kg) 주문은 재제출 불가",
+    guard: "배정 rider 본인. measuredKg + photoUrls(>=1) + payoutMethod(CASH|POINT — 08 P2) 필수. 상태는 ARRIVED 유지. 중재 완료(final_kg) 주문은 재제출 불가",
   },
   {
     from: "ARRIVED",
     action: "CONFIRM_MEASURE",
     role: "supplier",
     to: "COMPLETED",
-    guard: "주문 본인 supplier. 무게+현금 수령 2자 확인. cash_paid_amount+completed_at 기록. EARN/HOLD 없음",
+    guard: "주문 본인 supplier. 무게+지급 2자 확인. cash_paid_amount+completed_at 기록. POINT면 supplier EARN 발행(08 P3)",
   },
   {
     from: "ARRIVED",
@@ -130,7 +130,7 @@ export const TRANSITIONS: readonly OrderTransitionRule[] = [
     action: "FORCE_COMPLETE",
     role: "admin",
     to: "COMPLETED",
-    guard: "admin(D6). 계량/중재 kg 존재 + memo 필수. 점주 수령 확인 교착 해소",
+    guard: "admin(07 D6). 계량/중재 kg 존재 + memo 필수. 점주 수령 확인 교착 해소. POINT면 EARN 발행(08 P3)",
   },
   {
     from: "REQUESTED",
@@ -144,21 +144,21 @@ export const TRANSITIONS: readonly OrderTransitionRule[] = [
     action: "CANCEL",
     role: "admin",
     to: "CANCELLED",
-    guard: "admin만 + fault 필수(D4·D6). SUPPLIER/SYSTEM→REFUND, RIDER→환급 없음",
+    guard: "admin만 + fault 필수(07 D4·D6 — 감사 기록). 쿠폰 REFUND는 레거시 잔존 주문에서만(08 P1)",
   },
   {
     from: "ARRIVED",
     action: "CANCEL",
     role: "admin",
     to: "CANCELLED",
-    guard: "admin만 + fault 필수(D4·D6). SUPPLIER/SYSTEM→REFUND, RIDER→환급 없음",
+    guard: "admin만 + fault 필수(07 D4·D6 — 감사 기록). 쿠폰 REFUND는 레거시 잔존 주문에서만(08 P1)",
   },
   {
     from: "DISPUTED",
     action: "CANCEL",
     role: "admin",
     to: "CANCELLED",
-    guard: "admin만 + fault 필수(D4·D6). SUPPLIER/SYSTEM→REFUND, RIDER→환급 없음",
+    guard: "admin만 + fault 필수(07 D4·D6 — 감사 기록). 쿠폰 REFUND는 레거시 잔존 주문에서만(08 P1)",
   },
 ] as const;
 
@@ -177,7 +177,7 @@ export const LEGACY_TRANSITIONS: readonly OrderTransitionRule[] = [
     action: "DELIVER",
     role: "rider",
     to: "COMPLETED",
-    guard: "레거시. 배정 rider. depot.qr_secret 일치. RELEASE 후 DELIVERED 경유 즉시 COMPLETED",
+    guard: "레거시. 배정 rider. depot.qr_secret 일치. 지급 없음(07 D1 보강) — DELIVERED 경유 즉시 COMPLETED",
   },
 ] as const;
 

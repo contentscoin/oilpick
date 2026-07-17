@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
+import { NotificationsBell } from "./NotificationsBell";
 
 /**
  * 03-frontend.md apps/admin: "사이드바 내비, shadcn/ui + TanStack Table".
@@ -14,8 +15,9 @@ const NAV_ITEMS = [
   { to: "/price", label: "시세 관리" },
   { to: "/orders", label: "주문 관리" },
   { to: "/users", label: "회원 관리" },
-  { to: "/settlement", label: "매출·정산" }, // 07 F10-③ 재편
+  { to: "/settlement", label: "정산" }, // 08 G7-① 재편(출금 큐·포인트 정산)
   { to: "/cs", label: "CS" }, // 07 F12 신설
+  { to: "/referrals", label: "레퍼럴" }, // 09 H4 신설(추천 실적분석)
   // [07 F13] 집하장(/depots) 내비 제거 — 집하장/QR 배송 소멸(07 §0). 라우트도 App.tsx에서 제거.
   { to: "/notify", label: "공지" },
 ];
@@ -36,10 +38,12 @@ export function AdminShell({ children }: { children: ReactNode }) {
             O
           </span>
           <div>
-            <p className="text-lg font-bold leading-tight text-primary">OilPick</p>
+            <p className="text-lg font-bold leading-tight text-primary">오반장</p>
             <p className="text-xs text-gray-500">관리자</p>
           </div>
         </div>
+        {/* admin 알림 벨(이의신청·무수락 취소 통지 소비 지면 — 00-domain 알림 매트릭스 "admin 웹 알림"). */}
+        <NotificationsBell />
         <nav className="flex flex-1 flex-col gap-1 px-3">
           {NAV_ITEMS.map((item) => (
             <NavLink

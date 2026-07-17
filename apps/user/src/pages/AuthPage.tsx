@@ -1,9 +1,35 @@
 import { type FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BigButton, colors, inputClassName, inputStyle } from "@oilpick/ui";
-import { humanizeSupabaseError, isValidKrMobilePhone, supplierSignupInputSchema, toE164Kr } from "@oilpick/core";
+import {
+  REFERRAL_CODE_STORAGE_KEY,
+  humanizeSupabaseError,
+  isValidKrMobilePhone,
+  referralCodeSchema,
+  supplierSignupInputSchema,
+  toE164Kr,
+} from "@oilpick/core";
 import { supabase } from "../lib/supabaseClient";
+import { invokeEdgeFunction } from "../lib/edgeFunction";
 import { AddressField, type AddressValue } from "../components/AddressField";
+
+/**
+ * [09 H4] 랜딩(/ref/:code)에서 저장해둔 추천코드가 있으면 가입 성공 직후 best-effort로 연결한다.
+ * 비차단: 실패해도 가입은 성립하며 오류를 사용자에게 노출하지 않는다. 성패와 무관하게 코드를
+ * 소비(제거)해 재시도·중복 attach를 막는다(점주 1인 1회는 서버가 최종 강제).
+ */
+async function attachStoredReferral(): Promise<void> {
+  const raw = localStorage.getItem(REFERRAL_CODE_STORAGE_KEY);
+  if (!raw) return;
+  localStorage.removeItem(REFERRAL_CODE_STORAGE_KEY);
+  const parsed = referralCodeSchema.safeParse(raw);
+  if (!parsed.success) return;
+  try {
+    await invokeEdgeFunction("referral-attach", { code: parsed.data });
+  } catch {
+    // 비차단 — 추천 연결 실패는 가입을 막지 않는다.
+  }
+}
 
 /**
  * U2 가입/로그인. 03-frontend.md: "Supabase 전화 OTP → profiles+supplier_profiles 생성.
@@ -136,11 +162,15 @@ export function AuthPage() {
       address: parsed.data.address,
       location: `SRID=4326;POINT(${parsed.data.lng} ${parsed.data.lat})`,
     });
-    setLoading(false);
     if (supplierError) {
+      setLoading(false);
       setError(humanizeSupabaseError(supplierError));
       return;
     }
+
+    // [09 H4] 가입(supplier_profiles insert) 성공 직후 추천코드 연결(best-effort, 비차단).
+    await attachStoredReferral();
+    setLoading(false);
 
     navigate("/", { replace: true });
   }

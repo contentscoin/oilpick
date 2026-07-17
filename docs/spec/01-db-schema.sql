@@ -6,14 +6,21 @@ create extension if not exists postgis;
 -- ===== enums =====
 create type user_role as enum ('supplier','rider','admin');
 create type order_status as enum ('REQUESTED','ACCEPTED','ARRIVED','PICKED_UP','DELIVERED','COMPLETED','CANCELLED','DISPUTED');
-create type ledger_type as enum ('EARN','HOLD','RELEASE','WITHDRAW_REQUEST','WITHDRAW_CANCEL','ADJUST','PURCHASE'); -- 레거시(신규 발행 중지, 07 D1)
+-- [08 P3·P4] 포인트 복권 — 현역: EARN(POINT 지급수단 적립)/WITHDRAW_REQUEST/WITHDRAW_CANCEL/ADJUST.
+-- [09 H5] REFERRAL(추천 활성화 시 점주 보너스, +부호·출금 가능) 추가(실 DDL: 20260715000003 alter type add value).
+-- 레거시 전용(신규 발행 없음): HOLD/RELEASE(구모델 수거비), PURCHASE(미래 예약).
+create type ledger_type as enum ('EARN','HOLD','RELEASE','WITHDRAW_REQUEST','WITHDRAW_CANCEL','ADJUST','PURCHASE','REFERRAL');
+-- [09 H2] 라이더 추천 상태(SIGNED_UP=가입, ACTIVATED=첫 수거 완료·보너스 발행, CANCELLED)
+create type referral_status as enum ('SIGNED_UP','ACTIVATED','CANCELLED');
 -- [07 F2] SUSPENDED 추가(실 마이그레이션은 별도 파일의 alter type add value — 사용 트랜잭션과 분리. 액션·정책은 07 F11)
 create type verify_status as enum ('PENDING','APPROVED','REJECTED','SUSPENDED');
-create type withdraw_status as enum ('REQUESTED','APPROVED','REJECTED','PAID'); -- 레거시(출금 폐기, 07 D1/F13)
--- [07 F2] 수거쿠폰 원장 항목 타입
+create type withdraw_status as enum ('REQUESTED','APPROVED','REJECTED','PAID'); -- [08 P4] 현역 복권(출금 부활)
+-- [07 F2] 수거쿠폰 원장 항목 타입 — [08 P1] 레거시(신규 발행 중지, 전환기 CONSUME/REFUND만 잔존)
 create type coupon_entry_type as enum ('CHARGE','CONSUME','REFUND','ADJUST');
--- [07 F2] 쿠폰 구매(PG 결제) 상태 — EXPIRED 포함(orphan PENDING 24h TTL, 07 §1-4)
+-- [07 F2] 쿠폰 구매(PG 결제) 상태 — [08 P1] 레거시(coupon-* 함수 일몰)
 create type coupon_purchase_status as enum ('PENDING','PAID','FAILED','EXPIRED','REFUNDED');
+-- [08 P2] 현장 지급수단(실 DDL: 20260715000001)
+create type payout_method as enum ('CASH','POINT');
 
 -- ===== profiles =====
 create table profiles (
@@ -49,6 +56,7 @@ create table rider_profiles (
   work_radius_km int not null default 15,
   bank_name text, bank_account text, bank_holder text,
   recycler_name text, recycler_contact text,  -- 인계 재활용업체(승인 조건, 07 F11 D5. 실 DDL: 20260709000008)
+  referral_code text unique,   -- [09 H2] 라이더 추천코드(Crockford base32 8자, Edge referral-code 생성. APPROVED 코드만 attach 유효. 실 DDL: 20260715000004)
   created_at timestamptz not null default now()
 );
 create index idx_rider_location on rider_profiles using gist(last_location);
@@ -89,12 +97,13 @@ create table pickup_orders (
   -- 스냅샷 (생성 시 고정)
   snapshot_price_per_kg int not null,
   snapshot_rider_fee int,                   -- [07 F2] 레거시 — not null 해제, 신규 미기록
-  coupon_cost int,                          -- [07 F2] 소진 쿠폰 장수 스냅샷 = ceil(requested_kg/KG_PER_CAN). 레거시 주문 null(CONSUME/REFUND skip)
+  coupon_cost int,                          -- [08 P1] 레거시 — 07 쿠폰 스냅샷. order-create가 기록 중지(신규 항상 null → CONSUME/REFUND skip)
   -- 확정 정보
   measured_kg numeric(8,1),                 -- 라이더 계량
-  final_kg numeric(8,1),                    -- 확정(중재 반영) — 현금/EARN 계산 기준
-  supplier_point int,                       -- 레거시 — 지급된 EARN
-  cash_paid_amount int,                     -- [07 F2] 현장 지급 현금(원) = round(final_kg × snapshot_price_per_kg). COMPLETED 시 기록
+  final_kg numeric(8,1),                    -- 확정(중재 반영) — 지급액/EARN 계산 기준
+  supplier_point int,                       -- 레거시(구모델) — 지급된 EARN
+  payout_method payout_method,              -- [08 P2] 현장 지급수단('CASH'|'POINT'). SUBMIT_MEASURE에서 라이더 선택. null=레거시(완료 시 CASH 간주)
+  cash_paid_amount int,                     -- [08 P3] 확정 지급액 = round(final_kg × snapshot_price_per_kg). POINT 지급도 이 컬럼(1P=1원). COMPLETED 시 기록
   photo_urls text[] not null default '{}',
   cancel_reason text,
   dispute_reason text,
@@ -119,7 +128,9 @@ create table order_events (
 create index idx_order_events_order on order_events (order_id, created_at);
 
 -- ===== 포인트 원장 (append-only) =====
--- 레거시 — 신규 발행 중지(07 D1). 테이블·과거 데이터는 회계 기록으로 보존, 신규 EARN/HOLD/RELEASE/WITHDRAW insert 없음.
+-- [08 P3·P4] 현역 복권 — POINT 지급수단의 EARN(fn_transition_order CONFIRM_MEASURE/FORCE_COMPLETE),
+-- 출금 WITHDRAW_REQUEST/WITHDRAW_CANCEL(fn_request_withdraw/fn_process_withdraw), admin ADJUST(point-adjust).
+-- HOLD/RELEASE는 레거시 전용(신규 발행 없음 — 07 D1 보강 유지). insert는 service_role RPC에만(절대 규칙 1).
 create table point_ledger (
   id bigint generated always as identity primary key,
   user_id uuid not null references profiles(id),
@@ -163,9 +174,10 @@ select
                     else 0 end),0)::int as held
 from point_ledger group by user_id;
 
--- ===== 수거쿠폰 [07 F2] =====
--- 신모델 플랫폼 수익원. 절대 규칙 1 확장: coupon_ledger insert는 service_role RPC
--- (fn_charge_coupon/fn_consume_coupon)에만 존재, 잔액은 v_coupon_balance 뷰로만 조회.
+-- ===== 수거쿠폰 [07 F2] — [08 P1] 레거시(신규 발행 중지) =====
+-- 07 모델의 플랫폼 수익원이었으나 08 피벗으로 폐기. 테이블·뷰·RPC·과거 데이터는 회계 감사용 보존
+-- (삭제 금지). 신규 발행 경로는 order-create의 coupon_cost 중지 + coupon-* Edge Function 삭제로 소멸,
+-- 전환기 잔존 주문(coupon_cost not null)의 CONSUME/REFUND 분기만 fn_transition_order에 잔존.
 
 -- 쿠폰 단가 tick (price_ticks 패턴 미러: 전체 read, admin insert, update/delete 정책 없음=정정 불가·신규 tick만)
 create table coupon_price_ticks (
@@ -251,8 +263,17 @@ from coupon_ledger group by rider_id;
 --   미승인 라이더 신규 콜 수락 차단(최심층 방어). 게이트는 ACCEPT에만; 진행 전이는 무게이트(진행중 완결 허용).
 -- fn_transition_order 레거시 RELEASE 제거(20260709000010_rpc_transition_drop_legacy_release.sql, 07 D1 보강):
 --   DELIVER(레거시 완결) 분기의 fn_post_ledger RELEASE 호출 제거 — 배송 완료는 라이더 지급 이벤트가
---   아니다(라이더는 쿠폰 구매 측). 이로써 point_ledger 신규 insert 경로 0(위 "신규 발행 중지" 주석이
---   문자 그대로 성립). 완결 전이·QR 검증은 유지, 잔존 HOLD는 held 잔존(과거 회계 기록).
+--   아니다(라이더는 쿠폰 구매 측). 완결 전이·QR 검증은 유지, 잔존 HOLD는 held 잔존(과거 회계 기록).
+-- fn_transition_order 현장 지급수단 개정(20260715000002_rpc_transition_payout.sql, 08 G2-②):
+--   SUBMIT_MEASURE가 payload.payoutMethod('CASH'|'POINT')를 검증해 pickup_orders.payout_method 기록
+--   (생략·명시적 null이면 CASH 폴백 — 구버전 호환. 유효하지 않은 문자열만 거부. 재제출로 수단 변경
+--   가능). CONFIRM_MEASURE/FORCE_COMPLETE는
+--   coalesce(payout_method,'CASH')='POINT'면 같은 트랜잭션에서 fn_post_ledger(supplier,'EARN',
+--   cash_paid_amount, order_id) 발행 — 포인트 복권의 유일한 적립 경로. 멱등은 point_ledger
+--   unique(order_id, entry_type, user_id). ACCEPT/CANCEL의 쿠폰 분기는 전환기 잔존 주문 전용 보존(08 P1).
+-- 출금 RPC 복권(08 P4 — 기존 정의 그대로 현역): fn_request_withdraw(20260704000007, user 단위
+--   FOR UPDATE 직렬화·최소 10,000P·WITHDRAW_REQUEST(-)+withdrawals insert 원자) /
+--   fn_process_withdraw(20260704000008, REQUESTED→APPROVED→PAID / REJECTED 시 WITHDRAW_CANCEL(+) 복구).
 
 -- ===== 쿠폰 구매 확정·환불 RPC [07 F4] — 실 정의는 supabase/migrations/20260709000005_rpc_purchase.sql =====
 -- PG 결제(토스페이먼츠) 경로. 둘 다 SECURITY DEFINER + search_path=public + revoke all/grant service_role.
@@ -329,6 +350,46 @@ create table notifications (
 );
 create index idx_notifications_user on notifications (user_id, created_at desc);
 
+-- ===== [09 H2] 라이더 추천(레퍼럴) — 실 DDL: 20260715000004_referrals.sql =====
+-- 라이더(referrer)가 점주(referred)에게 앱 설치를 영업. 추천으로 가입한 점주가 첫 수거를 완료(활성화)하면
+-- 점주에게 REFERRAL 포인트(출금 가능) 적립 + 라이더 추천 실적 집계(라이더 보상은 08 P5 오프라인 정산 근거).
+-- 점주 1인 1회(referred_supplier_id unique, 선착순 최초 확정). 쓰기는 service_role RPC에만(절대 규칙 1 확장).
+create table referrals (
+  id uuid primary key default gen_random_uuid(),
+  referrer_rider_id uuid not null references rider_profiles(id),
+  referred_supplier_id uuid not null unique references supplier_profiles(id),  -- 점주 1인 1회
+  code text not null,                                       -- 사용된 코드 스냅샷
+  status referral_status not null default 'SIGNED_UP',
+  supplier_bonus int not null check (supplier_bonus >= 0),  -- 활성화 시 점주 REFERRAL 포인트(가입 시점 스냅샷)
+  rider_reward int not null check (rider_reward >= 0),      -- 라이더 오프라인 정산 보상(스냅샷, admin 통계 전용)
+  signed_up_at timestamptz not null default now(),
+  activated_at timestamptz,                                 -- 활성화(첫 수거 완료) 시각
+  activating_order_id uuid references pickup_orders(id),    -- 활성화 유발 주문
+  -- [09 H8] 라이더 보상 오프라인 지급 이력(실 DDL: 20260716000001). null=미정산. 원장 발행 없음(08 P5).
+  reward_settled_at timestamptz,
+  reward_settled_by uuid references profiles(id)
+);
+create index idx_referrals_referrer on referrals (referrer_rider_id, signed_up_at desc);
+-- RLS: referrer 본인 or referred 본인 or admin(select). insert/update 정책 부재 = service_role RPC만(아래 RLS 절).
+-- Realtime: 라이더 실적 실시간 갱신(alter publication supabase_realtime add table referrals).
+
+-- 추천 RPC [09 H2] — 실 정의는 20260715000004_referrals.sql. 둘 다 SECURITY DEFINER + search_path=public
+--   + revoke all/grant service_role(절대 규칙 1: referrals·point_ledger 쓰기는 service_role RPC에만).
+--   fn_attach_referral(p_supplier_id uuid, p_code text, p_supplier_bonus int, p_rider_reward int) returns referrals
+--     - 코드 정규화(upper/trim) → APPROVED 라이더 해석(없으면 raise 'INVALID_REFERRAL_CODE'). 자기추천 차단.
+--       이미 추천된 점주: 같은 코드면 기존 행 반환(멱등), 다른 코드면 raise 'ALREADY_REFERRED'(점주 1인 1회·
+--       선착순 최초 확정 — 서버 단일 정규화 판정). on conflict(referred_supplier_id) do nothing.
+--       보너스는 파라미터 스냅샷(core 상수가 단일 진실). gen 직후 best-effort로 referral-attach Edge가 호출.
+--   fn_activate_referral(p_supplier_id uuid, p_order_id uuid) returns referrals
+--     - referrals FOR UPDATE. status<>'SIGNED_UP'(미추천·이미활성·취소)면 no-op(멱등, null 반환).
+--       SIGNED_UP→ACTIVATED 전이 + fn_post_ledger(supplier,'REFERRAL',supplier_bonus,order_id) 발행.
+--       order-transition Edge가 완료 전이 성공 후 호출(fn_transition_order 본체 무변경, 09 H7). 멱등은
+--       point_ledger unique(order_id,'REFERRAL',user_id).
+--   fn_settle_referral_reward(p_referral_id uuid, p_admin_id uuid, p_settle boolean) returns referrals  -- [09 H8]
+--     - FOR UPDATE. 없으면 raise 'NOT_FOUND', ACTIVATED 아니면 raise 'INVALID_TRANSITION'.
+--       p_settle=true: reward_settled_at/by 기록(이미 정산이면 멱등 no-op). false: 해제(오기록 정정, 멱등).
+--       원장 발행 없음(라이더 지갑 없음, 08 P5) — referral-settle Edge(admin)가 호출.
+
 -- ===== RLS =====
 alter table profiles enable row level security;
 alter table supplier_profiles enable row level security;
@@ -346,6 +407,8 @@ alter table coupon_purchases enable row level security;
 alter table coupon_ledger enable row level security;
 -- [07 F12] CS 티켓 RLS
 alter table cs_tickets enable row level security;
+-- [09 H2] 레퍼럴 RLS
+alter table referrals enable row level security;
 
 -- security definer 함수는 search_path를 고정해 하이재킹을 막는다(Supabase security advisor 대응).
 create or replace function is_admin() returns boolean as
@@ -369,7 +432,9 @@ from coupon_ledger
 where is_admin()
 group by 1;
 
--- 수거 활동 추이: 일별 COMPLETED 건수/final_kg 합/cash_paid_amount 합(completed_at 기준). 쿠폰 매출과 상관 분석용.
+-- 수거 활동 추이: 일별 COMPLETED 건수/final_kg 합/지급액(completed_at 기준).
+-- [08 G2-③] 수단별 분리 컬럼 append(실 DDL: 20260715000001) — total_cash는 "총 지급액"(현금+포인트)로
+-- 의미 확장(07까지는 전액 현금이라 동치). admin KPI는 cash_amount/point_amount를 사용.
 create view v_pickup_stats_daily
   with (security_invoker = true)
 as
@@ -377,10 +442,65 @@ select
   completed_at::date            as day,
   count(*)                      as completed_count,
   coalesce(sum(final_kg),0)     as total_kg,
-  coalesce(sum(cash_paid_amount),0)::int as total_cash
+  coalesce(sum(cash_paid_amount),0)::int as total_cash,
+  coalesce(sum(cash_paid_amount) filter (where coalesce(payout_method,'CASH')='CASH'),0)::int  as cash_amount,
+  coalesce(sum(cash_paid_amount) filter (where payout_method='POINT'),0)::int                  as point_amount,
+  count(*) filter (where coalesce(payout_method,'CASH')='CASH') as cash_count,
+  count(*) filter (where payout_method='POINT')                 as point_count
 from pickup_orders
 where status='COMPLETED' and completed_at is not null and is_admin()
 group by 1;
+
+-- [08 G2-④] 라이더별 지급 실적(admin 전용, 08 P5) — 포인트 지급분은 플랫폼이 점주에게 부담(EARN)하므로
+-- 라이더-플랫폼 오프라인 정산·청구의 대사 근거. 실 DDL: 20260715000001.
+create view v_rider_payout_daily
+  with (security_invoker = true)
+as
+select
+  rider_id,
+  completed_at::date as day,
+  count(*)           as completed_count,
+  coalesce(sum(final_kg),0) as total_kg,
+  coalesce(sum(cash_paid_amount) filter (where coalesce(payout_method,'CASH')='CASH'),0)::int as cash_amount,
+  coalesce(sum(cash_paid_amount) filter (where payout_method='POINT'),0)::int                 as point_amount
+from pickup_orders
+where status='COMPLETED' and completed_at is not null and rider_id is not null and is_admin()
+group by 1, 2;
+
+-- [09 H2] 라이더별 추천 실적(security_invoker=true → referrals RLS 의존): 라이더는 본인 1행, admin은 전체.
+create view v_referral_stats
+  with (security_invoker = true)
+as
+select
+  referrer_rider_id,
+  count(*)::int                                                          as signed_up,
+  count(*) filter (where status = 'ACTIVATED')::int                      as activated,
+  coalesce(sum(supplier_bonus) filter (where status='ACTIVATED'),0)::int as supplier_bonus_paid,
+  coalesce(sum(rider_reward)   filter (where status='ACTIVATED'),0)::int as rider_reward_earned,
+  -- [09 H8] 정산 분리 합계(20260716000001 append — settled+unsettled=earned)
+  coalesce(sum(rider_reward)   filter (where status='ACTIVATED' and reward_settled_at is not null),0)::int as rider_reward_settled,
+  coalesce(sum(rider_reward)   filter (where status='ACTIVATED' and reward_settled_at is null),0)::int     as rider_reward_unsettled
+from referrals
+group by referrer_rider_id;
+
+-- [09 H2] 일별 추천 추이(admin 전용 — is_admin() 게이트 + security_invoker, 집계 뷰 선례 미러).
+-- 가입은 signed_up_at, 활성화는 activated_at으로 각각 버킷팅(UNION ALL) — 활성화는 가입보다 대개 며칠 뒤라
+-- "같은 날 활성화"로 세면 거의 항상 0이 된다(어드버서리얼 리뷰 확정 결함 수정).
+create view v_referral_daily
+  with (security_invoker = true)
+as
+select
+  t.day,
+  coalesce(sum(t.signed_up), 0)::int as signed_up,
+  coalesce(sum(t.activated), 0)::int as activated
+from (
+  select signed_up_at::date as day, 1 as signed_up, 0 as activated from referrals
+  union all
+  select activated_at::date as day, 0 as signed_up, 1 as activated
+  from referrals where status = 'ACTIVATED' and activated_at is not null
+) t
+where is_admin()
+group by t.day;
 
 -- profiles: 본인 R/W(role 변경 불가는 컬럼 권한으로), admin 전체 R
 -- 성능 advisor(auth_rls_initplan): auth.uid()는 (select auth.uid())로 감싸 행마다 재평가되지 않고
@@ -472,9 +592,17 @@ create policy p_cs_read on cs_tickets for select using (author_id = (select auth
 create policy p_cs_insert on cs_tickets for insert with check (author_id = (select auth.uid()) and role = fn_current_role());
 create policy p_cs_admin_update on cs_tickets for update using (is_admin()) with check (is_admin());
 
+-- [09 H2] referrals: referrer 라이더 본인 + referred 점주 본인 + admin read. insert/update 정책 부재 = service_role RPC만.
+create policy p_referral_read on referrals for select using (
+  referrer_rider_id = (select auth.uid())
+  or referred_supplier_id = (select auth.uid())
+  or is_admin()
+);
+
 -- Storage 버킷: order-photos (관련자 read / rider write), rider-docs (본인 write, admin read)
--- Realtime publication: pickup_orders, notifications, price_ticks, rider_profiles, point_ledger, coupon_ledger 활성화
+-- Realtime publication: pickup_orders, notifications, price_ticks, rider_profiles, point_ledger, coupon_ledger, referrals 활성화
 -- [07 F5] coupon_ledger 추가(20260709000006 — apps/rider 쿠폰 잔액 카드/내역이 CHARGE/CONSUME/REFUND/ADJUST insert를 폴링 없이 반영. RLS p_coupon_ledger_read 적용, 본인 행만 전달)
+-- [09 H2] referrals 추가(20260715000004 — apps/rider "내 추천" 실적이 attach/activate를 폴링 없이 반영. RLS p_referral_read 적용, 본인 관련 행만 전달)
 -- (price_ticks는 03-frontend.md U3 "PriceCard(최신 tick, Realtime 구독)"에 필요 — T7에서 추가.
 --  rider_profiles는 apps/rider R1 "PENDING 대기 화면(Realtime으로 verify_status 변경 감지)"에
 --  필요 — T9에서 추가. point_ledger는 apps/user U11 지갑·apps/rider R7/R8 정산의

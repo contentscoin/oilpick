@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ORDER_STATUS_LABEL, formatKg, formatKrw, formatRelativeTime, type OrderFault } from "@oilpick/core";
+import { ORDER_STATUS_LABEL, formatKg, formatKrw, formatPoint, formatRelativeTime, type OrderFault } from "@oilpick/core";
 import type { AdminOrderDetail, AdminOrderEvent } from "../hooks/useOrdersAdmin";
 import { useEscapeClose, useInitialFocus } from "../hooks/useEscapeClose";
 import { invokeEdgeFunction } from "../lib/edgeFunction";
@@ -191,31 +191,46 @@ export function OrderDetailDrawer({ order, events, isLoading, onClose, onMutated
                   {order.finalKg !== null ? formatKg(order.finalKg) : "-"}
                 </p>
               </div>
-              {/* 07 F10-⑤: 포인트 → 쿠폰/현금 표기. coupon_cost null = 레거시 주문(쿠폰 미소진). */}
+              {/* 08 G7-③: 지급수단 뱃지 + 확정 지급액(POINT면 P 표기). 쿠폰 필드는 레거시 주문에서만. */}
               <div>
-                <p className="text-xs text-gray-500">소진 쿠폰</p>
-                <p className="font-medium tabular-nums text-gray-800" data-testid="order-coupon-cost">
-                  {order.couponCost !== null ? `${order.couponCost}장` : "- (레거시)"}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">쿠폰 환급</p>
-                <p className="font-medium text-gray-800" data-testid="order-coupon-refunded">
-                  {order.refunded ? (
+                <p className="text-xs text-gray-500">지급수단</p>
+                <p className="font-medium text-gray-800" data-testid="order-payout-method">
+                  {order.payoutMethod === "POINT" ? (
+                    <span className="rounded-pill bg-accent-light px-2 py-0.5 text-xs font-semibold text-accent-deep">
+                      🪙 포인트
+                    </span>
+                  ) : order.payoutMethod === "CASH" ? (
                     <span className="rounded-pill bg-primary-light px-2 py-0.5 text-xs font-semibold text-primary">
-                      환급됨
+                      💵 현금
                     </span>
                   ) : (
-                    "-"
+                    "- (계량 전)"
                   )}
                 </p>
               </div>
               <div>
-                <p className="text-xs text-gray-500">현금 지급액</p>
+                <p className="text-xs text-gray-500">확정 지급액</p>
                 <p className="font-bold tabular-nums text-accent-deep" data-testid="order-cash-paid">
-                  {order.cashPaidAmount !== null ? formatKrw(order.cashPaidAmount) : "-"}
+                  {order.cashPaidAmount !== null
+                    ? order.payoutMethod === "POINT"
+                      ? formatPoint(order.cashPaidAmount)
+                      : formatKrw(order.cashPaidAmount)
+                    : "-"}
                 </p>
               </div>
+              {order.couponCost !== null && (
+                <div>
+                  <p className="text-xs text-gray-500">소진 쿠폰(레거시)</p>
+                  <p className="font-medium tabular-nums text-gray-800" data-testid="order-coupon-cost">
+                    {order.couponCost}장
+                    {order.refunded && (
+                      <span className="ml-1 rounded-pill bg-primary-light px-2 py-0.5 text-xs font-semibold text-primary" data-testid="order-coupon-refunded">
+                        환급됨
+                      </span>
+                    )}
+                  </p>
+                </div>
+              )}
               <div className="col-span-2 border-t border-gray-50 pt-3">
                 <p className="text-xs text-gray-500">수거 주소</p>
                 <p className="text-sm text-gray-700">{order.pickupAddress}</p>
@@ -338,8 +353,8 @@ export function OrderDetailDrawer({ order, events, isLoading, onClose, onMutated
               <div className="rounded-card border border-status-danger/20 bg-white p-4 shadow-card">
                 <p className="mb-1 text-sm font-semibold text-status-danger">주문 취소 (귀책 선택 필수)</p>
                 <p className="mb-3 text-xs text-gray-500">
-                  귀책에 따라 쿠폰 환급이 갈려요 — 점주/플랫폼 귀책이면 라이더에게 쿠폰이 자동 환급되고, 라이더
-                  귀책이면 소진이 유지돼요.
+                  귀책은 감사 기록으로 남아요(08 P1). 레거시 쿠폰 주문(coupon_cost 있음)은 점주/플랫폼
+                  귀책일 때 쿠폰이 자동 환급돼요.
                 </p>
                 <div className="mb-3 flex flex-col gap-2" role="radiogroup" aria-label="귀책 대상">
                   {FAULT_OPTIONS.map((option) => (
@@ -374,9 +389,11 @@ export function OrderDetailDrawer({ order, events, isLoading, onClose, onMutated
                   >
                     {selectedFault.refunds
                       ? order.couponCost !== null
-                        ? `점주/플랫폼 귀책 → 라이더에게 쿠폰 ${order.couponCost}장 자동 환급`
-                        : "점주/플랫폼 귀책 — 레거시 주문(쿠폰 미소진)이라 환급 없이 취소돼요"
-                      : "라이더 귀책 → 쿠폰 환급 없음(소진 유지)"}
+                        ? `점주/플랫폼 귀책 → 라이더에게 쿠폰 ${order.couponCost}장 자동 환급(레거시 주문)`
+                        : "점주/플랫폼 귀책 — 감사 기록으로 남아요(환급 대상 없음)"
+                      : order.couponCost !== null
+                        ? "라이더 귀책 → 쿠폰 환급 없음(소진 유지)"
+                        : "라이더 귀책 — 감사 기록으로 남아요"}
                   </p>
                 )}
                 <input

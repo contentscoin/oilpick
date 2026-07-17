@@ -29,10 +29,10 @@ export const queryKeys = {
   ledger: (userId: string) => ["ledger", userId] as const,
   bankAccount: (userId: string) => ["bankAccount", userId] as const,
   notifications: (userId: string) => ["notifications", userId] as const,
-  couponPrice: () => ["couponPrice", "latest"] as const,
-  couponBalance: (riderId: string) => ["couponBalance", riderId] as const,
-  couponLedger: (riderId: string) => ["couponLedger", riderId] as const,
-  pendingPurchases: (riderId: string) => ["couponPurchases", "pending", riderId] as const,
+  // 09 H4 라이더 추천 — 코드(불변, 세션 1회)와 실적(v_referral_stats, referrals Realtime로 갱신).
+  referralCode: () => ["referral", "code"] as const,
+  referralStats: (riderId: string) => ["referral", "stats", riderId] as const,
+  // 08 G6-①: 쿠폰 키(couponPrice/couponBalance/couponLedger/pendingPurchases) 제거 — 쿠폰 모델 폐기.
   // 06 E9 운행 히스토리 — "orders" 프리픽스로 주문 Realtime invalidate 대상에 포함.
   runHistory: (riderId: string, page: number) => ["orders", "runHistory", riderId, page] as const,
 };

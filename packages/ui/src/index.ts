@@ -7,6 +7,8 @@ export * from "./hooks/usePrefersReducedMotion";
 
 export * from "./components/PriceCard";
 export * from "./components/PriceChart";
+export * from "./components/PriceStatsRow";
+export * from "./components/PayoutMethodChip";
 export * from "./components/SegmentToggle";
 export * from "./components/OrderTimeline";
 export * from "./components/CallCard";
@@ -30,3 +32,4 @@ export * from "./components/StatusHeadline";
 export * from "./components/DriverCard";
 export * from "./components/InfoStatCard";
 export * from "./components/LedgerList";
+export * from "./components/Mascot";

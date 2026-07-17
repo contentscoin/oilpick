@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { EmptyState, InfoStatCard, StatusBadge, colors, elevation, gray, radius, surface } from "@oilpick/ui";
-import { formatKg, formatKrw } from "@oilpick/core";
+import { EmptyState, InfoStatCard, PayoutMethodChip, StatusBadge, colors, elevation, gray, radius, surface } from "@oilpick/ui";
+import { formatKg, formatKrw, formatPoint } from "@oilpick/core";
 import { useSession } from "../hooks/useSession";
 import { useMonthlyPickupStats } from "../hooks/useTodayStats";
 import { useRunHistory } from "../hooks/useRunHistory";
@@ -103,12 +103,19 @@ export function HistoryPage() {
                     <span className="oilpick-tabular-nums" style={{ color: gray[900] }}>{formatKg(order.finalKg)}</span>
                   )}
                   {order.finalKg != null && order.couponCost != null && " · "}
+                  {/* 레거시 쿠폰 주문 표시 전용(08 P1 — 신규 주문은 couponCost null). */}
                   {order.couponCost != null && `쿠폰 ${order.couponCost}장`}
                 </span>
-                {/* 07 D1: 수거비(snapshot_rider_fee) 대신 현장 지급 현금만 표기. */}
+                {/* 08 G6: 확정 지급액 + 지급수단 칩(null=레거시 현금 간주). */}
                 {order.cashPaidAmount != null && (
-                  <span className="oilpick-tabular-nums" style={{ fontSize: 16, fontWeight: 700, color: colors.primary.dark }}>
-                    {formatKrw(order.cashPaidAmount)}
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <PayoutMethodChip method={order.payoutMethod ?? "CASH"} />
+                    <span
+                      className="oilpick-tabular-nums"
+                      style={{ fontSize: 16, fontWeight: 700, color: order.payoutMethod === "POINT" ? colors.accent.deep : colors.primary.dark }}
+                    >
+                      {order.payoutMethod === "POINT" ? formatPoint(order.cashPaidAmount) : formatKrw(order.cashPaidAmount)}
+                    </span>
                   </span>
                 )}
               </div>

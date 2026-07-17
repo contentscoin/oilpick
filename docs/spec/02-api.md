@@ -7,20 +7,13 @@
 - 응답: 성공 `{ ok: true, data }`, 실패 `{ ok: false, code, message }` + HTTP 상태코드.
 - 에러 코드 상수는 `packages/core/src/errorCodes.ts`에 정의.
 - DB 접근은 service_role 클라이언트. 상태 전이+원장 기록은 **단일 Postgres 함수(RPC) 호출로 트랜잭션 보장** —
-  Edge Function에서 다건 쿼리로 쪼개지 말 것. 핵심 RPC: `fn_transition_order`, `fn_post_ledger`,
-  **`fn_charge_coupon`(CHARGE/ADJUST), `fn_consume_coupon`(CONSUME, rider 단위 FOR UPDATE 직렬화 후 잔액 재계산 → 부족 시 `INSUFFICIENT_COUPON` 예외)** (07 F3a).
-- **PG 시크릿(토스 TOSS_SECRET_KEY / 코엠 KOEM_MID·KOEM_API_KEY)은 Edge Function 전용**(supabase secrets) — 클라이언트 번들엔 공개 값만(절대 규칙 3 확장, 07 §1-4).
-- PG 호출은 `_shared/pg.ts` **어댑터 계약 경유**(07 F14): 활성 PG는 `PG_PROVIDER` env(기본
-  `toss`)로 선택. `koem`(코엠페이먼츠 SIMPLEPAY)은 **결제창 리다이렉트형**이라 승인 확정이
-  §12가 아닌 §12-1(rUrl 서버 콜백)에서 일어나고, §12 confirm은 토스·데모 전용이다(코엠 모드
-  호출 시 402 PAYMENT_FAILED). 취소(§13)는 모든 PG가 어댑터 경유.
-  원장·상태머신·에러코드는 PG 중립(무변경).
-- `demo`(F14 데모 운영 — 코엠 실연결 보류 결정, CEO 2026-07-09): PG 외부 호출만 즉시 성공으로
-  대체하는 가짜 어댑터. §11이 `demo: true`를 반환하면 클라이언트가 결제창 없이 §12 confirm
-  (paymentKey=`demo_${purchaseId}` 관례)을 직행 호출한다. 원장·멱등·상태머신은 실경로 그대로.
-  **실 과금이 없으므로 시연·개발 전용 — 실 라이더 운영 배포 금지**(DEPLOY.md 경고).
+  Edge Function에서 다건 쿼리로 쪼개지 말 것. 핵심 RPC: `fn_transition_order`, `fn_post_ledger`(EARN/ADJUST),
+  **`fn_request_withdraw`/`fn_process_withdraw`(출금 — 08 P4 복권)**.
+  레거시 RPC(전환기·회계 보존): fn_charge_coupon/fn_consume_coupon/fn_confirm_purchase/fn_refund_purchase.
+- **PG 결제 경로는 일몰**(08 P1 — 쿠폰 구매 폐기). `_shared/pg.ts` 어댑터·시크릿 격리 원칙 기록은
+  07-pivot-plan.md F4/F14 참조(코드 삭제됨, 미래 결제 기능 시 선례로 재사용).
 
-읽기 전용 조회(시세, 주문 목록, 원장, 알림)는 Edge Function을 만들지 않는다 —
+읽기 전용 조회(시세, 주문 목록, 원장, 잔액 뷰, 알림)는 Edge Function을 만들지 않는다 —
 클라이언트가 RLS 하에서 supabase-js로 직접 select한다.
 
 ---
@@ -28,23 +21,23 @@
 ## 1. `order-create` (supplier)
 수거 요청 생성.
 - 입력: `{ requestedCans?: number, requestedKg: number, address: string, lat: number, lng: number, preferredTime: string }`
+  (18L/10L 통 수는 클라이언트에서 `estimateKg(cans, canSizeL)`로 kg 환산해 requestedKg로 전달 — 08 P6)
 - 검증: requestedKg 1~500. 진행중(REQUESTED~PICKED_UP) 주문 3건 이상이면 409 `TOO_MANY_ACTIVE`.
-- 처리: 최신 price_tick 시세 스냅샷 + **`coupon_cost = ceil(requestedKg / KG_PER_CAN)` 스냅샷**(07 §1-2, D2) →
-  pickup_orders insert (REQUESTED) → order_events → 반경 3km 매칭 브로드캐스트 (아래 `broadcastCall` 헬퍼).
-  **rider_fee 스냅샷 중지**(레거시, snapshot_rider_fee 미기록).
-- 출력: `{ orderId, snapshotPricePerKg, couponCost, estimatedCash }` (07 F3b-① — estimatedPoint→estimatedCash 계약 개정)
+- 처리: 최신 price_tick 시세 스냅샷 → pickup_orders insert (REQUESTED) → order_events → 반경 3km 매칭
+  브로드캐스트 (아래 `broadcastCall` 헬퍼). **coupon_cost 스냅샷 중지**(08 P1 — 신규 주문 항상 null).
+  rider_fee 스냅샷 중지 유지(07 레거시).
+- 출력: `{ orderId, snapshotPricePerKg, estimatedCash }` (08 G3-① — couponCost 필드 삭제)
 
 `broadcastCall(orderId, radiusKm)`: rider_profiles에서 `verify_status='APPROVED' and is_online
 and last_location 반경 내 and 진행중 주문 없음` 검색 → FCM 멀티캐스트 + notifications insert.
 
 ## 2. `order-accept` (rider)
 - 입력: `{ orderId }`
-- 가드: verified·online·**진행중 주문 없음(ACCEPTED/ARRIVED/PICKED_UP/DISPUTED 포함**, idx_rider_single_active_order와 정합 — 07 F3b-②). 아니면 403 `RIDER_NOT_ELIGIBLE`.
-- **쿠폰 사전 체크(fail-fast, UX용)**: `v_coupon_balance.balance ≥ coupon_cost` 아니면 409 `INSUFFICIENT_COUPON`
-  ("수거쿠폰이 부족해요. 충전 후 수락할 수 있어요."). coupon_cost null(레거시)은 skip.
-- 처리: fn_transition_order ACCEPT — 조건부 `update ... where status='REQUESTED'`(0행이면 409 `ALREADY_ACCEPTED`) 성공 시
-  **같은 트랜잭션에서 coupon_cost not null이면 fn_consume_coupon(CONSUME, -coupon_cost)** 실행. 부족 예외 시 ACCEPT 전체 롤백(주문 REQUESTED 잔존).
-  **동시성 방어의 유일한 진실은 RPC**(위 fail-fast는 UX용). `mapTransitionError`에 `INSUFFICIENT_COUPON → 409` 매핑 추가.
+- 가드: verified·online·**진행중 주문 없음(ACCEPTED/ARRIVED/PICKED_UP/DISPUTED 포함**, idx_rider_single_active_order와 정합). 아니면 403 `RIDER_NOT_ELIGIBLE`.
+- **쿠폰 사전 체크 삭제**(08 P1 — 신규 주문 coupon_cost null). `mapTransitionError`의
+  `INSUFFICIENT_COUPON → 409` 매핑은 전환기 잔존 쿠폰 주문(coupon_cost not null) 대비로 보존.
+- 처리: fn_transition_order ACCEPT — 조건부 `update ... where status='REQUESTED'`(0행이면 409 `ALREADY_ACCEPTED`).
+  잔존 쿠폰 주문이면 RPC가 레거시 CONSUME 분기를 통과(동시성 방어의 유일한 진실은 RPC).
 - 부수효과: order_events, supplier 푸시.
 
 ## 3. `order-transition` (rider/supplier/admin)
@@ -55,17 +48,20 @@ ACCEPTED 이후 모든 전이 단일 엔드포인트.
 | action | actor | payload | 처리 |
 |---|---|---|---|
 | `ARRIVE` | 배정 rider | — | →ARRIVED, supplier 푸시 |
-| `SUBMIT_MEASURE` | 배정 rider | `{ measuredKg, photoUrls[] (≥1) }` | measured_kg/photo_urls 저장 (상태 유지 ARRIVED), supplier 푸시 "계량 결과 도착 — 무게·현금 확인" |
-| `CONFIRM_MEASURE` | supplier 본인 | — | **→COMPLETED**(2자 확인=무게+현금 수령 확인). final_kg=measured_kg, `cash_paid_amount=round(final_kg×snapshot_price_per_kg)`, `completed_at=now()`. **EARN/HOLD 발행 제거**(07 F3a). rider 푸시 "현금 지급 확인" |
+| `SUBMIT_MEASURE` | 배정 rider | `{ measuredKg, photoUrls[] (≥1), payoutMethod: 'CASH'\|'POINT' }` (**payoutMethod 필수 — 08 P2**. RPC는 생략 시 CASH 폴백으로 구버전 호환) | measured_kg/photo_urls/**payout_method** 저장 (상태 유지 ARRIVED). supplier 푸시 — CASH "무게·현금 ₩N 확인" / POINT "확인 시 포인트 N P 적립". 재제출로 수단 변경 가능(final_kg 고정 전) |
+| `CONFIRM_MEASURE` | supplier 본인 | — | **→COMPLETED**(2자 확인=무게+지급 확인). final_kg 확정, `cash_paid_amount=round(final_kg×snapshot_price_per_kg)`, `completed_at=now()`. **payout_method='POINT'면 같은 트랜잭션에서 fn_post_ledger EARN(+지급액) 발행**(08 P3, null=CASH 간주). rider 푸시(수단별) + POINT면 supplier 적립 푸시 |
 | `DISPUTE` | supplier 본인 | `{ reason }` | →DISPUTED, admin 알림 |
-| `RESOLVE_DISPUTE` | admin | `{ finalKg }` | **→ARRIVED**(의미 재정의: 중재는 kg 확정까지만 — final_kg 고정, 이후 SUBMIT_MEASURE 재제출 불가). 현금 지급·수령 확인이 남아 일반 CONFIRM_MEASURE 경로로 COMPLETED. 양쪽 알림 |
-| `FORCE_COMPLETE` | admin (D6) | `{ memo }` (필수) | **→COMPLETED** — ARRIVED + 계량(또는 중재) kg 존재 시에만. 제출/중재 kg 기반 cash_paid_amount+completed_at 기록 + order_events. 점주 수령 확인 교착 해소용, CS(F12) 연동. 양쪽 알림 |
-| `DELIVER` | 배정 rider | `{ depotId, qrSecret }` | **레거시 전용**(PICKED_UP 잔존분 완결). qr_secret 검증(불일치 400 `INVALID_QR`) → DELIVERED → RELEASE → COMPLETED. 신규 주문 도달 불가 |
-| `CANCEL` | supplier(REQUESTED만) / admin({ACCEPTED\|ARRIVED\|DISPUTED}) | `{ reason, fault? }` | →CANCELLED. **admin 취소 시 `fault` 필수**(`'SUPPLIER'`\|`'RIDER'`\|`'SYSTEM'`, D4·D6). SUPPLIER/SYSTEM → coupon_ledger REFUND(+coupon_cost)(단 동일 order_id+rider_id CONSUME 존재·qty 일치 확인, 없으면 skip). RIDER → 환급 없음 |
+| `RESOLVE_DISPUTE` | admin | `{ finalKg }` | **→ARRIVED**(중재는 kg 확정까지만 — final_kg 고정, 이후 SUBMIT_MEASURE 재제출 불가). 지급·수령 확인이 남아 일반 CONFIRM_MEASURE 경로로 COMPLETED. 양쪽 알림 |
+| `FORCE_COMPLETE` | admin | `{ memo }` (필수) | **→COMPLETED** — ARRIVED + 계량(또는 중재) kg 존재 시에만. CONFIRM_MEASURE와 동일 지급 로직(**POINT면 EARN 발행**) + order_events. 점주 수령 확인 교착 해소용, CS 연동. 양쪽 알림 |
+| `DELIVER` | 배정 rider | `{ depotId, qrSecret }` | **레거시 전용**(PICKED_UP 잔존분 완결). qr_secret 검증(불일치 400 `INVALID_QR`) → DELIVERED → COMPLETED. 지급 없음. 신규 주문 도달 불가 |
+| `CANCEL` | supplier(REQUESTED만) / admin({ACCEPTED\|ARRIVED\|DISPUTED}) | `{ reason, fault? }` | →CANCELLED. **admin 취소 시 `fault` 필수**(`'SUPPLIER'`\|`'RIDER'`\|`'SYSTEM'` — 감사 기록). 쿠폰 REFUND는 레거시 잔존 주문(CONSUME 존재·qty 일치)에서만 |
 
 - 전이 유효성은 packages/core `orderMachine.canTransition(from, action, role)` 재사용. 위반 409 `INVALID_TRANSITION`.
-- coupon_ledger CONSUME/REFUND insert는 unique(order_id, entry_type, rider_id) 제약으로 멱등 — 중복 요청 시 conflict를 잡아 재응답.
-- **알림은 00-domain.md 알림 매트릭스(07 §1-6)를 단일 진실로 참조** — `notifyForAction`(index.ts) 분기를 매트릭스대로 개정(구모델 "포인트 지급"·"수거비 보류" 거짓 푸시 제거, 현금 확인 요청/완료/환급 카피, 07 F3b-③).
+- **알림은 00-domain.md 알림 매트릭스(08 §1-5)를 단일 진실로 참조** — `buildActionNotifications` 분기를
+  매트릭스대로 개정(지급수단별 카피 분기, 08 G3-④).
+- **[09 H7] 추천 활성화 훅**: 완료 전이(status='COMPLETED')가 성공한 뒤 `fn_activate_referral(supplier_id, order_id)`를
+  호출한다(best-effort·비차단, 멱등 no-op). fn_transition_order 본체는 무변경(레퍼럴은 순수 추가 — 상태머신 오염 방지).
+  방금 활성화된 경우(SIGNED_UP→ACTIVATED)에만 점주("추천 보너스 N P 적립" → /wallet)·라이더("추천 실적 적립" → /referrals) 푸시.
 
 ## 4. `order-expire` (cron, 1분마다 — Supabase scheduled function)
 - REQUESTED이고 created_at 경과별 처리: 5분→반경 7km 재브로드캐스트, 10분→15km, 30분→CANCELLED(NO_RIDER)+푸시.
@@ -78,7 +74,7 @@ ACCEPTED 이후 모든 전이 단일 엔드포인트.
 
 ## 6. `rider-verify` (admin)
 - 입력: `{ riderId, decision: 'APPROVED'|'REJECTED'|'SUSPENDED'|'REINSTATED', rejectReason? }`
-- 처리: verify_status 갱신 + rider 푸시(§1-6 인증 승인/반려·정지/해제).
+- 처리: verify_status 갱신 + rider 푸시(§1-5 인증 승인/반려·정지/해제).
 - **07 F11 — 정지·서류·인계처**:
   - `APPROVED`(최초 승인): 서버 필수 검증 — `doc_permit_url`(폐기물처리(수집·운반) 신고증명서)과
     `recycler_name`/`recycler_contact`(인계처)가 없으면 400 `VALIDATION_ERROR`(message로 사유 명시).
@@ -93,90 +89,60 @@ ACCEPTED 이후 모든 전이 단일 엔드포인트.
     가능. authenticated의 셀프 정지·해제 변조는 트리거로 차단.
 
 ## 7. `withdraw-request` (supplier/rider)
-> ⚠️ **삭제됨 (07 F13)** — 포인트 적립·출금 모델 폐기(D1). Edge Function 코드는 저장소에서 삭제.
-> **프로덕션 undeploy는 배포 체크리스트 ⓖ**(구모델 앱 가동 중 — 앱 배포 완료 후 내림).
-> DB 함수 `fn_request_withdraw`는 레거시 회계 기록용으로 **보존**(삭제 금지).
-- (구) 입력: `{ amount }` (≥10000). 프로필에 계좌 없으면 400 `NO_BANK_ACCOUNT`.
-- (구) RPC 트랜잭션: v_point_balance.available >= amount 검증 → WITHDRAW_REQUEST(-amount) → withdrawals insert.
+> ✅ **부활 (08 P4·G3-⑤)** — F13이 삭제했던 함수를 git 이력 기반으로 복원(계약 동일).
+- 입력: `{ amount }` (≥10000, `MIN_WITHDRAW`). 프로필에 계좌 없으면 400 `NO_BANK_ACCOUNT`.
+- 처리: 계좌 사전 확인 후 **`fn_request_withdraw` RPC 단일 호출** — user 단위 FOR UPDATE 직렬화 →
+  잔액 재계산(v_point_balance.available ≥ amount) → WITHDRAW_REQUEST(-amount) + withdrawals insert 원자.
+  잔액 부족 400 `INSUFFICIENT_BALANCE`.
+- 출력: `{ withdrawalId, status, amount }`
 
 ## 8. `withdraw-process` (admin)
-> ⚠️ **삭제됨 (07 F13)** — 포인트 적립·출금 모델 폐기(D1). Edge Function 코드는 저장소에서 삭제.
-> **프로덕션 undeploy는 배포 체크리스트 ⓖ**. DB 함수 `fn_process_withdraw`는 레거시 보존(삭제 금지).
-- (구) 입력: `{ withdrawalId, decision: 'APPROVED'|'REJECTED'|'PAID', memo? }`
-- (구) REJECTED 시 WITHDRAW_CANCEL(+amount) 복구. 상태 전이: REQUESTED→APPROVED→PAID 또는 REQUESTED→REJECTED.
+> ✅ **부활 (08 P4·G3-⑤)** — F13이 삭제했던 함수를 git 이력 기반으로 복원(계약 동일).
+- 입력: `{ withdrawalId, decision: 'APPROVED'|'REJECTED'|'PAID', memo? }`
+- 처리: **`fn_process_withdraw` RPC 단일 호출**. REJECTED 시 WITHDRAW_CANCEL(+amount) 복구(withdrawal_id 멱등).
+  상태 전이: REQUESTED→APPROVED→PAID 또는 REQUESTED→REJECTED. 위반 409 `INVALID_TRANSITION`.
+- 부수효과: supplier 푸시 — "출금 신청이 승인되었어요"/"출금이 완료되었어요"/"출금 신청이 반려되어
+  포인트가 복구되었어요" (§1-5), link `/wallet`.
+- 출력: `{ withdrawalId, status }`
 
 ## 9. `price-set` (admin)
-- 입력: `{ pricePerKg }` → price_ticks insert. **riderFee 입력 삭제**(레거시 — 07 F3b-④, priceSetInputSchema 개정. rider_fee 미기록).
+- 입력: `{ pricePerKg }` → price_ticks insert. riderFee 입력 없음(07 레거시).
 
 ## 10. `point-adjust` (admin)
-> ⚠️ **삭제됨 (07 F13)** — 포인트 적립·출금 모델 폐기(D1). Edge Function 코드는 저장소에서 삭제.
-> **프로덕션 undeploy는 배포 체크리스트 ⓖ**. DB 함수 `fn_post_ledger`는 레거시 회계 기록용 보존(삭제 금지).
-> 쿠폰 수동 조정은 §14 `coupon-adjust` 참조.
-- (구) 입력: `{ userId, amount, memo }` (memo 필수) → ADJUST insert.
+> ✅ **부활 (08 P4·G3-⑤)** — CS 수동 조정 경로 복원.
+- 입력: `{ userId, amount, memo }` (memo 필수, amount ± 정수) → `fn_post_ledger`(ADJUST) insert.
+- 음수 조정으로 잔액이 음수가 되는 것은 admin 책임(원장 감사로 추적) — 구계약 유지.
 
-## 11. `coupon-purchase-intent` (rider) — 07 F4·F14
-쿠폰 구매 신청(PG 결제 진입 전 단계).
-- 입력: `{ qty: number }` (1~200 정수)
-- 처리: 최신 `coupon_price_ticks` 단가 스냅샷 → `coupon_purchases`(status='PENDING', unit_price 스냅샷,
-  amount=qty×unit_price, pg_order_id 생성) insert. **pg_order_id는 `op`+18hex 20자 고정**(F14 개정 —
-  코엠 응답 orderno 규격 Max 20, 토스 orderId 규칙과도 호환).
-- 출력: `{ purchaseId, pgOrderId, amount, unitPrice, koem?, demo? }` — `PG_PROVIDER=koem`이면 결제창
-  진입 정보 `koem: { payUrl, params }`를 동봉(F14). params는 문서 3.2.1 규격 전체(checkHash 포함)로
-  **서버가 생성**(API_KEY 필요)하며 클라이언트는 수정 없이 hidden form POST만 한다. rUrl은
-  §12-1(기본 `${SUPABASE_URL}/functions/v1/coupon-purchase-return`, env `KOEM_RETURN_URL`로 재정의).
-  `PG_PROVIDER=demo`면 `demo: true`를 동봉 — 클라이언트는 결제창 없이 §12 confirm 직행(데모 운영).
-- 검증 실패 400. 단가 tick 미설정 시 409 `COUPON_PRICE_NOT_SET` (07 §1-4 확정).
+## 16. `referral-code` (rider) — 09 H3
+> 라이더 추천코드 발급/조회. 세션 라이더 본인.
+- 입력: 없음(`{}`). role=rider 필수(FORBIDDEN 아니면).
+- 처리: `rider_profiles.referral_code`가 있으면 반환, 없으면 Crockford base32 8자를 생성해 unique 저장 후 반환
+  (충돌 시 재시도, 동시 생성 방어 = `update ... where referral_code is null`). rider_profiles 행 없으면 404.
+- 출력: `{ code, shareUrl }`(`shareUrl = ${REFERRAL_BASE_URL ?? REFERRAL_LINK_BASE}/ref/<CODE>`). `referralCodeOutputSchema`.
+- 코드/알파벳/링크 규칙은 packages/core(`generateReferralCode`/`buildReferralShareUrl`)가 단일 진실. APPROVED 검증은
+  attach 시점에만(미승인 라이더도 코드는 볼 수 있으나 그 코드로는 활성화되지 않음, 09 §안티어뷰즈).
 
-## 12. `coupon-purchase-confirm` (rider) — 07 F4 (토스 전용)
-토스 결제 승인 확정 + 쿠폰 충전(멱등 3중, 07 §1-4).
-- 입력: `{ purchaseId, paymentKey, pgOrderId, amount }` (토스 successUrl 파라미터)
-- 처리: `coupon_purchases` 행 **FOR UPDATE 잠금 → status=PENDING 재확인 → 시크릿 키로 토스 승인 API 호출 +
-  amount 일치 검증 → 같은 트랜잭션에서 fn_charge_coupon(CHARGE, purchase_id) + status=PAID·payment_key 기록**.
-  성공 시 "쿠폰 N장 충전 완료" 알림 insert.
-- 멱등: 상태 전이 + `payment_key` unique + `coupon_ledger` unique(purchase_id, entry_type). **재호출 안전**(orphan 재시도).
-- amount 위변조 시 거부(전이 없음). **PG 시크릿 키는 Edge Function 전용**.
-- **코엠 모드에서는 미사용**(F14) — 어댑터 confirmPayment가 NOT_SUPPORTED로 거절되어 402
-  `PAYMENT_FAILED`. 코엠 확정은 §12-1이 담당하고, 클라이언트는 PENDING 목록 재조회로 반영을 확인한다.
-- **데모 모드**(F14 데모 운영): 어댑터가 요청 값을 그대로 성공으로 반환해 실 PG 없이 확정된다.
-  paymentKey는 `demo_${purchaseId}` 관례 — 재시도 시 같은 키라 멱등 경로(PAID 조기 반환)를 탄다.
-- 출력: `{ balance }` (충전 후 쿠폰 잔액)
+## 17. `referral-attach` (supplier) — 09 H4
+> 점주 가입 직후 저장된 코드로 추천 연결(best-effort, 비차단 — 실패해도 가입 성립).
+- 입력: `{ code }`(`referralAttachInputSchema` — trim·대문자 정규화). role=supplier 필수.
+- 처리: `fn_attach_referral(supplier_id, code, REFERRAL_SUPPLIER_BONUS, REFERRAL_RIDER_REWARD)`. APPROVED 라이더
+  코드만 유효(아니면 400 `INVALID_REFERRAL_CODE`), 점주 1인 1회(멱등 — 기존 행 반환), 자기추천 차단. 이미 다른
+  코드로 연결된 점주면 409 `ALREADY_REFERRED`. 원장·referrals 쓰기는 RPC(service_role)에만(절대 규칙 1 확장).
+- 출력: `{ status, supplierBonus }`(`referralAttachOutputSchema`).
 
-## 12-1. `coupon-purchase-return` (공개 — 코엠 PG 서버 콜백) — 07 F14
-코엠 결제창 완료 후 PG가 rUrl로 결과를 form POST하는 수신점. **코엠의 유일한 승인 확정 경로**
-(코엠은 서버 승인 API가 없는 결제창 리다이렉트형 — SIMPLEPAY 가이드 v1.14 §3.1.1).
-- 인증: 없음(`verify_jwt=false`, supabase/config.toml) — PG 서버가 호출. 검증은 아래 대조로 수행.
-- 입력: 결제응답 규격(가이드 §3.2.2) form-urlencoded — `result_code, tid, orderno, approvamt(표기
-  편차 approamt 수용), reserved01(=purchaseId 이중화)` 사용.
-- 처리: ① orderno(=pg_order_id)로 구매건 조회 → ② 이미 PAID면 멱등 성공 → ③ 실패 코드
-  (EC9000 사용자취소 등)는 FAILED 전이 → ④ **approvamt == 서버 스냅샷 amount 검증**(불일치 시
-  코엠 취소 시도 + FAILED) → ⑤ `fn_confirm_purchase`(PENDING→PAID + CHARGE, payment_key=tid) →
-  ⑥ "쿠폰 N장 충전 완료" 알림. RPC 실패(EXPIRED 등)는 취소 시도 + FAILED.
-- 출력: HTML(결제창 웹뷰 표시용) — 항상 200. `KOEM_RETURN_APP_URL`(앱 스킴) 설정 시 앱 복귀 시도.
-- **보안 한계(확정 기록)**: 결제응답에 무결성 해시가 없다(가이드 §3.2.2 — checkHash는 요청 전용).
-  방어: 서버 스냅샷 금액 대조 + 멱등 3중 + tid 저장(환불 시 PG 실검증으로 위조 tid 발각) +
-  admin 일일 대사(F10 매출 통계 ↔ 코엠 관리자페이지). 잔여 외부 액션: 코엠에 거래조회 API·
-  응답 해시·Notification(가이드 §4) 발신 IP 목록 문의 — 확보 시 검증 강화(07 F14 잔여).
+## 18. `referral-settle` (admin) — 09 H8
+> 라이더 추천 보상의 오프라인 지급 완료 마킹(해제 지원 — 오기록 정정). 원장 발행 없음(08 P5).
+- 입력: `{ referralId, settle }`(`referralSettleInputSchema`). role=admin 필수.
+- 처리: `fn_settle_referral_reward(referral_id, admin_id, settle)` — ACTIVATED 아니면 409
+  `INVALID_TRANSITION`, 대상 없음 404 `NOT_FOUND`, 재정산/재해제는 멱등. referrals 쓰기는 RPC(service_role)에만.
+- 출력: `{ referralId, settled, settledAt }`(`referralSettleOutputSchema`). v_referral_stats의
+  `rider_reward_settled`/`rider_reward_unsettled`가 admin 정산 큐·rider 실적 표기에 쓰인다.
 
-## 13. `coupon-refund` (admin) — 07 F4
-쿠폰 구매 건 환불(구매 건 단위, 건당 1회 한정, 07 §1-4).
-- 입력: `{ purchaseId, qty?, reason }` (qty 생략=전액, 지정=부분 1회)
-- 처리: 금액=해당 건 unit_price 스냅샷 기준. **미사용 잔액(v_coupon_balance) ≥ 환불 qty 검증** →
-  **rider 단위 FOR UPDATE 직렬화 후 잔액 재계산**(동시 수락 경합 방지) → 원장 `ADJUST(-qty, purchase_id 필수)` +
-  `coupon_purchases.status=REFUNDED`(FOR UPDATE 상태 기반 멱등). rider "환급" 알림.
-- 미사용 잔액 부족 시 409 `INSUFFICIENT_COUPON` 재사용 — 동일 의미(잔액 부족, 07 §1-4 확정).
-- 코엠(F14): 취소는 `/api/cc/approv/cancel`(server-to-server JSON, checkHash=HMAC(tid+mid+cancel_amt)).
-  **부분취소는 계약·카드에 따라 거부될 수 있다**(가이드 결과코드 EC1088 "부분 취소 불가") — 실패 시
-  원장 무변경 402로 반환되므로 admin은 전액 환불로 재시도한다. 취소 API는 가맹점 공인 IP 방화벽
-  등록이 선행 조건(DEPLOY.md 운영 노트).
-
-## 14. `coupon-adjust` (admin) — 07 F3b-⑤
-쿠폰 수동 조정(CS 보조 / 데모 라이더 선지급 20장. point-adjust 패턴 복제).
-- 입력: `{ riderId, qty: number, memo: string }` (memo 필수, qty ±)
-- 처리: `fn_charge_coupon(ADJUST, ±qty, purchase_id=null, memo, created_by=admin)`.
-
-## 15. `coupon-price-set` (admin) — 07 F3b-⑤
-쿠폰 단가 tick 등록(price-set 패턴 복제).
-- 입력: `{ unitPrice: number }` (>0) → `coupon_price_ticks` insert.
+## 11~15. `coupon-*` (coupon-purchase-intent/confirm/return, coupon-refund, coupon-adjust, coupon-price-set)
+> ⚠️ **삭제됨 (08 P1·G3-⑥)** — 수거쿠폰 모델 폐기. Edge Function 코드 6종 저장소에서 삭제.
+> **프로덕션 undeploy는 08 배포 체크리스트 ⓔ**(앱 배포 완료 후 — 가동 중 구버전 앱 파손 방지).
+> DB RPC(fn_charge_coupon/fn_consume_coupon/fn_confirm_purchase/fn_refund_purchase)·테이블·과거
+> 데이터는 회계 감사용 보존(삭제 금지). 구계약 전문은 git 이력과 07-pivot-plan.md F4/F14 참조.
 
 ## 푸시 발송 헬퍼 `_shared/push.ts`
 - `sendPush(userIds[], title, body, link)`: profiles.fcm_token 조회 → FCM HTTP v1 멀티캐스트

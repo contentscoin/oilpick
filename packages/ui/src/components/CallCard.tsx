@@ -2,12 +2,12 @@ import { formatKg, formatKrw } from "@oilpick/core";
 import { colors, elevation, gray, radius, surface } from "../tokens";
 
 /**
- * 03-frontend.md "packages/ui 컴포넌트" — CallCard(거리/수량/쿠폰·매입액).
+ * 03-frontend.md "packages/ui 컴포넌트" — CallCard(거리/수량/매입액).
  * 05-design-upgrade.md "CallCard(콜 카드)": 리치 카드 — 좌측 거리(큰 숫자+km),
  * 중앙 수량(kg)·주소(truncate). 좌측 얇은 green 액센트 바.
- * [07 F5] 우측 표기 전환: "수거비"(구모델) 제거 → "예상 매입 지급액 ₩M"(requested_kg×시세, 라이더가
- * 점주에게 낼 현금) 앰버 강조 + "쿠폰 N장 소진"(coupon_cost) 칩. 레거시 주문(couponCost null)은
- * 쿠폰 칩 생략. apps/rider R2 콜 홈 목록에서 쓰인다. 거리·매입액 계산은 클라이언트 책임 —
+ * [08 G6-②] "쿠폰 N장 소진" 칩 제거(쿠폰 모델 폐기) — 우측은 "예상 매입 지급액 ₩M"
+ * (requested_kg×시세, 라이더가 점주에게 현금 또는 포인트로 지급할 금액) 앰버 강조만.
+ * apps/rider R2 콜 홈 목록에서 쓰인다. 거리·매입액 계산은 클라이언트 책임 —
  * 이 컴포넌트는 계산된 값만 받는다.
  */
 export interface CallCardProps {
@@ -15,10 +15,8 @@ export interface CallCardProps {
   distanceKm: number;
   /** 예상 수거량(kg). */
   estimatedKg: number;
-  /** 예상 매입 지급액(원) = requested_kg × snapshot_price_per_kg. 라이더가 점주에게 낼 현금. */
+  /** 예상 매입 지급액(원) = requested_kg × snapshot_price_per_kg. 현장에서 현금/포인트로 지급. */
   estimatedCash: number;
-  /** 소진 쿠폰 장수(coupon_cost). null=레거시 주문 → 쿠폰 칩 생략(07 §1-2). */
-  couponCost?: number | null;
   /** 수거 주소(선택). 지정 시 중앙에 한 줄 truncate로 표시. */
   address?: string;
   onClick?: () => void;
@@ -29,7 +27,6 @@ export function CallCard({
   distanceKm,
   estimatedKg,
   estimatedCash,
-  couponCost,
   address,
   onClick,
   className,
@@ -89,7 +86,7 @@ export function CallCard({
         )}
       </div>
 
-      {/* 우: 예상 매입 지급액(앰버 강조) + 쿠폰 소진 칩 */}
+      {/* 우: 예상 매입 지급액(앰버 강조) */}
       <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", justifyContent: "center", gap: 4, flexShrink: 0 }}>
         <span style={{ fontSize: 11, fontWeight: 600, color: colors.status.wait }}>예상 매입 지급액</span>
         <span
@@ -99,22 +96,6 @@ export function CallCard({
         >
           {formatKrw(estimatedCash)}
         </span>
-        {couponCost != null && (
-          <span
-            className="oilpick-tabular-nums"
-            data-testid="call-card-coupon"
-            style={{
-              fontSize: 11,
-              fontWeight: 700,
-              color: colors.primary.dark,
-              backgroundColor: colors.primary.light,
-              borderRadius: radius.pill,
-              padding: "2px 8px",
-            }}
-          >
-            쿠폰 {couponCost}장 소진
-          </span>
-        )}
       </div>
     </Tag>
   );

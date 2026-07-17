@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { BigButton, ConfirmSheet, DriverCard, ErrorScreen, InfoStatCard, MapView, OrderTimeline, PageHeader, StatusHeadline, colors, elevation, gradient, gray, radius, surface, touchTarget, useToast } from "@oilpick/ui";
+import { BigButton, ConfirmSheet, DriverCard, ErrorScreen, InfoStatCard, MapView, OrderTimeline, PageHeader, PayoutMethodChip, StatusHeadline, colors, elevation, gradient, gray, radius, surface, touchTarget, useToast } from "@oilpick/ui";
 import { estimateCash, formatKg, formatKrw, formatPoint, formatTimeOfDay, type OrderStatus } from "@oilpick/core";
 import { KAKAO_KEY } from "../lib/env";
 import { invokeEdgeFunction } from "../lib/edgeFunction";
@@ -10,11 +10,13 @@ import { useSession } from "../hooks/useSession";
 import { useUnreadCount } from "../hooks/useUnreadCount";
 
 /**
- * U6~U9 "/orders/:id" 상태별 단일 화면. 03-frontend.md(07 F9 개정):
+ * U6~U9 "/orders/:id" 상태별 단일 화면. 03-frontend.md(08 G5-③ 개정):
  * "status로 분기 렌더. REQUESTED: 반경 애니메이션+취소. ACCEPTED~: MapView(라이더 위치 Realtime
  * broadcast 구독)+OrderTimeline+라이더 카드. ARRIVED+measured_kg(또는 중재 final_kg): 계량 확인 UI
- * (사진 뷰어+확정 kg+받을 현금+[무게·현금 수령 확인][이의신청]). COMPLETED: 받은 현금(cash_paid_amount)
- * 대형 표시". 신모델(07 D1): 포인트 표기 폐기 → 현장 현금 수령. CONFIRM_MEASURE = 무게+현금 2자 확인.
+ * (사진 뷰어+확정 kg+지급수단 칩+수단별 확인 CTA+[이의신청]). COMPLETED: 확정 지급액 히어로 수단별".
+ * 08 P2/P3: 지급수단은 라이더가 SUBMIT_MEASURE에서 선택(payout_method) — CASH는 07과 동일한
+ * 현금 2자 확인, POINT는 CONFIRM과 원자적으로 point_ledger EARN이 발행된다(서버).
+ * payout_method null은 레거시 주문 → CASH 간주(coalesce, 08 P3).
  *
  * 라이더 위치 Realtime broadcast(`order:{orderId}:location`, 02-api.md rider-location)는
  * rider-location 함수가 아직 실제 호출되지 않을 수 있으므로(04-tasks.md 태스크 지시) 좌표가
@@ -94,7 +96,13 @@ export function OrderDetailPage() {
     });
     setConfirming(false);
     if (result.ok) {
-      showToast("무게를 확인했어요 — 현금 수령 확인 완료", { variant: "success" });
+      // 08 G5-③: 수단별 확인 카피 — POINT는 CONFIRM과 원자적으로 EARN이 적립된다(서버).
+      showToast(
+        order?.payoutMethod === "POINT"
+          ? "무게를 확인했어요 — 포인트가 적립됐어요"
+          : "무게를 확인했어요 — 현금 수령 확인 완료",
+        { variant: "success" },
+      );
     } else {
       showToast(result.message, { variant: "error" });
     }
@@ -120,13 +128,16 @@ export function OrderDetailPage() {
 
   // 07 F9: 계량 제출(measuredKg) 또는 중재 확정(finalKg)이 있으면 확인 패널을 노출한다.
   // 중재(RESOLVE_DISPUTE) 후에는 DISPUTED→ARRIVED로 복귀하고 final_kg가 고정된다(재제출 불가) —
-  // 이때 현금 지급·수령 확인(CONFIRM_MEASURE)만 남는다(00-domain.md 신 상태머신).
+  // 이때 지급·수령 확인(CONFIRM_MEASURE)만 남는다(00-domain.md 신 상태머신).
   const isArbitrated = order.status === "ARRIVED" && order.finalKg != null;
   const showMeasureConfirmUi =
     order.status === "ARRIVED" && (order.measuredKg != null || order.finalKg != null);
   // 확인·완료 계산 기준 kg = 중재 확정(finalKg) 우선, 없으면 계량 제출(measuredKg).
   const confirmKg = order.finalKg ?? order.measuredKg ?? 0;
   const confirmCash = Math.round(confirmKg * order.snapshotPricePerKg);
+  // 08 P2/P3: 지급수단 — 계량 제출이 기록한 payout_method. null(레거시·전환기)은 CASH 간주(coalesce).
+  const payoutMethod = order.payoutMethod ?? "CASH";
+  const isPointPayout = payoutMethod === "POINT";
 
   const showRiderCard = order.status !== "REQUESTED" && order.status !== "CANCELLED";
   const showMapAndTimeline = order.status !== "REQUESTED" && order.status !== "CANCELLED";
@@ -290,7 +301,9 @@ export function OrderDetailPage() {
           </h2>
           {isArbitrated && (
             <p data-testid="arbitration-notice" style={{ margin: 0, fontSize: 14, color: colors.status.wait }}>
-              중재 확정 무게 {formatKg(confirmKg)} — 라이더에게 현금 {formatKrw(confirmCash)}을 받고 확인해 주세요.
+              {isPointPayout
+                ? `중재 확정 무게 ${formatKg(confirmKg)} — 확인하시면 포인트 ${formatPoint(confirmCash)}가 적립돼요.`
+                : `중재 확정 무게 ${formatKg(confirmKg)} — 라이더에게 현금 ${formatKrw(confirmCash)}을 받고 확인해 주세요.`}
             </p>
           )}
           {order.photoUrls.length > 0 && (
@@ -312,21 +325,32 @@ export function OrderDetailPage() {
                 {formatKg(confirmKg)}
               </span>
             </div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ fontSize: 14, color: colors.status.wait }}>받을 현금</span>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 14, color: colors.status.wait }}>
+                {isPointPayout ? "적립될 포인트" : "받을 현금"}
+                <PayoutMethodChip method={payoutMethod} />
+              </span>
               <span
                 data-testid="measure-cash-amount"
                 className="oilpick-tabular-nums"
-                style={{ fontSize: 18, fontWeight: 700, color: colors.primary.dark }}
+                style={{ fontSize: 18, fontWeight: 700, color: isPointPayout ? colors.accent.deep : colors.primary.dark }}
               >
-                {formatKrw(confirmCash)}
+                {isPointPayout ? formatPoint(confirmCash) : formatKrw(confirmCash)}
               </span>
             </div>
           </div>
-          {/* 07 F9-⑥: CONFIRM = "무게 확인 + 현금 수령 확인" 2자 확인(현금 수령 증빙). */}
+          {/* 08 G5-③: CONFIRM = "무게 확인 + 지급 확인" 2자 확인 — 수단별 카피 분기.
+              POINT는 CONFIRM과 원자적으로 EARN이 발행된다(서버, 08 P3). */}
           <BigButton data-testid="confirm-measure-button" loading={confirming} onClick={handleConfirmMeasure}>
-            무게 {formatKg(confirmKg)} 확인 · 현금 {formatKrw(confirmCash)} 받았어요
+            {isPointPayout
+              ? `무게 ${formatKg(confirmKg)} 확인 · 포인트 ${formatPoint(confirmCash)} 적립받기`
+              : `무게 ${formatKg(confirmKg)} 확인 · 현금 ${formatKrw(confirmCash)} 받았어요`}
           </BigButton>
+          {isPointPayout && (
+            <p data-testid="point-confirm-caption" style={{ margin: 0, fontSize: 13, color: colors.status.wait, textAlign: "center" }}>
+              확인하시면 포인트가 즉시 적립되고 지갑에서 출금 신청할 수 있어요.
+            </p>
+          )}
           {!isArbitrated && (
             <button
               type="button"
@@ -377,7 +401,8 @@ export function OrderDetailPage() {
         </section>
       )}
 
-      {/* 07 F9-⑥: COMPLETED 히어로 — 현장에서 받은 현금(cash_paid_amount). */}
+      {/* 08 G5-③: COMPLETED 히어로 — 확정 지급액(cash_paid_amount)을 수단별로 렌더.
+          CASH=받은 현금(브랜드 그린), POINT=적립된 포인트(앰버) + [지갑에서 보기]. */}
       {showCashHero && (
         <section
           data-testid="completed-panel"
@@ -388,18 +413,29 @@ export function OrderDetailPage() {
             gap: 6,
             padding: "28px 20px",
             borderRadius: radius.hero,
-            background: gradient.brand,
+            background: isPointPayout ? gradient.point : gradient.brand,
             boxShadow: elevation.raised,
           }}
         >
-          <p style={{ margin: 0, fontSize: 15, fontWeight: 600, color: "rgba(255,255,255,0.75)" }}>받은 현금</p>
+          <p style={{ margin: 0, fontSize: 15, fontWeight: 600, color: "rgba(255,255,255,0.75)" }}>
+            {isPointPayout ? "적립된 포인트" : "받은 현금"}
+          </p>
           <p
             data-testid="completed-cash-amount"
             className="oilpick-tabular-nums"
             style={{ margin: 0, fontSize: 40, fontWeight: 800, letterSpacing: "-0.02em", color: "#FFFFFF" }}
           >
-            {formatKrw(order.cashPaidAmount ?? 0)}
+            {isPointPayout ? formatPoint(order.cashPaidAmount ?? 0) : formatKrw(order.cashPaidAmount ?? 0)}
           </p>
+          {isPointPayout && (
+            <Link
+              to="/wallet"
+              data-testid="completed-wallet-link"
+              style={{ marginTop: 8, fontSize: 14, fontWeight: 700, color: "#FFFFFF", textDecoration: "underline" }}
+            >
+              지갑에서 보기
+            </Link>
+          )}
         </section>
       )}
 

@@ -8,7 +8,6 @@ const {
   mockUseSession,
   mockUseRiderProfile,
   mockUseOpenCalls,
-  mockUseCouponBalance,
   mockUseTodayStats,
   mockUseGeolocation,
   mockFrom,
@@ -16,7 +15,6 @@ const {
   mockUseSession: vi.fn(),
   mockUseRiderProfile: vi.fn(),
   mockUseOpenCalls: vi.fn(),
-  mockUseCouponBalance: vi.fn(),
   mockUseTodayStats: vi.fn(),
   mockUseGeolocation: vi.fn(),
   mockFrom: vi.fn(),
@@ -24,7 +22,6 @@ const {
 vi.mock("../hooks/useSession", () => ({ useSession: mockUseSession }));
 vi.mock("../hooks/useRiderProfile", () => ({ useRiderProfile: mockUseRiderProfile }));
 vi.mock("../hooks/useOpenCalls", () => ({ useOpenCalls: mockUseOpenCalls }));
-vi.mock("../hooks/useCoupons", () => ({ useCouponBalance: mockUseCouponBalance }));
 vi.mock("../hooks/useTodayStats", () => ({ useTodayStats: mockUseTodayStats }));
 vi.mock("../hooks/useGeolocation", () => ({ useGeolocation: mockUseGeolocation }));
 vi.mock("../lib/supabaseClient", () => ({ supabase: { from: mockFrom } }));
@@ -43,8 +40,6 @@ function renderHome() {
       <MemoryRouter initialEntries={["/"]}>
         <Routes>
           <Route path="/" element={<CallHomePage />} />
-          <Route path="/coupons" element={<div>쿠폰 내역 화면</div>} />
-          <Route path="/coupons/purchase" element={<div>쿠폰 충전 화면</div>} />
         </Routes>
       </MemoryRouter>
     </ToastProvider>,
@@ -56,41 +51,27 @@ beforeEach(() => {
   mockUseSession.mockReturnValue({ session: { user: { id: "rider-1" } }, loading: false });
   mockUseRiderProfile.mockReturnValue({ data: { isOnline: true, verifyStatus: "APPROVED" } });
   mockUseOpenCalls.mockReturnValue({ data: [], isLoading: false });
-  mockUseCouponBalance.mockReturnValue({ data: 12 });
   mockUseTodayStats.mockReturnValue({
-    data: { completedCount: 2, collectedKg: 60, cashPaid: 96000, consumedCoupons: 3 },
+    data: { completedCount: 2, collectedKg: 60, cashPaid: 96000, pointPaid: 21000 },
   });
   mockUseGeolocation.mockReturnValue(null);
 });
 
-describe("CallHomePage — 쿠폰 잔액 카드(07 F5-①)", () => {
-  it("renders coupon balance hero (보유 수거쿠폰 N장)", () => {
+describe("CallHomePage — 쿠폰 UI 제거(08 G6-①)", () => {
+  it("쿠폰 잔액 히어로·충전 진입점이 없다", () => {
     renderHome();
-    expect(screen.getByText("보유 수거쿠폰")).toBeInTheDocument();
-    expect(screen.getByText("12장")).toBeInTheDocument();
-  });
-
-  it("[충전하기] navigates to /coupons/purchase", () => {
-    renderHome();
-    fireEvent.click(screen.getByTestId("coupon-charge-button"));
-    expect(screen.getByText("쿠폰 충전 화면")).toBeInTheDocument();
-  });
-
-  it("card tap navigates to /coupons (ledger)", () => {
-    renderHome();
-    fireEvent.click(screen.getByTestId("point-balance-card"));
-    expect(screen.getByText("쿠폰 내역 화면")).toBeInTheDocument();
+    expect(screen.queryByText("보유 수거쿠폰")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("coupon-charge-button")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("point-balance-card")).not.toBeInTheDocument();
   });
 });
 
-describe("CallHomePage — 오늘 실적(07 F6-⑥)", () => {
-  it("수거 kg / 지급 현금 / 소진 쿠폰(현금 매입 기준)", () => {
+describe("CallHomePage — 오늘 실적(08 G6-④, 수단 분리)", () => {
+  it("수거 kg / 현금 지급 / 포인트 지급", () => {
     renderHome();
     expect(screen.getByTestId("today-collected-kg")).toHaveTextContent("60.0kg");
     expect(screen.getByTestId("today-cash")).toHaveTextContent("96,000원");
-    expect(screen.getByTestId("today-coupons")).toHaveTextContent("오늘 소진 쿠폰 3장");
-    // 구모델 포인트 표기 없음.
-    expect(screen.queryByText("오늘 확정 포인트")).not.toBeInTheDocument();
+    expect(screen.getByTestId("today-point")).toHaveTextContent("21,000P");
   });
 
   it("지급 현금 값은 밝은 배경 위 딥앰버(accent.deep)로 렌더한다(05 대비 폴리시)", () => {
@@ -100,13 +81,6 @@ describe("CallHomePage — 오늘 실적(07 F6-⑥)", () => {
 });
 
 describe("CallHomePage — 로딩 스켈레톤(잔액/실적 0 플래시 제거)", () => {
-  it("쿠폰 잔액 로딩 중에는 히어로 대신 스켈레톤을 렌더한다", () => {
-    mockUseCouponBalance.mockReturnValue({ data: undefined, isLoading: true });
-    renderHome();
-    expect(screen.getByTestId("coupon-balance-skeleton")).toBeInTheDocument();
-    expect(screen.queryByTestId("point-balance-card")).not.toBeInTheDocument();
-  });
-
   it("오늘 실적 로딩 중에는 2카드 대신 스켈레톤을 렌더한다", () => {
     mockUseTodayStats.mockReturnValue({ data: undefined, isLoading: true });
     renderHome();

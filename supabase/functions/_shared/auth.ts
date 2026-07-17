@@ -27,7 +27,7 @@ export class AuthError extends Error {
   }
 }
 
-/** service_role 클라이언트. 인증 없는 서버 콜백 함수(coupon-purchase-return)도 사용한다. */
+/** service_role 클라이언트(SUPABASE_SERVICE_ROLE_KEY). */
 export function getServiceRoleClient(): SupabaseClient {
   const url = Deno.env.get("SUPABASE_URL");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");

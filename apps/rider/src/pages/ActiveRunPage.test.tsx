@@ -33,7 +33,7 @@ function makeRun(overrides: Partial<ActiveRun> = {}): ActiveRun {
     photoUrls: [],
     snapshotPricePerKg: 1600,
     snapshotRiderFee: 0,
-    couponCost: 3,
+    payoutMethod: null,
     cashPaidAmount: null,
     completedAt: null,
     createdAt: "2026-07-09T00:00:00Z",
@@ -167,6 +167,8 @@ describe("ActiveRunPage — 액션 피드백 토스트(06 E6)", () => {
 describe("ActiveRunPage — 계량 제출: 업로드 진행 + 토스트(06 E6/E8-③)", () => {
   function fillMeasureForm() {
     fireEvent.change(screen.getByTestId("measured-kg-input"), { target: { value: "40" } });
+    // 08 P2: 지급 수단 필수 — 현금 선택.
+    fireEvent.click(screen.getByTestId("payout-option-cash"));
     const files = [
       new File(["a"], "a.jpg", { type: "image/jpeg" }),
       new File(["b"], "b.jpg", { type: "image/jpeg" }),
@@ -201,7 +203,7 @@ describe("ActiveRunPage — 계량 제출: 업로드 진행 + 토스트(06 E6/E8
     resolvers[1]?.();
     await waitFor(() =>
       expect(screen.getByTestId("toast")).toHaveTextContent(
-        "계량을 제출했어요 — 사장님 확인을 기다려요",
+        "계량을 제출했어요 — 현금을 지급하고 사장님 확인을 받아요",
       ),
     );
     expect(screen.queryByTestId("upload-progress")).not.toBeInTheDocument();

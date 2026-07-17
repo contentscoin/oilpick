@@ -1,12 +1,14 @@
 // order-transition (rider/supplier/admin). docs/spec/02-api.md "3. order-transition":
 // ACCEPTED 이후 모든 전이 단일 엔드포인트. action별 처리는 fn_transition_order RPC에 위임하고
 // 이 함수는 입력 검증 + role 확인 + RPC 호출(6-인자, p_fault 포함) + 에러 매핑 + 알림 매트릭스
-// (00-domain.md §알림 매트릭스, 07 §1-6) 발송만 담당한다 — 상태머신/원장 로직을 재구현하지 않는다.
+// (00-domain.md §알림 매트릭스, 08 §1-5 — 지급수단별 카피 분기) 발송만 담당한다 — 상태머신/원장
+// 로직을 재구현하지 않는다.
 
 import {
   orderTransitionInputSchema,
   formatKrw,
   formatKg,
+  formatPoint,
   estimateCash,
 } from "@oilpick/core/index.ts";
 import { AuthError, requireAuth } from "../_shared/auth.ts";
@@ -86,9 +88,59 @@ Deno.serve((req) =>
 
     await notifyForAction(admin, action, order as TransitionOrder, before, fault);
 
+    // [09 H6·H7] 완료 전이 성공 후 추천 활성화 시도(멱등 no-op). fn_transition_order 본체는 무변경 —
+    // 레퍼럴은 순수 추가라 상태머신을 오염시키지 않는다. 첫 수거 완료(COMPLETED 도달)에서만 발행된다.
+    if ((order as TransitionOrder & { status?: string }).status === "COMPLETED") {
+      await activateReferralIfAny(admin, (order as TransitionOrder).supplier_id, (order as TransitionOrder).id);
+    }
+
     return okResponse({ orderId: order.id, status: order.status });
   })
 );
+
+/**
+ * [09 H7] 완료된 주문의 점주에 대해 추천 활성화를 시도한다(fn_activate_referral, 멱등).
+ * RPC는 추천 없음/이미 활성/취소면 null을 반환(no-op) — 그 경우 알림 없이 조용히 넘어간다.
+ * 방금 SIGNED_UP→ACTIVATED로 전이된 경우에만 행이 반환되어 점주·라이더에게 1회 알림을 보낸다.
+ * best-effort: 예외/실패는 로그만 남기고 전이 응답을 막지 않는다(핵심 로직 무영향).
+ */
+async function activateReferralIfAny(
+  admin: SupabaseClient,
+  supplierId: string,
+  orderId: string,
+): Promise<void> {
+  try {
+    const { data: referral, error } = await admin.rpc("fn_activate_referral", {
+      p_supplier_id: supplierId,
+      p_order_id: orderId,
+    });
+    if (error) {
+      console.error("fn_activate_referral 실패 (핵심 로직 무영향)", error);
+      return;
+    }
+    if (!referral) return; // 추천 없음/이미 활성 — no-op
+
+    const bonus = Number(referral.supplier_bonus ?? 0);
+    await sendPush(
+      admin,
+      [supplierId],
+      "추천 보너스 적립",
+      `추천 보너스 ${formatPoint(bonus)}가 적립됐어요 — 지갑에서 확인하세요.`,
+      "/wallet",
+    );
+    if (referral.referrer_rider_id) {
+      await sendPush(
+        admin,
+        [referral.referrer_rider_id],
+        "추천 실적 적립",
+        "회원님 추천으로 가입한 점주가 첫 수거를 완료했어요 — 추천 실적이 적립됐어요.",
+        "/referrals",
+      );
+    }
+  } catch (err) {
+    console.error("추천 활성화 처리 중 예외 (핵심 로직 무영향)", err);
+  }
+}
 
 function mapTransitionError(rpcErr: { message?: string }): Response {
   const message = rpcErr.message ?? "";
@@ -103,7 +155,7 @@ function mapTransitionError(rpcErr: { message?: string }): Response {
 }
 
 // ===================== 알림 매트릭스 (순수 헬퍼) =====================
-// 00-domain.md §알림 매트릭스(07 §1-6)를 단일 진실로, action×수신자×카피를 순수 함수로 산출한다.
+// 00-domain.md §알림 매트릭스(08 §1-5)를 단일 진실로, action×수신자×카피를 순수 함수로 산출한다.
 // (DoD F3b-③: Deno 테스트 선례가 없어 분기 로직을 순수 헬퍼로 분리 — I/O(sendPush)는 dispatcher가 담당.)
 
 /** RPC가 반환하는 pickup_orders 행 중 알림에 필요한 필드. numeric은 문자열로 올 수 있어 Number()로 정규화. */
@@ -112,6 +164,7 @@ export interface TransitionOrder {
   supplier_id: string;
   rider_id: string | null;
   coupon_cost: number | null;
+  payout_method: "CASH" | "POINT" | null;
   cash_paid_amount: number | null;
   final_kg: number | string | null;
   measured_kg: number | string | null;
@@ -131,6 +184,8 @@ interface PushSpec {
   userIds: Array<string | null>;
   title: string;
   body: string;
+  /** 기본은 주문 상세(/orders/:id). 포인트 적립 통지 등은 지갑으로 딥링크(08 §1-5). */
+  link?: string;
 }
 
 /** admin 웹 알림(notifications) — FCM 대상 아님(00-domain.md "이의신청" 행). */
@@ -160,35 +215,55 @@ export function buildActionNotifications(
       ];
 
     case "SUBMIT_MEASURE": {
-      // supplier: "계량 결과가 도착했어요 — 무게·현금 ₩N을 확인해 주세요". N = round(계량kg × 스냅샷시세).
+      // supplier 카피는 지급수단별 분기(08 §1-5). N = round(계량kg × 스냅샷시세).
       const kg = Number(order.measured_kg ?? 0);
-      const cash = estimateCash(kg, order.snapshot_price_per_kg);
+      const amount = estimateCash(kg, order.snapshot_price_per_kg);
+      const isPoint = order.payout_method === "POINT";
       return [
         {
           kind: "push",
           userIds: [order.supplier_id],
           title: "계량 결과 도착",
-          body: `계량 결과가 도착했어요 — 무게 ${formatKg(kg)}·현금 ${formatKrw(cash)}을 확인해 주세요.`,
+          body: isPoint
+            ? `계량 결과가 도착했어요 — 무게 ${formatKg(kg)}, 확인하시면 포인트 ${formatPoint(amount)}가 적립돼요.`
+            : `계량 결과가 도착했어요 — 무게 ${formatKg(kg)}·현금 ${formatKrw(amount)}을 확인해 주세요.`,
         },
       ];
     }
 
     case "CONFIRM_MEASURE": {
-      // 완료. rider: "수거 완료 — 현금 ₩N 지급이 확인됐어요". N = cash_paid_amount.
-      const cash = order.cash_paid_amount ?? 0;
+      // 완료. 지급수단별 분기(08 §1-5). N = cash_paid_amount(확정 지급액 — POINT면 적립 P).
+      const amount = order.cash_paid_amount ?? 0;
+      if (order.payout_method === "POINT") {
+        return [
+          {
+            kind: "push",
+            userIds: [order.rider_id],
+            title: "수거 완료",
+            body: `수거 완료 — 포인트 ${formatPoint(amount)} 지급이 확인됐어요.`,
+          },
+          {
+            kind: "push",
+            userIds: [order.supplier_id],
+            title: "포인트 적립",
+            body: `포인트 ${formatPoint(amount)}가 적립됐어요 — 지갑에서 출금 신청할 수 있어요.`,
+            link: "/wallet",
+          },
+        ];
+      }
       return [
         {
           kind: "push",
           userIds: [order.rider_id],
           title: "수거 완료",
-          body: `수거 완료 — 현금 ${formatKrw(cash)} 지급이 확인됐어요.`,
+          body: `수거 완료 — 현금 ${formatKrw(amount)} 지급이 확인됐어요.`,
         },
       ];
     }
 
-    case "FORCE_COMPLETE":
-      // supplier + rider: "관리자 확인으로 주문이 완료 처리됐어요".
-      return [
+    case "FORCE_COMPLETE": {
+      // supplier + rider: "관리자 확인으로 주문이 완료 처리됐어요". POINT면 supplier 적립 카피 병기(08 §1-5).
+      const specs: NotificationSpec[] = [
         {
           kind: "push",
           userIds: [order.supplier_id, order.rider_id],
@@ -196,6 +271,18 @@ export function buildActionNotifications(
           body: "관리자 확인으로 주문이 완료 처리됐어요.",
         },
       ];
+      if (order.payout_method === "POINT") {
+        const amount = order.cash_paid_amount ?? 0;
+        specs.push({
+          kind: "push",
+          userIds: [order.supplier_id],
+          title: "포인트 적립",
+          body: `포인트 ${formatPoint(amount)}가 적립됐어요 — 지갑에서 출금 신청할 수 있어요.`,
+          link: "/wallet",
+        });
+      }
+      return specs;
+    }
 
     case "RESOLVE_DISPUTE": {
       // supplier + rider: "이의신청 중재 결과: 확정 무게 O.Okg".
@@ -215,6 +302,8 @@ export function buildActionNotifications(
       return [{ kind: "admin", title: "이의신청 접수", body: "계량 이의신청이 접수됐어요." }];
 
     case "CANCEL": {
+      // [08 P1 레거시] 쿠폰 환급 카피는 잔존 쿠폰 주문(coupon_cost not null)에서만 — 신규 주문은
+      // coupon_cost null이라 아래 일반 취소 통지로 떨어진다.
       const refunded =
         fault !== null &&
         (fault === "SUPPLIER" || fault === "SYSTEM") &&
@@ -276,7 +365,7 @@ async function notifyForAction(
     }
     const userIds = spec.userIds.filter((id): id is string => Boolean(id));
     if (userIds.length === 0) continue;
-    await sendPush(admin, userIds, spec.title, spec.body, link);
+    await sendPush(admin, userIds, spec.title, spec.body, spec.link ?? link);
   }
 }
 

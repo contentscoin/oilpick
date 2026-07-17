@@ -44,7 +44,7 @@ export function AddressField({ value, onChange }: AddressFieldProps) {
         data-testid="address-input"
         type="text"
         required
-        placeholder="예: 서울특별시 강서구 오일픽로 1"
+        placeholder="예: 서울특별시 강서구 오반장로 1"
         value={value.address}
         onChange={(e) => onChange({ ...value, address: e.target.value })}
         className={inputClassName}

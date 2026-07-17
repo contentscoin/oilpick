@@ -33,17 +33,14 @@ const HistoryPage = lazy(() =>
 const EarningsPage = lazy(() =>
   import("./pages/EarningsPage").then((m) => ({ default: m.EarningsPage })),
 );
-const CouponPurchasePage = lazy(() =>
-  import("./pages/CouponPurchasePage").then((m) => ({ default: m.CouponPurchasePage })),
-);
-const CouponLedgerPage = lazy(() =>
-  import("./pages/CouponLedgerPage").then((m) => ({ default: m.CouponLedgerPage })),
-);
 const BadgePage = lazy(() => import("./pages/BadgePage").then((m) => ({ default: m.BadgePage })));
 const NotificationsPage = lazy(() =>
   import("./pages/NotificationsPage").then((m) => ({ default: m.NotificationsPage })),
 );
 const MyPage = lazy(() => import("./pages/MyPage").then((m) => ({ default: m.MyPage })));
+const ReferralsPage = lazy(() =>
+  import("./pages/ReferralsPage").then((m) => ({ default: m.ReferralsPage })),
+);
 const SupportPage = lazy(() =>
   import("./pages/SupportPage").then((m) => ({ default: m.SupportPage })),
 );
@@ -52,8 +49,9 @@ const SupportPage = lazy(() =>
  * apps/rider 라우팅. docs/spec/03-frontend.md "apps/rider" 표(R1~R12).
  * R1(/auth, /verify), R2(/), R3(/calls/:id), R4~R6(/active)는 T9 구현.
  * R7(/earnings="수거 실적"), R9(/badge), R11/R12(/notifications, /my)는 T10 구현.
- * 07 F6-⑤: 포인트 출금(/earnings/withdraw) 라우트 제거(포인트 모델 폐기). EarningsWithdrawPage.tsx는
- * 참조 0의 고아 파일로 남겨 F13 레거시 일몰에서 삭제한다. R10(/history)은 placeholder 유지.
+ * 07 F6-⑤: 포인트 출금(/earnings/withdraw) 라우트 제거(구모델 라이더 포인트 폐기).
+ * 08 G6-①: 쿠폰 모델 폐기 — /coupons·/coupons/purchase 라우트와 페이지·훅을 전면 삭제.
+ * 잔존 딥링크/북마크는 catch-all이 콜 홈으로 되돌린다.
  */
 export function App() {
   // 네이티브(Capacitor) 통합: 커스텀 스킴 딥링크 + FCM 푸시 초기화(웹에서는 no-op).
@@ -117,22 +115,6 @@ export function App() {
             }
           />
           <Route
-            path="/coupons/purchase"
-            element={
-              <AuthGuard>
-                <CouponPurchasePage />
-              </AuthGuard>
-            }
-          />
-          <Route
-            path="/coupons"
-            element={
-              <AuthGuard>
-                <CouponLedgerPage />
-              </AuthGuard>
-            }
-          />
-          <Route
             path="/badge"
             element={
               <AuthGuard>
@@ -164,6 +146,17 @@ export function App() {
               <AuthGuard>
                 <RiderShell>
                   <HistoryPage />
+                </RiderShell>
+              </AuthGuard>
+            }
+          />
+          {/* 09 H4 — 내 추천(코드·공유·실적). 탭바에 없고 마이에서 진입(운행 이력과 동일 패턴). */}
+          <Route
+            path="/referrals"
+            element={
+              <AuthGuard>
+                <RiderShell>
+                  <ReferralsPage />
                 </RiderShell>
               </AuthGuard>
             }

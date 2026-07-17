@@ -28,7 +28,6 @@ var orderCreateInputSchema = z.object({
 var orderCreateOutputSchema = z.object({
   orderId: uuidSchema,
   snapshotPricePerKg: z.number().int().positive(),
-  couponCost: z.number().int().nonnegative(),
   estimatedCash: z.number().int().nonnegative()
 });
 var orderAcceptInputSchema = z.object({
@@ -40,9 +39,11 @@ var orderAcceptOutputSchema = z.object({
   acceptedAt: z.string()
 });
 var arrivePayloadSchema = z.undefined().or(z.object({}).strict());
+var payoutMethodSchema = z.enum(["CASH", "POINT"]);
 var submitMeasurePayloadSchema = z.object({
   measuredKg: kgSchema,
-  photoUrls: z.array(z.string().url()).min(1)
+  photoUrls: z.array(z.string().url()).min(1),
+  payoutMethod: payoutMethodSchema
 });
 var confirmMeasurePayloadSchema = z.undefined().or(z.object({}).strict());
 var disputePayloadSchema = z.object({
@@ -141,66 +142,6 @@ var pointAdjustOutputSchema = z.object({
   userId: uuidSchema,
   amount: z.number().int()
 });
-var couponAdjustInputSchema = z.object({
-  riderId: uuidSchema,
-  qty: z.number().int().refine((v) => v !== 0, { message: "\uC870\uC815 \uC218\uB7C9\uC740 0\uC774 \uB420 \uC218 \uC5C6\uC5B4\uC694." }),
-  memo: z.string().min(1)
-});
-var couponAdjustOutputSchema = z.object({
-  riderId: uuidSchema,
-  qty: z.number().int()
-});
-var couponPriceSetInputSchema = z.object({
-  unitPrice: z.number().int().positive()
-});
-var couponPriceSetOutputSchema = z.object({
-  id: z.number().int(),
-  unitPrice: z.number().int().positive(),
-  effectiveAt: z.string()
-});
-var couponPurchaseIntentInputSchema = z.object({
-  qty: z.number().int().min(1).max(200)
-});
-var couponPurchaseIntentOutputSchema = z.object({
-  purchaseId: uuidSchema,
-  /** PG 주문번호(pg_order_id). 토스 requestPayment()의 orderId / 코엠 orderno(20자 이내). */
-  pgOrderId: z.string().min(1),
-  /** 결제 금액(원) = qty × unitPrice. 위젯 setAmount·confirm amount 검증 기준. */
-  amount: z.number().int().positive(),
-  unitPrice: z.number().int().positive(),
-  /** 코엠(PG_PROVIDER=koem) 결제창 진입 정보(07 F14). 클라이언트는 params를 수정 없이
-      hidden form으로 payUrl에 POST한다(checkHash 포함 — 서버 생성). 토스 모드에서는 없음. */
-  koem: z.object({
-    payUrl: z.string().min(1),
-    params: z.record(z.string())
-  }).optional(),
-  /** 데모 결제(PG_PROVIDER=demo, 07 F14 데모 운영 — 코엠 실연결 전). 클라이언트는 결제창 없이
-      곧장 confirm(paymentKey=`demo_${purchaseId}`)을 호출한다. 실 PG 모드에서는 없음. */
-  demo: z.literal(true).optional()
-});
-var couponPurchaseConfirmInputSchema = z.object({
-  purchaseId: uuidSchema,
-  paymentKey: z.string().min(1),
-  pgOrderId: z.string().min(1),
-  amount: z.number().int().positive()
-});
-var couponPurchaseConfirmOutputSchema = z.object({
-  /** 충전 후 쿠폰 잔액(장). v_coupon_balance 재조회. */
-  balance: z.number().int().nonnegative()
-});
-var couponRefundInputSchema = z.object({
-  purchaseId: uuidSchema,
-  /** 환불 수량(장). 생략 시 구매 전액. 1 이상, 구매 qty 이하(RPC가 상한 검증). */
-  qty: z.number().int().positive().optional(),
-  reason: z.string().min(1)
-});
-var couponRefundOutputSchema = z.object({
-  purchaseId: uuidSchema,
-  /** 실제 환불된 수량(장). */
-  refundedQty: z.number().int().positive(),
-  /** 환불 후 라이더 쿠폰 잔액(장). */
-  balance: z.number().int().nonnegative()
-});
 var supplierSignupInputSchema = z.object({
   displayName: z.string().min(1),
   storeName: z.string().min(1),
@@ -242,20 +183,42 @@ var csReplyOutputSchema = z.object({
   ticketId: uuidSchema,
   status: csStatusSchema
 });
+var referralStatusSchema = z.enum(["SIGNED_UP", "ACTIVATED", "CANCELLED"]);
+var referralCodeSchema = z.string().trim().toUpperCase().regex(/^[0-9A-HJKMNP-TV-Z]{8}$/, "\uCD94\uCC9C\uCF54\uB4DC \uD615\uC2DD\uC774 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC544\uC694.");
+var referralCodeOutputSchema = z.object({
+  code: referralCodeSchema,
+  shareUrl: z.string().url()
+});
+var referralAttachInputSchema = z.object({
+  code: referralCodeSchema
+});
+var referralAttachOutputSchema = z.object({
+  status: referralStatusSchema,
+  supplierBonus: z.number().int().nonnegative()
+});
+var referralStatsSchema = z.object({
+  referrer_rider_id: uuidSchema,
+  signed_up: z.number().int().nonnegative(),
+  activated: z.number().int().nonnegative(),
+  supplier_bonus_paid: z.number().int().nonnegative(),
+  rider_reward_earned: z.number().int().nonnegative(),
+  // [09 H8] 보상 정산 분리 합계(20260716000001에서 뷰에 append).
+  rider_reward_settled: z.number().int().nonnegative(),
+  rider_reward_unsettled: z.number().int().nonnegative()
+});
+var referralSettleInputSchema = z.object({
+  referralId: uuidSchema,
+  settle: z.boolean()
+});
+var referralSettleOutputSchema = z.object({
+  referralId: uuidSchema,
+  settled: z.boolean(),
+  settledAt: z.string().nullable()
+});
 export {
   arrivePayloadSchema,
   cancelPayloadSchema,
   confirmMeasurePayloadSchema,
-  couponAdjustInputSchema,
-  couponAdjustOutputSchema,
-  couponPriceSetInputSchema,
-  couponPriceSetOutputSchema,
-  couponPurchaseConfirmInputSchema,
-  couponPurchaseConfirmOutputSchema,
-  couponPurchaseIntentInputSchema,
-  couponPurchaseIntentOutputSchema,
-  couponRefundInputSchema,
-  couponRefundOutputSchema,
   csCategorySchema,
   csReplyInputSchema,
   csReplyOutputSchema,
@@ -276,10 +239,19 @@ export {
   orderFaultSchema,
   orderTransitionInputSchema,
   orderTransitionOutputSchema,
+  payoutMethodSchema,
   pointAdjustInputSchema,
   pointAdjustOutputSchema,
   priceSetInputSchema,
   priceSetOutputSchema,
+  referralAttachInputSchema,
+  referralAttachOutputSchema,
+  referralCodeOutputSchema,
+  referralCodeSchema,
+  referralSettleInputSchema,
+  referralSettleOutputSchema,
+  referralStatsSchema,
+  referralStatusSchema,
   resolveDisputePayloadSchema,
   riderLocationInputSchema,
   riderLocationOutputSchema,

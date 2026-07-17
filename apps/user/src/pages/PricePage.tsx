@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   PageHeader,
   PriceChart,
+  PriceStatsRow,
   SegmentToggle,
   colors,
   elevation,
@@ -138,6 +139,7 @@ export function PricePage() {
                 stroke={colors.chart.lineOnDark}
                 areaColor={colors.chart.areaTop}
                 onDark
+                showGrid
                 onScrub={setScrub}
               />
             ) : (
@@ -148,6 +150,9 @@ export function PricePage() {
                 시세 데이터가 쌓이면 차트가 표시돼요.
               </p>
             )}
+
+            {/* 08 G4-②: 기간 최고/최저/평균/등락률(상세 화면 — y축 가이드와 세트). */}
+            {hasChart && <PriceStatsRow data={daily} onDark />}
 
             <SegmentToggle
               options={[

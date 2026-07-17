@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { OrderStatus } from "@oilpick/core";
+import type { OrderStatus, PayoutMethod } from "@oilpick/core";
 import { supabase } from "../lib/supabaseClient";
 import { queryKeys } from "../lib/queryClient";
 
@@ -17,9 +17,12 @@ export interface ActiveRun {
   photoUrls: string[];
   snapshotPricePerKg: number;
   snapshotRiderFee: number;
-  /** 소진 쿠폰 장수(coupon_cost). 레거시 주문 null. */
-  couponCost: number | null;
-  /** 완료 시 현장 지급 현금(원). COMPLETED에서만 채워짐. 07 F6-④ 완료 요약. */
+  /**
+   * 현장 지급수단(08 P2). SUBMIT_MEASURE에서 라이더가 선택 — 재제출 프리필·대기/완료 카피 분기에
+   * 사용한다. 계량 제출 전·레거시 주문은 null(완료 표시는 CASH 간주 — 08 P3 coalesce).
+   */
+  payoutMethod: PayoutMethod | null;
+  /** 확정 지급액(원). POINT 지급도 이 컬럼에 기록(1P=1원, 08 P3). COMPLETED에서만 채워짐. */
   cashPaidAmount: number | null;
   completedAt: string | null;
   createdAt: string;
@@ -30,7 +33,7 @@ export interface ActiveRun {
 }
 
 const RUN_COLUMNS =
-  "id, status, supplier_id, depot_id, pickup_address, requested_kg, measured_kg, final_kg, photo_urls, snapshot_price_per_kg, snapshot_rider_fee, coupon_cost, cash_paid_amount, completed_at, created_at";
+  "id, status, supplier_id, depot_id, pickup_address, requested_kg, measured_kg, final_kg, photo_urls, snapshot_price_per_kg, snapshot_rider_fee, payout_method, cash_paid_amount, completed_at, created_at";
 
 /**
  * 진행중으로 취급하는 상태(07 F6-②③④).
@@ -57,7 +60,7 @@ function mapRow(row: {
   photo_urls: string[];
   snapshot_price_per_kg: number;
   snapshot_rider_fee: number;
-  coupon_cost: number | null;
+  payout_method: PayoutMethod | null;
   cash_paid_amount: number | null;
   completed_at: string | null;
   created_at: string;
@@ -74,7 +77,7 @@ function mapRow(row: {
     photoUrls: row.photo_urls ?? [],
     snapshotPricePerKg: row.snapshot_price_per_kg,
     snapshotRiderFee: row.snapshot_rider_fee,
-    couponCost: row.coupon_cost ?? null,
+    payoutMethod: row.payout_method ?? null,
     cashPaidAmount: row.cash_paid_amount ?? null,
     completedAt: row.completed_at,
     createdAt: row.created_at,

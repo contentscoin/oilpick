@@ -3,6 +3,7 @@ import { formatRelativeTime } from "@oilpick/core";
 import { useNavigate } from "react-router-dom";
 import { useSession } from "../hooks/useSession";
 import { useMarkNotificationRead, useNotifications } from "../hooks/useNotifications";
+import { normalizeDeepLink } from "../lib/native/deeplink";
 
 /**
  * R11 알림함. apps/user/src/pages/NotificationsPage.tsx와 동일 구조(RiderShell은 App.tsx에서
@@ -25,7 +26,10 @@ export function NotificationsPage() {
     if (!notification.readAt) {
       await markRead(notification.id);
     }
-    if (notification.link) navigate(notification.link);
+    // 서버 link는 supplier/공용 표기(/orders/:id, /wallet)라 rider 라우트로 재매핑이 필수 —
+    // 푸시 탭·커스텀 스킴과 동일한 normalizeDeepLink 경유(raw navigate는 캐치올로 홈에 떨어진다).
+    const path = normalizeDeepLink(notification.link);
+    if (path) navigate(path);
   }
 
   return (

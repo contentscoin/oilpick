@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { REFERRAL_CODE_STORAGE_KEY } from "@oilpick/core";
 import { AuthPage } from "./AuthPage";
 
 const {
@@ -10,6 +11,7 @@ const {
   mockFrom,
   mockMaybeSingle,
   mockInsert,
+  mockInvokeEdgeFunction,
 } = vi.hoisted(() => ({
   mockSignInWithOtp: vi.fn(),
   mockVerifyOtp: vi.fn(),
@@ -17,6 +19,7 @@ const {
   mockFrom: vi.fn(),
   mockMaybeSingle: vi.fn(),
   mockInsert: vi.fn(),
+  mockInvokeEdgeFunction: vi.fn(),
 }));
 
 vi.mock("../lib/supabaseClient", () => ({
@@ -29,6 +32,8 @@ vi.mock("../lib/supabaseClient", () => ({
     from: mockFrom,
   },
 }));
+// 09 H4 — 가입 직후 best-effort referral-attach 경로 검증용.
+vi.mock("../lib/edgeFunction", () => ({ invokeEdgeFunction: mockInvokeEdgeFunction }));
 
 function renderPage() {
   return render(
@@ -41,9 +46,30 @@ function renderPage() {
   );
 }
 
+/** OTP→코드→프로필 폼 제출까지 신규 가입 플로우를 완주시키는 헬퍼(referral attach 테스트 공용). */
+async function completeSignupFlow() {
+  mockSignInWithOtp.mockResolvedValue({ error: null });
+  mockVerifyOtp.mockResolvedValue({ data: { user: { id: "user-1" } }, error: null });
+  renderPage();
+
+  fireEvent.change(screen.getByTestId("phone-input"), { target: { value: "010-1234-5678" } });
+  fireEvent.click(screen.getByTestId("send-otp-button"));
+  await screen.findByTestId("code-input");
+  fireEvent.change(screen.getByTestId("code-input"), { target: { value: "123456" } });
+  fireEvent.click(screen.getByTestId("verify-otp-button"));
+  await screen.findByTestId("display-name-input");
+
+  fireEvent.change(screen.getByTestId("display-name-input"), { target: { value: "김사장" } });
+  fireEvent.change(screen.getByTestId("store-name-input"), { target: { value: "행복식당" } });
+  fireEvent.change(screen.getByTestId("biz-number-input"), { target: { value: "123-45-67890" } });
+  fireEvent.change(screen.getByTestId("address-input"), { target: { value: "서울시 강서구" } });
+  fireEvent.click(screen.getByTestId("create-profile-button"));
+}
+
 describe("AuthPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
     // profiles.select(...).eq(...).maybeSingle() 체인 — 기본은 "신규 가입자"(row 없음).
     mockMaybeSingle.mockResolvedValue({ data: null, error: null });
     mockFrom.mockImplementation(() => ({
@@ -52,6 +78,7 @@ describe("AuthPage", () => {
     }));
     mockInsert.mockResolvedValue({ error: null });
     mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } }, error: null });
+    mockInvokeEdgeFunction.mockResolvedValue({ ok: true, data: { status: "SIGNED_UP", supplierBonus: 5000 } });
   });
 
   it("rejects an invalid phone number before calling signInWithOtp", () => {
@@ -152,5 +179,41 @@ describe("AuthPage", () => {
       }),
     );
     expect(await screen.findByText("HOME_PAGE")).toBeInTheDocument();
+  });
+
+  // ===== 09 H4 — 가입 직후 추천코드 attach(best-effort·비차단) =====
+
+  it("저장된 유효 추천코드로 referral-attach를 호출하고 키를 소비한다", async () => {
+    localStorage.setItem(REFERRAL_CODE_STORAGE_KEY, "ABCD2345");
+    await completeSignupFlow();
+
+    expect(await screen.findByText("HOME_PAGE")).toBeInTheDocument();
+    expect(mockInvokeEdgeFunction).toHaveBeenCalledWith("referral-attach", { code: "ABCD2345" });
+    // 성패와 무관하게 코드를 소비해 재시도·중복 attach를 막는다.
+    expect(localStorage.getItem(REFERRAL_CODE_STORAGE_KEY)).toBeNull();
+  });
+
+  it("저장된 코드가 형식 위반이면 attach를 건너뛰되 키는 소비한다", async () => {
+    localStorage.setItem(REFERRAL_CODE_STORAGE_KEY, "BAD"); // 8자 미달
+    await completeSignupFlow();
+
+    expect(await screen.findByText("HOME_PAGE")).toBeInTheDocument();
+    expect(mockInvokeEdgeFunction).not.toHaveBeenCalled();
+    expect(localStorage.getItem(REFERRAL_CODE_STORAGE_KEY)).toBeNull();
+  });
+
+  it("attach가 실패(예외)해도 가입은 성립하고 홈으로 이동한다(비차단)", async () => {
+    localStorage.setItem(REFERRAL_CODE_STORAGE_KEY, "ABCD2345");
+    mockInvokeEdgeFunction.mockRejectedValue(new Error("network down"));
+    await completeSignupFlow();
+
+    expect(await screen.findByText("HOME_PAGE")).toBeInTheDocument();
+    expect(localStorage.getItem(REFERRAL_CODE_STORAGE_KEY)).toBeNull();
+  });
+
+  it("저장된 코드가 없으면 attach를 호출하지 않는다", async () => {
+    await completeSignupFlow();
+    expect(await screen.findByText("HOME_PAGE")).toBeInTheDocument();
+    expect(mockInvokeEdgeFunction).not.toHaveBeenCalled();
   });
 });

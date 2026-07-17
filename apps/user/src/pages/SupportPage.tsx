@@ -13,7 +13,8 @@ import { useSession } from "../hooks/useSession";
 import { supabase } from "../lib/supabaseClient";
 import { csTicketsKey, useMyOrderOptions, useMyTickets } from "../hooks/useSupport";
 
-const CATEGORY_ORDER: CsCategory[] = ["ORDER", "CASH_DISPUTE", "COUPON_PAYMENT", "ACCOUNT", "ETC"];
+// 08 P1: COUPON_PAYMENT은 레거시(쿠폰 모델 폐기) — 신규 접수 폼에서 제외(과거 티켓 렌더는 라벨 맵으로 유지).
+const CATEGORY_ORDER: CsCategory[] = ["ORDER", "CASH_DISPUTE", "ACCOUNT", "ETC"];
 
 /**
  * 고객센터(07 F12 ③). MyPage "고객센터" placeholder를 대체하는 실 문의 폼 + 내 문의 내역.

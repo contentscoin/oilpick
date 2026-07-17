@@ -2,8 +2,6 @@ import { useNavigate } from "react-router-dom";
 import {
   CallCard,
   EmptyState,
-  PointBalanceCard,
-  PointHeroAction,
   colors,
   elevation,
   gray,
@@ -11,11 +9,10 @@ import {
   surface,
   useToast,
 } from "@oilpick/ui";
-import { estimateCash, formatKg, formatKrw } from "@oilpick/core";
+import { estimateCash, formatKg, formatKrw, formatPoint } from "@oilpick/core";
 import { useSession } from "../hooks/useSession";
 import { useRiderProfile } from "../hooks/useRiderProfile";
 import { useOpenCalls } from "../hooks/useOpenCalls";
-import { useCouponBalance } from "../hooks/useCoupons";
 import { useTodayStats } from "../hooks/useTodayStats";
 import { useGeolocation } from "../hooks/useGeolocation";
 import { distanceKm } from "../lib/geo";
@@ -34,7 +31,6 @@ export function CallHomePage() {
 
   const { data: rider } = useRiderProfile(userId);
   const { data: stats, isLoading: statsLoading } = useTodayStats(userId);
-  const { data: couponBalance, isLoading: couponLoading } = useCouponBalance(userId);
   const position = useGeolocation(true);
   const {
     data: calls,
@@ -110,31 +106,8 @@ export function CallHomePage() {
         </button>
       </div>
 
-      {/* 07 F5-①: 쿠폰 잔액 히어로(v_coupon_balance + Realtime). [충전하기]→결제 화면, 카드 탭→쿠폰 내역. */}
-      {couponLoading ? (
-        // 로딩 중 잔액 0장이 먼저 떴다가 실제 값으로 교체되는 플래시 방지 스켈레톤.
-        <div data-testid="coupon-balance-skeleton" style={{ height: 160, borderRadius: radius.hero, backgroundColor: gray[100] }} />
-      ) : (
-        <PointBalanceCard
-          available={couponBalance ?? 0}
-          label="보유 수거쿠폰"
-          formatValue={(n) => `${n}장`}
-          onClick={() => navigate("/coupons")}
-          action={
-            <PointHeroAction
-              data-testid="coupon-charge-button"
-              onClick={(e) => {
-                e.stopPropagation();
-                navigate("/coupons/purchase");
-              }}
-            >
-              충전하기
-            </PointHeroAction>
-          }
-        />
-      )}
-
-      {/* 07 F6-⑥ "오늘 실적": 신모델 현금 매입 기준(수거 kg / 지급 현금 / 소진 쿠폰, completed_at 기준). */}
+      {/* 08 G6-④ "오늘 실적": 수거 kg + 지급 수단 분리(현금/포인트, completed_at 기준).
+          쿠폰 잔액 히어로·소진 집계는 쿠폰 모델 폐기(08 P1)로 제거. */}
       <section data-testid="today-stats" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {statsLoading ? (
           // 로딩 중 0kg/0원이 먼저 떴다가 실제 값으로 교체되는 플래시 방지 스켈레톤.
@@ -143,45 +116,53 @@ export function CallHomePage() {
             <div style={{ flex: 1, height: 92, borderRadius: radius.card, backgroundColor: gray[100] }} />
           </div>
         ) : (
-          <>
-            <div style={{ display: "flex", gap: 12 }}>
-              <div
-                style={{
-                  flex: 1,
-                  borderRadius: radius.card,
-                  padding: 16,
-                  backgroundColor: surface.card,
-                  border: `1px solid ${surface.border}`,
-                  boxShadow: elevation.card,
-                }}
-              >
-                <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: colors.status.wait }}>오늘 수거량</p>
-                <p data-testid="today-collected-kg" className="oilpick-tabular-nums" style={{ margin: "6px 0 0", fontSize: 24, fontWeight: 800, letterSpacing: "-0.01em", color: colors.primary.DEFAULT }}>
-                  {formatKg(stats?.collectedKg ?? 0)}
-                </p>
-                <p style={{ margin: "4px 0 0", fontSize: 12, color: colors.status.wait }}>{stats?.completedCount ?? 0}건</p>
-              </div>
-              <div
-                style={{
-                  flex: 1,
-                  borderRadius: radius.card,
-                  padding: 16,
-                  backgroundColor: surface.card,
-                  border: `1px solid ${surface.border}`,
-                  boxShadow: elevation.card,
-                }}
-              >
-                <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: colors.status.wait }}>오늘 지급 현금</p>
-                {/* 05 폴리시: 밝은 배경 위 앰버 "텍스트"는 accent.deep(대비 4.5:1) — 배경 앰버일 때만 흰 텍스트. */}
-                <p data-testid="today-cash" className="oilpick-tabular-nums" style={{ margin: "6px 0 0", fontSize: 24, fontWeight: 800, letterSpacing: "-0.01em", color: colors.accent.deep }}>
-                  {formatKrw(stats?.cashPaid ?? 0)}
-                </p>
-              </div>
+          <div style={{ display: "flex", gap: 12 }}>
+            <div
+              style={{
+                flex: 1,
+                borderRadius: radius.card,
+                padding: 16,
+                backgroundColor: surface.card,
+                border: `1px solid ${surface.border}`,
+                boxShadow: elevation.card,
+              }}
+            >
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: colors.status.wait }}>오늘 수거량</p>
+              <p data-testid="today-collected-kg" className="oilpick-tabular-nums" style={{ margin: "6px 0 0", fontSize: 24, fontWeight: 800, letterSpacing: "-0.01em", color: colors.primary.DEFAULT }}>
+                {formatKg(stats?.collectedKg ?? 0)}
+              </p>
+              <p style={{ margin: "4px 0 0", fontSize: 12, color: colors.status.wait }}>{stats?.completedCount ?? 0}건</p>
             </div>
-            <p data-testid="today-coupons" style={{ margin: 0, fontSize: 13, color: colors.status.wait, textAlign: "center" }}>
-              오늘 소진 쿠폰 {stats?.consumedCoupons ?? 0}장
-            </p>
-          </>
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "center",
+                gap: 6,
+                borderRadius: radius.card,
+                padding: 16,
+                backgroundColor: surface.card,
+                border: `1px solid ${surface.border}`,
+                boxShadow: elevation.card,
+              }}
+            >
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: colors.status.wait }}>오늘 지급</p>
+              <p style={{ margin: 0, display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, fontSize: 13, color: colors.status.wait }}>
+                현금
+                {/* 05 폴리시: 밝은 배경 위 앰버 "텍스트"는 accent.deep(대비 4.5:1) — 배경 앰버일 때만 흰 텍스트. */}
+                <span data-testid="today-cash" className="oilpick-tabular-nums" style={{ fontSize: 17, fontWeight: 800, letterSpacing: "-0.01em", color: colors.accent.deep }}>
+                  {formatKrw(stats?.cashPaid ?? 0)}
+                </span>
+              </p>
+              <p style={{ margin: 0, display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, fontSize: 13, color: colors.status.wait }}>
+                포인트
+                <span data-testid="today-point" className="oilpick-tabular-nums" style={{ fontSize: 17, fontWeight: 800, letterSpacing: "-0.01em", color: colors.primary.dark }}>
+                  {formatPoint(stats?.pointPaid ?? 0)}
+                </span>
+              </p>
+            </div>
+          </div>
         )}
       </section>
 
@@ -239,7 +220,6 @@ export function CallHomePage() {
                 distanceKm={position ? distanceKm(position, { lat: call.pickupLat, lng: call.pickupLng }) : 0}
                 estimatedKg={call.requestedKg}
                 estimatedCash={estimateCash(call.requestedKg, call.snapshotPricePerKg)}
-                couponCost={call.couponCost}
                 address={call.pickupAddress}
                 onClick={() => navigate(`/calls/${call.id}`)}
               />

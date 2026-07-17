@@ -125,14 +125,14 @@ export interface DashboardKpi {
   orderCount: number;
   /** 오늘 완료된 수거 무게 합(completed_at 기준). */
   collectedKg: number;
-  /** 오늘 쿠폰 판매액(원) = Σ CHARGE unit_price×qty. */
-  couponSalesAmount: number;
-  /** 오늘 소진된 쿠폰 장수 = Σ CONSUME(-qty). */
-  consumedCoupons: number;
+  /** 오늘 현금 지급 합(원) — coalesce(payout_method,'CASH')='CASH'인 cash_paid_amount(08 P3). */
+  cashPaidAmount: number;
+  /** 오늘 포인트 지급 합(P) — payout_method='POINT'인 cash_paid_amount(1P=1원, 08 P3). */
+  pointPaidAmount: number;
+  /** 출금 대기(REQUESTED) 건수 — 08 P4 출금 부활. */
+  pendingWithdrawals: number;
   /** 온라인·승인 라이더 수. */
   activeRiderCount: number;
-  /** 오늘 현금 거래액 합(cash_paid_amount, completed_at 기준). */
-  cashPaidAmount: number;
 }
 
 function todayKey(): string {
@@ -140,9 +140,10 @@ function todayKey(): string {
 }
 
 /**
- * 오늘 KPI 카드(07 F10-④): 오늘 주문 / 오늘 수거 kg / 오늘 쿠폰 판매액 / 오늘 소진 쿠폰 /
- * 활성 라이더 + 오늘 현금 거래액. 구모델의 "오늘 발행 포인트"는 제거(D1 포인트 폐기).
- * 수거 kg·현금은 completed_at 기준, 쿠폰 판매·소진은 coupon_ledger(created_at 기준) 직접 집계.
+ * 오늘 KPI 카드(08 G7-②): 오늘 주문 / 오늘 수거 kg / 오늘 현금 지급 / 오늘 포인트 지급 /
+ * 출금 대기 / 활성 라이더. 07의 쿠폰 판매·소진 카드는 제거(쿠폰 모델 폐기, 08 P1).
+ * 수거 kg·지급은 completed_at 기준(payout_method null=레거시 → CASH 간주, 08 P3),
+ * 출금 대기는 withdrawals status=REQUESTED 카운트.
  */
 export function useDashboardKpi() {
   const day = todayKey();
@@ -153,7 +154,7 @@ export function useDashboardKpi() {
       startOfDay.setHours(0, 0, 0, 0);
       const startIso = startOfDay.toISOString();
 
-      const [orderCountRes, ridersRes, completedRes, chargeRes, consumeRes] = await Promise.all([
+      const [orderCountRes, ridersRes, completedRes, withdrawalsRes] = await Promise.all([
         supabase
           .from("pickup_orders")
           .select("id", { count: "exact", head: true })
@@ -165,42 +166,36 @@ export function useDashboardKpi() {
           .eq("verify_status", "APPROVED"),
         supabase
           .from("pickup_orders")
-          .select("final_kg, cash_paid_amount")
+          .select("final_kg, payout_method, cash_paid_amount")
           .eq("status", "COMPLETED")
           .gte("completed_at", startIso),
         supabase
-          .from("coupon_ledger")
-          .select("qty, unit_price")
-          .eq("entry_type", "CHARGE")
-          .gte("created_at", startIso),
-        supabase
-          .from("coupon_ledger")
-          .select("qty")
-          .eq("entry_type", "CONSUME")
-          .gte("created_at", startIso),
+          .from("withdrawals")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "REQUESTED"),
       ]);
       if (orderCountRes.error) throw orderCountRes.error;
       if (ridersRes.error) throw ridersRes.error;
       if (completedRes.error) throw completedRes.error;
-      if (chargeRes.error) throw chargeRes.error;
-      if (consumeRes.error) throw consumeRes.error;
+      if (withdrawalsRes.error) throw withdrawalsRes.error;
 
       const completedRows = completedRes.data ?? [];
       const collectedKg = completedRows.reduce((sum, r) => sum + (Number(r.final_kg) || 0), 0);
-      const cashPaidAmount = completedRows.reduce((sum, r) => sum + (Number(r.cash_paid_amount) || 0), 0);
-      const couponSalesAmount = (chargeRes.data ?? []).reduce(
-        (sum, r) => sum + (Number(r.unit_price) || 0) * (Number(r.qty) || 0),
-        0,
-      );
-      const consumedCoupons = (consumeRes.data ?? []).reduce((sum, r) => sum + Math.abs(Number(r.qty) || 0), 0);
+      let cashPaidAmount = 0;
+      let pointPaidAmount = 0;
+      for (const r of completedRows) {
+        const amount = Number(r.cash_paid_amount) || 0;
+        if (r.payout_method === "POINT") pointPaidAmount += amount;
+        else cashPaidAmount += amount;
+      }
 
       return {
         orderCount: orderCountRes.count ?? 0,
         collectedKg,
-        couponSalesAmount,
-        consumedCoupons,
-        activeRiderCount: ridersRes.count ?? 0,
         cashPaidAmount,
+        pointPaidAmount,
+        pendingWithdrawals: withdrawalsRes.count ?? 0,
+        activeRiderCount: ridersRes.count ?? 0,
       };
     },
     refetchInterval: 30_000,

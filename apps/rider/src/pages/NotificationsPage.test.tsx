@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { colors, elevation, surface } from "@oilpick/ui";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NotificationsPage } from "./NotificationsPage";
@@ -80,5 +80,52 @@ describe("NotificationsPage — 알림함(06 E12 미읽음 바)", () => {
     expect(screen.queryByText("아직 알림이 없어요")).not.toBeInTheDocument();
     fireEvent.click(screen.getByTestId("query-error-retry"));
     expect(refetch).toHaveBeenCalled();
+  });
+
+  it("서버 공용 링크(/orders/:id, /wallet)를 rider 라우트로 재매핑해 이동한다(회귀 방지)", async () => {
+    // raw navigate는 rider 캐치올(홈)로 떨어지던 확정 결함 — normalizeDeepLink 경유를 검증한다.
+    mockMarkRead.mockResolvedValue(undefined);
+    mockUseNotifications.mockReturnValue({
+      data: [
+        { id: 1, title: "새 콜 도착", body: "역삼동 30kg", link: "/orders/abc-123", readAt: null, createdAt: "2026-07-15T00:00:00Z" },
+        { id: 2, title: "출금 완료", body: "10,000P 지급", link: "/wallet", readAt: "2026-07-15T00:00:00Z", createdAt: "2026-07-15T00:00:00Z" },
+      ],
+      isLoading: false,
+    });
+    render(
+      <MemoryRouter initialEntries={["/notifications"]}>
+        <Routes>
+          <Route path="/notifications" element={<NotificationsPage />} />
+          <Route path="/calls/:id" element={<div data-testid="call-detail-page" />} />
+          <Route path="/earnings" element={<div data-testid="earnings-page" />} />
+          <Route path="*" element={<div data-testid="catch-all" />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByTestId("notification-row-1"));
+    expect(await screen.findByTestId("call-detail-page")).toBeInTheDocument();
+    expect(screen.queryByTestId("catch-all")).not.toBeInTheDocument();
+  });
+
+  it("/wallet 링크는 /earnings로 재매핑된다", async () => {
+    mockUseNotifications.mockReturnValue({
+      data: [
+        { id: 2, title: "출금 완료", body: "10,000P 지급", link: "/wallet", readAt: "2026-07-15T00:00:00Z", createdAt: "2026-07-15T00:00:00Z" },
+      ],
+      isLoading: false,
+    });
+    render(
+      <MemoryRouter initialEntries={["/notifications"]}>
+        <Routes>
+          <Route path="/notifications" element={<NotificationsPage />} />
+          <Route path="/earnings" element={<div data-testid="earnings-page" />} />
+          <Route path="*" element={<div data-testid="catch-all" />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByTestId("notification-row-2"));
+    expect(await screen.findByTestId("earnings-page")).toBeInTheDocument();
   });
 });

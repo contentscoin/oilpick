@@ -37,7 +37,7 @@ function renderPage() {
 function goToStep3(overrides?: { address?: string }) {
   fireEvent.click(screen.getByTestId("request-step-1-next"));
   fireEvent.change(screen.getByTestId("address-input"), {
-    target: { value: overrides?.address ?? "서울시 강서구 오일픽로 1" },
+    target: { value: overrides?.address ?? "서울시 강서구 오반장로 1" },
   });
   fireEvent.click(screen.getByTestId("request-step-2-next"));
 }
@@ -165,7 +165,7 @@ describe("RequestPage", () => {
     await waitFor(() =>
       expect(mockInvokeEdgeFunction).toHaveBeenCalledWith(
         "order-create",
-        expect.objectContaining({ requestedKg: 15, requestedCans: 1, address: "서울시 강서구 오일픽로 1", preferredTime: "지금" }),
+        expect.objectContaining({ requestedKg: 15, requestedCans: 1, address: "서울시 강서구 오반장로 1", preferredTime: "지금" }),
       ),
     );
   });

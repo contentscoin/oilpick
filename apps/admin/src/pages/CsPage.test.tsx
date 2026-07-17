@@ -123,14 +123,14 @@ describe("CsPage", () => {
     expect(mockNavigate).toHaveBeenCalledWith("/orders?order=o-9");
   });
 
-  it("COUPON_PAYMENT 문의는 매출·정산 환불로 연결한다 (07 F12 ④)", () => {
+  it("COUPON_PAYMENT 문의는 레거시 안내를 표시한다 (08 P1 — 쿠폰 모델 폐기)", () => {
     mockUseCsTickets.mockReturnValue({
       data: [ticket({ id: "t-3", category: "COUPON_PAYMENT", role: "rider" })],
       isLoading: false,
     });
     renderPage();
     fireEvent.click(screen.getByTestId("cs-detail-button-t-3"));
-    fireEvent.click(screen.getByTestId("cs-coupon-refund-link"));
-    expect(mockNavigate).toHaveBeenCalledWith("/settlement");
+    expect(screen.getByTestId("cs-coupon-legacy-note")).toHaveTextContent("레거시 문의");
+    expect(screen.queryByTestId("cs-coupon-refund-link")).not.toBeInTheDocument();
   });
 });
