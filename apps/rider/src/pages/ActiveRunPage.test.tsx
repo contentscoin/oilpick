@@ -18,7 +18,7 @@ vi.mock("../hooks/useRiderLocationPusher", () => ({ useRiderLocationPusher: vi.f
 vi.mock("../lib/native/scanner", () => ({ isScannerAvailable: () => false, scanQrCode: vi.fn() }));
 vi.mock("../lib/edgeFunction", () => ({ invokeEdgeFunction: mockInvoke }));
 vi.mock("../lib/supabaseClient", () => ({ supabase: { storage: { from: mockStorageFrom } } }));
-vi.mock("../lib/env", () => ({ KAKAO_KEY: "test-key" }));
+vi.mock("../lib/env", () => ({ MAP_STYLE_URL: undefined }));
 
 function makeRun(overrides: Partial<ActiveRun> = {}): ActiveRun {
   return {
@@ -27,6 +27,8 @@ function makeRun(overrides: Partial<ActiveRun> = {}): ActiveRun {
     supplierId: "s1",
     depotId: null,
     pickupAddress: "서울시 강남구 테헤란로 123",
+    pickupLat: 37.5509,
+    pickupLng: 126.8225,
     requestedKg: 45,
     measuredKg: null,
     finalKg: null,
@@ -143,6 +145,28 @@ describe("ActiveRunPage — 활성 주문 없음", () => {
   it("EmptyState + 콜 홈으로", () => {
     renderRun(null);
     expect(screen.getByTestId("active-run-go-home")).toBeInTheDocument();
+  });
+});
+
+describe("ActiveRunPage — ACCEPTED 내비 딥링크(11 M9-a)", () => {
+  it("좌표가 있으면 카카오맵 스킴에 목적지를 싣고 TMap/웹 폴백 링크를 렌더한다", () => {
+    renderRun(makeRun({ status: "ACCEPTED" }));
+    expect(screen.getByTestId("navigate-deeplink")).toHaveAttribute(
+      "href",
+      "kakaomap://route?ep=37.5509,126.8225&by=CAR",
+    );
+    expect(screen.getByTestId("navigate-tmap").getAttribute("href")).toContain("goalx=126.8225");
+    expect(screen.getByTestId("navigate-web-fallback").getAttribute("href")).toContain(
+      "map.kakao.com/link/to/",
+    );
+  });
+
+  it("좌표가 없으면(레거시/파싱 실패) 주소 검색 웹 링크로 강등한다", () => {
+    renderRun(makeRun({ status: "ACCEPTED", pickupLat: null, pickupLng: null }));
+    expect(screen.getByTestId("navigate-deeplink").getAttribute("href")).toContain(
+      "map.kakao.com/link/search/",
+    );
+    expect(screen.queryByTestId("navigate-tmap")).not.toBeInTheDocument();
   });
 });
 

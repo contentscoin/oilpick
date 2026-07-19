@@ -18,15 +18,19 @@ import {
 } from "@oilpick/ui";
 import {
   PAYOUT_METHOD_LABEL,
+  buildKakaoRouteUrl,
+  buildKakaoWebRouteUrl,
+  buildTmapRouteUrl,
   estimateCash,
   formatKg,
   formatKrw,
   formatPoint,
   humanizeSupabaseError,
+  type LatLng,
   type OrderStatus,
   type PayoutMethod,
 } from "@oilpick/core";
-import { KAKAO_KEY } from "../lib/env";
+import { MAP_STYLE_URL } from "../lib/env";
 import { invokeEdgeFunction } from "../lib/edgeFunction";
 import { supabase } from "../lib/supabaseClient";
 import { useSession } from "../hooks/useSession";
@@ -90,7 +94,13 @@ export function ActiveRunPage() {
       {/* 진행 맥락: U7과 동일한 세로 타임라인으로 라이더도 현재 단계를 본다. */}
       <OrderTimeline currentStatus={run.status} />
 
-      {run.status === "ACCEPTED" && <AcceptedPanel orderId={run.id} pickupAddress={run.pickupAddress} />}
+      {run.status === "ACCEPTED" && (
+        <AcceptedPanel
+          orderId={run.id}
+          pickupAddress={run.pickupAddress}
+          pickupPoint={run.pickupLat != null && run.pickupLng != null ? { lat: run.pickupLat, lng: run.pickupLng } : null}
+        />
+      )}
       {run.status === "ARRIVED" && (
         <ArrivedPanel
           orderId={run.id}
@@ -237,10 +247,24 @@ const inputStyle: CSSProperties = {
 };
 
 /** R4 ACCEPTED: 지도+내비 딥링크+[도착]. */
-function AcceptedPanel({ orderId, pickupAddress }: { orderId: string; pickupAddress: string }) {
+function AcceptedPanel({
+  orderId,
+  pickupAddress,
+  pickupPoint,
+}: {
+  orderId: string;
+  pickupAddress: string;
+  /** 수거지 실좌표(EWKB 파싱, 11 M9-a). null이면 지도는 프리뷰·내비는 주소 검색 폴백. */
+  pickupPoint: LatLng | null;
+}) {
   const [arriving, setArriving] = useState(false);
   // 06 E6: 도착 성공/실패 피드백은 전역 토스트로 통일(인라인 에러 텍스트 대체).
   const { showToast } = useToast();
+  // 11 M9-a: 좌표가 있으면 카카오맵 앱 스킴에 목적지를 실어 턴바이턴이 바로 뜨게 한다.
+  // 좌표가 없으면(레거시/파싱 실패) 주소 검색 웹 링크로 강등 — 죽은 딥링크 금지.
+  const kakaoHref = pickupPoint
+    ? buildKakaoRouteUrl(pickupPoint)
+    : `https://map.kakao.com/link/search/${encodeURIComponent(pickupAddress)}`;
 
   async function handleArrive() {
     setArriving(true);
@@ -259,9 +283,14 @@ function AcceptedPanel({ orderId, pickupAddress }: { orderId: string; pickupAddr
 
   return (
     <div data-testid="run-accepted-panel" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <MapView apiKey={KAKAO_KEY} center={{ lat: 37.5509, lng: 126.8225 }} pickupLabel={pickupAddress} />
+      <MapView
+        styleUrl={MAP_STYLE_URL}
+        center={pickupPoint ?? { lat: 37.5509, lng: 126.8225 }}
+        markers={pickupPoint ? [{ ...pickupPoint, label: pickupAddress }] : []}
+        pickupLabel={pickupAddress}
+      />
       <a
-        href="kakaomap://route"
+        href={kakaoHref}
         data-testid="navigate-deeplink"
         style={{
           display: "flex",
@@ -279,8 +308,28 @@ function AcceptedPanel({ orderId, pickupAddress }: { orderId: string; pickupAddr
           textDecoration: "none",
         }}
       >
-        길찾기 앱으로 이동
+        {pickupPoint ? "카카오맵으로 길안내" : "카카오맵에서 주소 검색"}
       </a>
+      {pickupPoint && (
+        <div style={{ display: "flex", justifyContent: "center", gap: 18, fontSize: 13 }}>
+          <a
+            href={buildTmapRouteUrl(pickupAddress, pickupPoint)}
+            data-testid="navigate-tmap"
+            style={{ color: gray[500], textDecoration: "none", fontWeight: 600 }}
+          >
+            TMap으로 안내
+          </a>
+          <a
+            href={buildKakaoWebRouteUrl(pickupAddress, pickupPoint)}
+            target="_blank"
+            rel="noreferrer"
+            data-testid="navigate-web-fallback"
+            style={{ color: gray[500], textDecoration: "none", fontWeight: 600 }}
+          >
+            앱이 없다면 웹 길찾기
+          </a>
+        </div>
+      )}
       <BigButton data-testid="arrive-button" loading={arriving} onClick={handleArrive}>
         도착
       </BigButton>

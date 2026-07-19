@@ -25,6 +25,8 @@
 | **가입 후 추천 attach(09)** | 저장된 코드로 referral-attach(best-effort) + 키 소비 | 형식 위반 스킵·실패해도 가입 성립(비차단)·무코드 무호출 | ✅ [단위 4케이스] |
 | **추천 랜딩 /ref/:code(09)** | 코드 정규화·localStorage 저장·보너스 카드·가입 CTA | 무효 코드 폴백 카드(저장 안 함), 로그인 시 홈 CTA | ✅ [단위 4 + **헤드리스 Chromium 실측**] |
 | 주소 등록 | 카카오 주소검색 → lat/lng | 키 없으면 수동 텍스트 입력 폴백 | ⚠️ 폴백만(실 SDK 🔴) |
+| **지도 렌더러(11 M8)** | MapLibre GL — VITE_MAP_STYLE_URL 게이트, 미설정 시 프리뷰 폴백 | 로드/WebGL 실패 시 프리뷰 강등(크래시 금지) | ⚠️ 단위 4케이스·폴백 ✅ / 실타일 렌더·Capacitor WebView WebGL 🔴 |
+| **내비 핸드오프(11 M9-a)** | kakaomap://route에 실좌표(ep=lat,lng) + TMap/웹 폴백 | 좌표 파싱 실패 시 주소 검색 링크 강등 | ⚠️ 단위(URL 조립·강등) ✅ / 실기기 앱 호출 🔴 |
 | 홈(U3, 08) | PriceChart v2 + 이번 달 수령 요약 **현금/포인트 분리** + 포인트 잔액 칩 | 진행중 주문 상단 고정 | ✅ [단위] |
 | 시세 상세(U4, 08) | PriceChart v2(마커/눈금/스크럽) + PriceStatsRow | 데이터 없음 스켈레톤/빈 표 | ✅ [단위] |
 | 수거 요청(U5, 08) | 18L 말통/10L/직접 kg 프리셋 → order-create | "현장 계량 기준 확정"·"예상 수령액"(수단 중립) 고지 | ✅ [단위] |
@@ -136,11 +138,11 @@ T13에서 로컬 스택 advisor lint를 점검·수정했다(상세는 이력 �
 
 | 패키지 | 테스트 파일 | 테스트 수 |
 |---|---|---|
-| @oilpick/core | 10 | 379 |
-| @oilpick/ui | 27 | 104 |
+| @oilpick/core | 11 | 386 |
+| @oilpick/ui | 28 | 108 |
 | @oilpick/user | 25 | 135 |
-| @oilpick/rider | 19 | 99 |
-| @oilpick/admin | 17 | 103 |
+| @oilpick/rider | 19 | 102 |
+| @oilpick/admin | 17 | 107 |
 
-DB 계층: pgTAP **9스위트 151 asserts**(supabase/tests/README.md 커버리지 참조 — CI에서 실행).
+DB 계층: pgTAP **9스위트 157 asserts**(supabase/tests/README.md 커버리지 참조 — CI에서 실행).
 숫자가 바뀌면 이 표와 supabase/tests/README.md를 함께 갱신할 것.

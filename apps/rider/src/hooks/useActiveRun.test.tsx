@@ -53,6 +53,7 @@ function baseRow(overrides: Record<string, unknown> = {}) {
     supplier_id: "s1",
     depot_id: null,
     pickup_address: "주소",
+    pickup_location: "0101000020E6100000713D0AD7A3B45F40E6AE25E483C64240",
     requested_kg: 45,
     measured_kg: null,
     final_kg: null,

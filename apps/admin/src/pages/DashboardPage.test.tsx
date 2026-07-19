@@ -22,7 +22,7 @@ vi.mock("../hooks/useDashboard", () => ({
 }));
 // MapView는 카카오 SDK placeholder — 지도는 이 테스트 범위 밖이라 목킹.
 vi.mock("@oilpick/ui", () => ({ MapView: () => <div data-testid="mock-map" /> }));
-vi.mock("../lib/env", () => ({ KAKAO_KEY: "" }));
+vi.mock("../lib/env", () => ({ MAP_STYLE_URL: undefined }));
 
 function setup(kpi: DashboardKpi) {
   mockOrders.mockReturnValue({ data: [], isLoading: false });

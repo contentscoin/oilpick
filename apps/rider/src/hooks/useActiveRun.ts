@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { OrderStatus, PayoutMethod } from "@oilpick/core";
+import { parseEwkbPoint, type OrderStatus, type PayoutMethod } from "@oilpick/core";
 import { supabase } from "../lib/supabaseClient";
 import { queryKeys } from "../lib/queryClient";
 
@@ -10,6 +10,9 @@ export interface ActiveRun {
   supplierId: string;
   depotId: string | null;
   pickupAddress: string;
+  /** 수거지 좌표(pickup_location EWKB 파싱, 11 M9-a) — 지도 센터·내비 딥링크용. 파싱 실패 시 null. */
+  pickupLat: number | null;
+  pickupLng: number | null;
   requestedKg: number;
   measuredKg: number | null;
   /** 확정(중재 반영) 무게. 07 §1-3: RESOLVE_DISPUTE가 기록하면 ARRIVED 복귀 + 재제출 불가 마킹. */
@@ -33,7 +36,7 @@ export interface ActiveRun {
 }
 
 const RUN_COLUMNS =
-  "id, status, supplier_id, depot_id, pickup_address, requested_kg, measured_kg, final_kg, photo_urls, snapshot_price_per_kg, snapshot_rider_fee, payout_method, cash_paid_amount, completed_at, created_at";
+  "id, status, supplier_id, depot_id, pickup_address, pickup_location, requested_kg, measured_kg, final_kg, photo_urls, snapshot_price_per_kg, snapshot_rider_fee, payout_method, cash_paid_amount, completed_at, created_at";
 
 /**
  * 진행중으로 취급하는 상태(07 F6-②③④).
@@ -54,6 +57,7 @@ function mapRow(row: {
   supplier_id: string;
   depot_id: string | null;
   pickup_address: string;
+  pickup_location: string | null;
   requested_kg: number;
   measured_kg: number | null;
   final_kg: number | null;
@@ -65,12 +69,15 @@ function mapRow(row: {
   completed_at: string | null;
   created_at: string;
 }): Omit<ActiveRun, "supplierPhone" | "supplierName"> {
+  const pickupPoint = parseEwkbPoint(row.pickup_location);
   return {
     id: row.id,
     status: row.status,
     supplierId: row.supplier_id,
     depotId: row.depot_id,
     pickupAddress: row.pickup_address,
+    pickupLat: pickupPoint?.lat ?? null,
+    pickupLng: pickupPoint?.lng ?? null,
     requestedKg: row.requested_kg,
     measuredKg: row.measured_kg,
     finalKg: row.final_kg,

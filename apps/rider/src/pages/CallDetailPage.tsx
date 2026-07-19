@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { BigButton, ErrorScreen, MapView, PageHeader, colors, elevation, gradient, gray, radius, surface, surfaceDark, useToast } from "@oilpick/ui";
 import { estimateCash, formatKg, formatKrw } from "@oilpick/core";
-import { KAKAO_KEY } from "../lib/env";
+import { MAP_STYLE_URL } from "../lib/env";
 import { invokeEdgeFunction } from "../lib/edgeFunction";
 import { useOpenCalls } from "../hooks/useOpenCalls";
 
@@ -78,7 +78,7 @@ export function CallDetailPage() {
       <PageHeader title="콜 상세" onBack={() => navigate("/")} backTestId="call-detail-back" />
 
       <MapView
-        apiKey={KAKAO_KEY}
+        styleUrl={MAP_STYLE_URL}
         center={{ lat: call.pickupLat, lng: call.pickupLng }}
         markers={[{ lat: call.pickupLat, lng: call.pickupLng }]}
         pickupLabel={call.pickupAddress}

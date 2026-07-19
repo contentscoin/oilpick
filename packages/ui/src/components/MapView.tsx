@@ -2,32 +2,20 @@ import { useEffect, useRef, useState } from "react";
 import { colors, elevation, gray, radius, surface } from "../tokens";
 
 /**
- * 03-frontend.md "packages/ui 컴포넌트" — MapView(카카오맵 래퍼).
+ * 03-frontend.md "packages/ui 컴포넌트" — MapView(MapLibre GL 래퍼).
+ * 11-map-renderer.md(M8): 카카오맵 SDK → MapLibre GL(mapcn 패턴) 렌더러 교체.
  *
- * 가정(04-tasks.md 질문 목록에 동일 내용 기록): 이 개발 환경에는 실제 카카오맵 JS SDK
- * API 키가 없다. apiKey를 prop(또는 앱이 import.meta.env.VITE_KAKAO_KEY를 읽어 전달)으로
- * 주입받고, 키가 없거나 SDK 스크립트 로드가 실패하면 크래시 없이 자리표시자 UI를 렌더한다.
- * 실제 SDK가 준비되면(키 주입 + 로드 성공) 컨테이너 div에 카카오맵 인스턴스를 마운트한다.
+ * 활성화 게이트: `styleUrl`(앱이 import.meta.env.VITE_MAP_STYLE_URL을 읽어 전달).
+ *  - MapLibre 스타일 JSON URL(벡터/래스터 스타일 문서) 또는
+ *  - `{z}/{x}/{y}` 래스터 타일 템플릿(예: VWorld WMTS) — 이 경우 인라인 래스터 스타일로 감싼다.
+ * 미설정이거나 로드/초기화 실패(WebGL 미지원 포함) 시 크래시 없이 "지도 미리보기" 일러스트를
+ * 렌더한다 — 수거지 핀·라이더 마커·경로·ETA/수거지 라벨을 담은 장식적 프리뷰(실좌표 아님).
+ * 실제 지도는 styleUrl 주입 시에만 렌더된다. etaLabel은 실제 ETA 데이터가 있을 때만 전달할 것.
  *
- * 키가 없을 때의 자리표시자는 단순 에러 박스가 아니라 "지도 미리보기"로 렌더한다 — 수거지 핀,
- * 라이더(스쿠터) 마커, 경로, ETA/수거지 라벨을 담은 일러스트. 이는 제품 목업(주문 상세)의 지도
- * 영역 디자인을 그대로 보여주기 위한 것이며, 실제 거리/경로/좌표를 반영하지 않는 장식적 프리뷰다.
- * 실제 지도(성수동 등 실거리)와 실시간 경로는 카카오 키 주입 + rider-location 데이터가 있을 때만
- * 렌더된다. etaLabel은 실제 ETA 데이터가 있을 때만 전달할 것(장식 프리뷰에 임의 시간 표기 금지).
+ * 한국 커버리지 주의(11-map-renderer.md M5): 글로벌 OSM/CARTO 타일은 국내 도로·라벨이 부실 —
+ * 프로덕션은 VWorld(국토부) 타일 권장. maplibre-gl은 dynamic import로 지연 로딩해 styleUrl이
+ * 없는 앱/화면의 초기 번들에 포함되지 않는다.
  */
-
-declare global {
-  interface Window {
-    kakao?: {
-      maps: {
-        load: (cb: () => void) => void;
-        LatLng: new (lat: number, lng: number) => unknown;
-        Map: new (container: HTMLElement, options: Record<string, unknown>) => unknown;
-        Marker: new (options: Record<string, unknown>) => { setMap: (map: unknown) => void };
-      };
-    };
-  }
-}
 
 export interface MapMarker {
   lat: number;
@@ -36,43 +24,35 @@ export interface MapMarker {
 }
 
 export interface MapViewProps {
-  apiKey?: string;
+  /** MapLibre 스타일 JSON URL 또는 {z}/{x}/{y} 래스터 타일 템플릿. 없으면 프리뷰 폴백. */
+  styleUrl?: string;
   center: { lat: number; lng: number };
   markers?: MapMarker[];
+  /** 확대 수준 — 카카오 level 호환(1=최대 확대). MapLibre zoom(≈19-level)으로 변환. */
   level?: number;
   className?: string;
   style?: React.CSSProperties;
-  /** 키 없을 때 일러스트 지도 프리뷰의 수거지(가게) 라벨. */
+  /** styleUrl 없을 때 일러스트 지도 프리뷰의 수거지(가게) 라벨. */
   pickupLabel?: string;
-  /** 키 없을 때 프리뷰에 표시할 ETA 라벨(예 "12분 후 도착"). 실제 rider-location 데이터가 있을 때만 전달. */
+  /** 프리뷰에 표시할 ETA 라벨(예 "12분 후 도착"). 실제 rider-location 데이터가 있을 때만 전달. */
   etaLabel?: string;
 }
 
-const SDK_SCRIPT_ID = "oilpick-kakao-maps-sdk";
-
-function loadKakaoMapsSdk(apiKey: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (window.kakao?.maps) {
-      resolve();
-      return;
-    }
-    const existing = document.getElementById(SDK_SCRIPT_ID) as HTMLScriptElement | null;
-    if (existing) {
-      existing.addEventListener("load", () => resolve());
-      existing.addEventListener("error", () => reject(new Error("kakao maps sdk load failed")));
-      return;
-    }
-    const script = document.createElement("script");
-    script.id = SDK_SCRIPT_ID;
-    script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${apiKey}&autoload=false`;
-    script.async = true;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error("kakao maps sdk load failed"));
-    document.head.appendChild(script);
-  });
+/** {z}/{x}/{y} 템플릿이면 인라인 래스터 스타일로, 아니면 스타일 URL 그대로. */
+function resolveStyle(styleUrl: string): string | Record<string, unknown> {
+  if (styleUrl.includes("{z}")) {
+    return {
+      version: 8,
+      sources: {
+        base: { type: "raster", tiles: [styleUrl], tileSize: 256 },
+      },
+      layers: [{ id: "base", type: "raster", source: "base" }],
+    };
+  }
+  return styleUrl;
 }
 
-/** 카카오키 없을 때의 "지도 미리보기" 일러스트(장식용, 실좌표 아님). */
+/** styleUrl 없을 때의 "지도 미리보기" 일러스트(장식용, 실좌표 아님). */
 function MapPreview() {
   const green = colors.primary.DEFAULT;
   const amber = colors.accent.DEFAULT;
@@ -141,7 +121,7 @@ function ClockIcon() {
 }
 
 export function MapView({
-  apiKey,
+  styleUrl,
   center,
   markers = [],
   level = 3,
@@ -154,41 +134,44 @@ export function MapView({
   const [status, setStatus] = useState<"idle" | "ready" | "placeholder">("idle");
 
   useEffect(() => {
-    if (!apiKey) {
+    if (!styleUrl) {
       setStatus("placeholder");
       return;
     }
     let cancelled = false;
-    loadKakaoMapsSdk(apiKey)
-      .then(() => {
-        if (cancelled) return;
-        window.kakao?.maps.load(() => {
-          if (cancelled || !containerRef.current) return;
-          const kakao = window.kakao;
-          if (!kakao) return;
-          const map = new kakao.maps.Map(containerRef.current, {
-            center: new kakao.maps.LatLng(center.lat, center.lng),
-            level,
-          });
-          markers.forEach((marker) => {
-            const markerInstance = new kakao.maps.Marker({
-              position: new kakao.maps.LatLng(marker.lat, marker.lng),
-            });
-            markerInstance.setMap(map);
-          });
-          setStatus("ready");
+    let map: { remove: () => void } | null = null;
+    (async () => {
+      try {
+        // css는 실지도 경로에서만 로드(프리뷰 폴백 앱은 maplibre 청크 자체를 안 받는다).
+        const [{ default: maplibregl }] = await Promise.all([
+          import("maplibre-gl"),
+          import("maplibre-gl/dist/maplibre-gl.css"),
+        ]);
+        if (cancelled || !containerRef.current) return;
+        map = new maplibregl.Map({
+          container: containerRef.current,
+          style: resolveStyle(styleUrl) as never,
+          center: [center.lng, center.lat],
+          zoom: Math.min(19, Math.max(3, 19 - level)),
         });
-      })
-      .catch(() => {
+        markers.forEach((marker) => {
+          new maplibregl.Marker({ color: colors.primary.DEFAULT })
+            .setLngLat([marker.lng, marker.lat])
+            .addTo(map as never);
+        });
+        setStatus("ready");
+      } catch {
+        // 모듈 로드 실패·WebGL 미지원 등 — 프리뷰 폴백(크래시 금지)
         if (!cancelled) setStatus("placeholder");
-      });
+      }
+    })();
     return () => {
       cancelled = true;
+      map?.remove();
     };
     // center/markers/level은 최초 로드 시점 값만 사용(초기 마운트 1회 렌더) — 이후 변경은
-    // 이 SDK 로드 이펙트를 재실행하지 않는다. eslint-plugin-react-hooks가 이 워크스페이스
-    // preset에 등록돼 있지 않아 exhaustive-deps 억제 주석은 불필요.
-  }, [apiKey]);
+    // 이 로드 이펙트를 재실행하지 않는다(카카오 구현과 동일 계약).
+  }, [styleUrl]);
 
   if (status === "placeholder") {
     return (
@@ -276,6 +259,7 @@ export function MapView({
       style={{
         minHeight: 200,
         borderRadius: radius.card,
+        overflow: "hidden",
         backgroundColor: gray[100],
         ...style,
       }}

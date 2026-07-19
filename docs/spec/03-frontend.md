@@ -51,7 +51,7 @@ spacing: 4px 그리드. 터치 타깃 최소 48px. radius: 카드 16px, 버튼 1
 `PriceCard`(현재가+등락+스파크라인), `OrderTimeline`(상태 스텝퍼, 세로형),
 `CallCard`(거리/수량/수거비), `PointBalanceCard`(available 크게, held는 "지급 확정 대기 nP" 보조 표기),
 `BigButton`(높이 56px CTA), `QtyStepper`(통/kg 토글), `BottomSheet`, `TabBar`, `Toast`,
-`EmptyState`, `PhotoUploader`(카메라 촬영 전용, Capacitor Camera), `MapView`(카카오맵 래퍼),
+`EmptyState`, `PhotoUploader`(카메라 촬영 전용, Capacitor Camera), `MapView`(MapLibre GL 래퍼 — 11-map-renderer.md M8, 타일 env 게이트·프리뷰 폴백),
 `StatusBadge`, `LedgerList`(원장 행: 타입 한글 라벨 + 부호 색상)
 
 - **[07 F7/F9]** `PriceChart`(순수 SVG 라인+영역, 스크럽, 기간 토글 7/30/90) 신설. `OrderTimeline` HAPPY_PATH를 `[REQUESTED,ACCEPTED,ARRIVED,COMPLETED]`로 교체(PICKED_UP/DELIVERED은 레거시 조건부). `CallCard`는 "수거비"→"쿠폰 N장 소진"+"예상 매입 지급액". `PointBalanceCard`/`LedgerList`는 쿠폰 잔액/원장으로 일반화 재사용. tokens.ts에 `surfaceDark`/차트 색/타입스케일/모션 토큰 확장.
@@ -199,7 +199,7 @@ Realtime: `pickup_orders` 자기 행 UPDATE 구독으로 상태 자동 갱신 (�
 - 딥링크: `oilpick-user://orders/:id`, `oilpick-user://ref/:code`(09 H3 추천 랜딩), `oilpick-rider://calls/:id` — 푸시 link 필드와 매핑
 - 추천 링크(웹): Edge(referral-code)가 `REFERRAL_BASE_URL`(Supabase 시크릿, 미설정 시 core `REFERRAL_LINK_BASE`=`https://app.oilpick.kr`)로 `${base}/ref/<CODE>`를 조립해 shareUrl로 반환 — 앱은 서버가 준 shareUrl을 그대로 표시(앱 env로 별도 조립 안 함)
 - iOS Info.plist: 위치(사용 중), 카메라 사용 사유 문구. rider는 위치 "항상 허용" 요구하지 않음(운행 화면 활성 시만)
-- 환경변수: `.env.development` / `.env.production` (VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, VITE_KAKAO_KEY)
+- 환경변수: `.env.development` / `.env.production` (VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, VITE_MAP_STYLE_URL — MapLibre 타일, 11 M8; user만 VITE_KAKAO_KEY — 주소검색)
 
 ## 공통 규칙
 - 데이터 fetching: TanStack Query. queryKey 컨벤션 `['orders', id]`, `['balance', userId]` 등.

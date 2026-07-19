@@ -119,7 +119,9 @@ supabase secrets set FCM_SERVICE_ACCOUNT="$(cat fcm-service-account.json)"
 - **환경변수**(Production + Preview):
   - `VITE_SUPABASE_URL` = `https://<ref>.supabase.co`
   - `VITE_SUPABASE_ANON_KEY` = anon(publishable) key
-  - `VITE_KAKAO_KEY` = 카카오 JS 앱 키(선택 — 없으면 MapView는 일러스트 프리뷰, 주소검색 수동입력 폴백)
+  - `VITE_MAP_STYLE_URL` = MapLibre 타일(스타일 JSON URL 또는 {z}/{x}/{y} 래스터 템플릿 — VWorld 권장,
+    11-map-renderer.md M8. 선택 — 없으면 MapView는 일러스트 프리뷰)
+  - (user만) `VITE_KAKAO_KEY` = 카카오 JS 앱 키(주소검색용. 선택 — 없으면 수동입력 폴백)
   - (user만, 선택 — 09) `VITE_APP_STORE_URL` / `VITE_PLAY_STORE_URL` = 추천 랜딩(/ref/:code)의 스토어
     버튼 링크. 미설정 시 버튼 비노출(스토어 출시 후 설정).
   - (rider `VITE_PG_PROVIDER`는 08 피벗 — 쿠폰 결제 폐기 — 으로 불필요. 남아 있어도 무시된다.)
