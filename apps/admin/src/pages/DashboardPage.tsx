@@ -1,6 +1,6 @@
 import { MapView, type MapMarker } from "@oilpick/ui";
 import { ORDER_STATUS_LABEL, formatKrw, formatPoint, type OrderStatus } from "@oilpick/core";
-import { KAKAO_KEY } from "../lib/env";
+import { MAP_STYLE_URL } from "../lib/env";
 import { useDashboardKpi, useDashboardOrders, useDashboardRiders } from "../hooks/useDashboard";
 import { OrderStatusPill } from "../components/OrderStatusPill";
 import { QueryError } from "../components/QueryError";
@@ -20,8 +20,8 @@ function KpiCard({ label, value, accent = false }: { label: string; value: strin
  * 03-frontend.md apps/admin "/" + 07 F10-④ KPI 개정: "카카오맵 전체 지도(진행중 주문 핀 +
  * 온라인 라이더 핀, Realtime) + 오늘 KPI(주문수/수거kg/쿠폰 판매액/소진 쿠폰/활성 라이더/
  * 현금 거래액 — 포인트 카드 제거)". 04-tasks.md T11 지시사항:
- * "카카오키 없으니 packages/ui MapView 재사용, 리스트 형태 보조 표시도 병행해도 됨".
- * 카카오 키가 없는 이 개발 환경에서는 MapView가 placeholder를 렌더하므로, 핀 정보를 확인할 수
+ * "packages/ui MapView 재사용, 리스트 형태 보조 표시도 병행해도 됨".
+ * 타일(VITE_MAP_STYLE_URL)이 없는 이 개발 환경에서는 MapView가 placeholder를 렌더하므로, 핀 정보를 확인할 수
  * 있도록 리스트를 항상 병행 표시한다.
  */
 export function DashboardPage() {
@@ -78,7 +78,7 @@ export function DashboardPage() {
       <div className="rounded-card bg-white p-5 shadow-card">
         <h2 className="mb-3 text-lg font-semibold text-gray-900">실시간 지도</h2>
         <MapView
-          apiKey={KAKAO_KEY}
+          styleUrl={MAP_STYLE_URL}
           center={SEOUL_CENTER}
           markers={[...orderMarkers, ...riderMarkers]}
           level={7}
