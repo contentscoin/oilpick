@@ -96,9 +96,13 @@
 
 ## M8. 실행 계획 → 구현 완료 (2026-07-19)
 1. [x] 스펙 개정: CLAUDE.md 스택 항목·03-frontend.md MapView 절·.env.example 3종·DEPLOY.md env 표.
-2. [ ] **VWorld 키 발급·도메인 등록**(사용자 액션) → `VITE_MAP_STYLE_URL` 설정 시 실지도 활성화.
-   래스터 예: `https://api.vworld.kr/req/wmts/1.0.0/{키}/Base/{z}/{y}/{x}.png` (템플릿은 {z}/{x}/{y}
-   표기로 입력 — MapView가 인라인 래스터 스타일로 감싼다).
+2. [ ] **VWorld 인증키 발급·서비스 URL 등록**(사용자 액션) → `VITE_MAP_STYLE_URL` 설정 시 실지도 활성화.
+   래스터 템플릿: `https://api.vworld.kr/req/wmts/1.0.0/<인증키>/Base/{z}/{y}/{x}.png` — VWorld WMTS는
+   경로가 z/**y**/x 순서다. 플레이스홀더는 이름으로 치환되므로 이 순서 그대로 넣으면 되고, MapView가
+   `{z}` 포함 여부로 템플릿을 감지해 인라인 래스터 스타일로 감싼다. 레이어: Base(일반)/gray/midnight/
+   Satellite/Hybrid. 발급 절차: vworld.kr 회원가입 → 오픈API → 인증키 발급(서비스 URL·목적 입력,
+   승인 후 활성) — 등록 URL과 다른 도메인 요청은 거부될 수 있으니 Vercel 3앱 도메인(+로컬 개발
+   http://localhost:5173)을 등록한다.
 3. [x] `MapView` 내부 MapLibre 재구현(prop 인터페이스 유지: `apiKey` → `styleUrl`만 교체, center/markers/
    level/pickupLabel/etaLabel 불변). maplibre-gl dynamic import + 실패·WebGL 미지원 시 프리뷰 폴백.
 4. [ ] 라우팅 폴리라인(카카오모빌리티 Directions)은 M9-b에서.
