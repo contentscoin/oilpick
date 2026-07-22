@@ -63,6 +63,10 @@ async function completeSignupFlow() {
   fireEvent.change(screen.getByTestId("store-name-input"), { target: { value: "행복식당" } });
   fireEvent.change(screen.getByTestId("biz-number-input"), { target: { value: "123-45-67890" } });
   fireEvent.change(screen.getByTestId("address-input"), { target: { value: "서울시 강서구" } });
+  // 12 S2: 좌표 미확정이면 [가입 완료]가 잠긴다 — 수동 좌표로 확정한다.
+  fireEvent.click(screen.getByTestId("address-manual-coords-toggle"));
+  fireEvent.change(screen.getByTestId("address-lat-input"), { target: { value: "37.55" } });
+  fireEvent.change(screen.getByTestId("address-lng-input"), { target: { value: "126.85" } });
   fireEvent.click(screen.getByTestId("create-profile-button"));
 }
 
@@ -161,6 +165,9 @@ describe("AuthPage", () => {
     fireEvent.change(screen.getByTestId("store-name-input"), { target: { value: "행복식당" } });
     fireEvent.change(screen.getByTestId("biz-number-input"), { target: { value: "123-45-67890" } });
     fireEvent.change(screen.getByTestId("address-input"), { target: { value: "서울시 강서구" } });
+    fireEvent.click(screen.getByTestId("address-manual-coords-toggle"));
+    fireEvent.change(screen.getByTestId("address-lat-input"), { target: { value: "37.55" } });
+    fireEvent.change(screen.getByTestId("address-lng-input"), { target: { value: "126.85" } });
 
     fireEvent.click(screen.getByTestId("create-profile-button"));
 

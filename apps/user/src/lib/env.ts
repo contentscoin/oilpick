@@ -9,3 +9,13 @@ export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 export const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 export const KAKAO_KEY: string | undefined = import.meta.env.VITE_KAKAO_KEY || undefined;
 export const MAP_STYLE_URL: string | undefined = import.meta.env.VITE_MAP_STYLE_URL || undefined;
+
+/**
+ * VWorld 인증키 — 주소→좌표 지오코딩(12 S2 AddressField)에 사용. 별도 env가 없으면
+ * MAP_STYLE_URL(VWorld WMTS 타일 URL)에 박힌 키를 추출해 재사용한다(사용자가 env를 한 번만
+ * 넣게). 둘 다 없으면 undefined — 지오코딩은 수동 좌표 입력으로 강등된다.
+ */
+export const VWORLD_KEY: string | undefined =
+  import.meta.env.VITE_VWORLD_KEY ||
+  MAP_STYLE_URL?.match(/\/wmts\/1\.0\.0\/([^/]+)\//)?.[1] ||
+  undefined;

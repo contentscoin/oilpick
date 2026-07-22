@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { colors, inputClassName, inputStyle } from "@oilpick/ui";
-import { KAKAO_KEY } from "../lib/env";
+import { openPostcodeSearch } from "../lib/daumPostcode";
+import { geocodeAddress } from "../lib/geocode";
 
 export interface AddressValue {
   address: string;
-  lat: number;
-  lng: number;
+  /** 좌표. 미확정(검색/지오코딩 전, 지오코딩 실패)이면 null — 제출 게이트가 이를 막는다. */
+  lat: number | null;
+  lng: number | null;
 }
 
 export interface AddressFieldProps {
@@ -14,42 +16,96 @@ export interface AddressFieldProps {
 }
 
 /**
- * U2 가입 화면의 주소 입력. 03-frontend.md: "주소는 카카오 주소검색 → 지도핀 미세조정 →
- * lat/lng 저장". 이 개발 환경에는 카카오 주소검색(Daum Postcode) API 키가 없다
- * (04-tasks.md 질문 목록에 기록 — MapView와 동일 패턴). VITE_KAKAO_KEY가 없으면 수동 텍스트
- * 입력 필드로 폴백하고, 위/경도는 기본값(집하장 인근 좌표)을 유지한 채 사용자가 필요하면
- * 직접 숫자로 조정할 수 있게 한다. 실제 키가 주입되면 이 컴포넌트를 Daum Postcode 위젯
- * 호출로 교체해야 한다(현재는 그 호출부만 없고 폴백 UI가 항상 쓰인다).
+ * U2 가입/수거요청의 매장 주소 입력(12 S2 재구현). 03-frontend.md: "주소 검색 → 좌표 저장".
+ * - [주소 검색]: Daum 우편번호 위젯(API 키 불필요) → 도로명 주소 선택.
+ * - 좌표: 선택한 주소를 VWorld Geocoder(VWORLD_KEY/MAP_STYLE_URL에서 키 재사용)로 변환.
+ * - 지오코딩 실패·위젯 로드 실패: 주소 텍스트 직접 입력 + 위/경도 수동 입력으로 강등.
+ * 좌표가 확정되기 전(lat/lng null)에는 호출부가 제출을 막는다 — 기본 좌표 저장(데이터 오염)
+ * 을 근본 차단한다(구현 전에는 카카오 키 유무로 UI가 사라지거나 기본 좌표가 저장됐다).
  */
 export function AddressField({ value, onChange }: AddressFieldProps) {
+  const [searching, setSearching] = useState(false);
   const [manualCoords, setManualCoords] = useState(false);
-  const hasKakaoKey = Boolean(KAKAO_KEY);
+  const [geocodeFailed, setGeocodeFailed] = useState(false);
 
-  if (hasKakaoKey) {
-    // 실제 키가 있는 배포 환경을 위한 자리 — 카카오 주소검색 SDK 연동은 키 발급 후 구현.
-    // 지금 이 분기로 들어올 일은 없다(VITE_KAKAO_KEY가 항상 비어있는 개발 환경).
-    return null;
+  const coordsConfirmed = value.lat != null && value.lng != null;
+
+  async function handleSearch() {
+    setSearching(true);
+    setGeocodeFailed(false);
+    try {
+      const picked = await openPostcodeSearch();
+      if (!picked) return; // 취소 또는 위젯 로드 실패
+      const point = await geocodeAddress(picked);
+      if (point) {
+        onChange({ address: picked, lat: point.lat, lng: point.lng });
+        setManualCoords(false);
+      } else {
+        // 주소는 확정, 좌표만 실패 → 수동 좌표 입력 유도(기본 좌표 저장 금지).
+        onChange({ address: picked, lat: null, lng: null });
+        setGeocodeFailed(true);
+        setManualCoords(true);
+      }
+    } finally {
+      setSearching(false);
+    }
   }
 
   return (
-    <div data-testid="address-field-fallback" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+    <div data-testid="address-field" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       <label htmlFor="address-input" style={{ fontSize: 14, fontWeight: 600 }}>
         매장 주소
       </label>
-      <p style={{ margin: 0, fontSize: 12, color: colors.status.wait }}>
-        카카오 주소검색을 사용할 수 없어 직접 입력으로 대체돼요.
-      </p>
-      <input
-        id="address-input"
-        data-testid="address-input"
-        type="text"
-        required
-        placeholder="예: 서울특별시 강서구 오반장로 1"
-        value={value.address}
-        onChange={(e) => onChange({ ...value, address: e.target.value })}
-        className={inputClassName}
-        style={inputStyle}
-      />
+
+      <div style={{ display: "flex", gap: 8 }}>
+        <input
+          id="address-input"
+          data-testid="address-input"
+          type="text"
+          required
+          placeholder="예: 서울특별시 강서구 오반장로 1"
+          value={value.address}
+          // 주소를 손으로 고치면 좌표는 다시 미확정(검색으로 재확정 필요) — 오염 방지.
+          onChange={(e) => onChange({ address: e.target.value, lat: null, lng: null })}
+          className={inputClassName}
+          style={{ ...inputStyle, flex: 1 }}
+        />
+        <button
+          type="button"
+          data-testid="address-search-button"
+          onClick={handleSearch}
+          disabled={searching}
+          style={{
+            flexShrink: 0,
+            minHeight: 44,
+            padding: "0 16px",
+            borderRadius: 12,
+            border: "none",
+            backgroundColor: colors.primary.DEFAULT,
+            color: "#fff",
+            fontWeight: 700,
+            fontSize: 14,
+            cursor: searching ? "default" : "pointer",
+            opacity: searching ? 0.6 : 1,
+          }}
+        >
+          {searching ? "검색 중…" : "주소 검색"}
+        </button>
+      </div>
+
+      {/* 좌표 확정 상태 표기 — 확정 전에는 경고, 확정되면 초록 확인. */}
+      {coordsConfirmed ? (
+        <p data-testid="address-coords-confirmed" style={{ margin: 0, fontSize: 12, fontWeight: 600, color: colors.primary.DEFAULT }}>
+          ✓ 지도 위치가 확인됐어요
+        </p>
+      ) : value.address ? (
+        <p data-testid="address-coords-pending" style={{ margin: 0, fontSize: 12, color: colors.status.danger }}>
+          {geocodeFailed
+            ? "주소의 지도 위치를 자동으로 찾지 못했어요. 아래에서 위치를 확인해주세요."
+            : "‘주소 검색’으로 정확한 위치를 확정해주세요."}
+        </p>
+      ) : null}
+
       <button
         type="button"
         data-testid="address-manual-coords-toggle"
@@ -58,7 +114,7 @@ export function AddressField({ value, onChange }: AddressFieldProps) {
           alignSelf: "flex-start",
           background: "none",
           border: "none",
-          color: colors.primary.DEFAULT,
+          color: colors.status.wait,
           fontSize: 13,
           fontWeight: 600,
           cursor: "pointer",
@@ -74,8 +130,9 @@ export function AddressField({ value, onChange }: AddressFieldProps) {
             type="number"
             step="0.0001"
             aria-label="위도"
-            value={value.lat}
-            onChange={(e) => onChange({ ...value, lat: Number(e.target.value) })}
+            placeholder="위도"
+            value={value.lat ?? ""}
+            onChange={(e) => onChange({ ...value, lat: e.target.value === "" ? null : Number(e.target.value) })}
             className={inputClassName}
             style={{ ...inputStyle, flex: 1, fontSize: 14 }}
           />
@@ -84,8 +141,9 @@ export function AddressField({ value, onChange }: AddressFieldProps) {
             type="number"
             step="0.0001"
             aria-label="경도"
-            value={value.lng}
-            onChange={(e) => onChange({ ...value, lng: Number(e.target.value) })}
+            placeholder="경도"
+            value={value.lng ?? ""}
+            onChange={(e) => onChange({ ...value, lng: e.target.value === "" ? null : Number(e.target.value) })}
             className={inputClassName}
             style={{ ...inputStyle, flex: 1, fontSize: 14 }}
           />

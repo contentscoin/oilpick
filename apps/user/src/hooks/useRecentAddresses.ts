@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { parseGeographyPoint } from "@oilpick/core";
 import { supabase } from "../lib/supabaseClient";
 import { queryKeys } from "../lib/queryClient";
 
@@ -13,20 +14,9 @@ export interface RecentAddress {
  * distinct 최근 2건 조회해 칩 탭 시 주소·좌표를 프리필한다. 스키마 무변경 — 본인 주문은
  * RLS(supplier_id = auth.uid())로 조회 가능하다.
  *
- * 좌표는 pickup_location(geography) 컬럼에서 뽑는다. supabase-js/PostgREST는 geography를
- * GeoJSON 객체({type:"Point",coordinates:[lng,lat]})로 직렬화하므로 rider useOpenCalls와 동일
- * 패턴으로 파싱한다(RPC/뷰 없이).
+ * 좌표는 pickup_location(geography)에서 core parseGeographyPoint로 뽑는다(12 S1: EWKB hex·
+ * GeoJSON 겸용 단일 파서). 파싱 실패 행은 스킵.
  */
-function parsePoint(raw: unknown): { lat: number; lng: number } | null {
-  if (raw && typeof raw === "object" && "coordinates" in raw) {
-    const coords = (raw as { coordinates: [number, number] }).coordinates;
-    if (Array.isArray(coords) && coords.length === 2) {
-      return { lat: coords[1], lng: coords[0] };
-    }
-  }
-  return null;
-}
-
 const RECENT_ADDRESS_LIMIT = 2;
 // distinct 2건을 뽑기 위해 최근 완료 주문을 넉넉히 조회한 뒤 클라이언트에서 주소 기준 중복 제거.
 const RECENT_ADDRESS_SCAN = 20;
@@ -51,7 +41,7 @@ export function useRecentAddresses(userId: string | undefined) {
       for (const row of data ?? []) {
         const address = row.pickup_address as string;
         if (!address || seen.has(address)) continue;
-        const point = parsePoint(row.pickup_location);
+        const point = parseGeographyPoint(row.pickup_location);
         if (!point) continue;
         seen.add(address);
         result.push({ address, lat: point.lat, lng: point.lng });

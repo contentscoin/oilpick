@@ -39,9 +39,15 @@ order-create), 지급수단 선택, 포인트 적립, 출금, 레퍼럴 전 기�
   URL에 vercel.app 3도메인 등록**이 안 되면 타일 403 → 회색 지도(11-map-renderer.md M8-2).
 - `FCM_SERVICE_ACCOUNT` 미설정 → 푸시 무발송(no-op, 알림 테이블만 기록). 실푸시는 키 설정 후.
 
-## 계층 1 — P1 코드 결함 (확정 — 즉시 수정 대상)
+## 계층 1 — P1 코드 결함 (✅ 수정 완료 — 2026-07-22)
 
-### S1. PostGIS 좌표 파싱 — GeoJSON 가정의 죽은 분기 3곳 【P1】
+### S1. PostGIS 좌표 파싱 — GeoJSON 가정의 죽은 분기 3곳 【P1 ✅ 완료】
+**구현**: core `parseGeographyPoint`(hex EWKB·GeoJSON 겸용) 단일 파서로 통일, 4개 호출부
+(useOpenCalls·useRecentAddresses·useDepotsAdmin·useDashboard) 교체, (0,0) 폴백 제거→null 강등.
+CallCard 거리 nullable("—"), CallHomePage 거리정렬·CallDetailPage 지도 센터 null 처리. 회귀
+테스트(core geo 3케이스 + CallCard null). 아래는 원 진단 기록.
+
+### S1(원 진단). PostGIS 좌표 파싱 — GeoJSON 가정의 죽은 분기 3곳 【P1】
 실제 Supabase REST(PostgREST)는 geography(point)를 **WKB hex 문자열**("0101000020E610…")로
 반환한다 — `apps/admin/src/hooks/useDashboard.ts:205`의 주석에 로컬 스택 curl 실증 기록이 있다.
 그런데 3개 훅이 GeoJSON 객체(`{coordinates:[lng,lat]}`)만 처리한다(죽은 분기):
@@ -63,7 +69,16 @@ order-create), 지급수단 선택, 포인트 적립, 출금, 레퍼럴 전 기�
 **수용 기준**: 로컬 스택(또는 pg-harness + PostgREST 계약 픽스처)에서 실제 hex 응답으로 콜
 목록 좌표·거리·최근 주소·대시보드 핀이 정상 값.
 
-### S2. AddressField — 주소검색 미구현 분기 【P1, 가입 크리티컬】
+### S2. AddressField — 주소검색 미구현 분기 【P1 ✅ 완료】
+**구현**: `if (hasKakaoKey) return null` 죽은 분기 제거 — 항상 동작하는 주소 입력 렌더.
+[주소 검색] = Daum 우편번호 위젯(무키, `lib/daumPostcode.ts`) → VWorld Geocoder
+(`lib/geocode.ts`, `VWORLD_KEY`는 env 또는 MAP_STYLE_URL에서 추출) → 좌표 확정. 실패·위젯
+미로드 시 수동 좌표 입력 폴백. **좌표 미확정(lat/lng null)이면 RequestPage `다음`·AuthPage
+`가입 완료` 버튼이 잠긴다 → 기본 좌표 저장(데이터 오염) 근본 차단.** 주소를 손으로 고치면
+좌표 재확정 필요(오염 방지). 테스트: AddressField 6·RequestPage 게이트·AuthPage 좌표 게이트.
+아래는 원 진단 기록.
+
+### S2(원 진단). AddressField — 주소검색 미구현 분기 【P1, 가입 크리티컬】
 `apps/user/src/components/AddressField.tsx:28`: `if (hasKakaoKey) return null;` — **카카오 키가
 설정된 프로덕션에서는 가입 화면의 주소 입력 UI가 통째로 사라진다**(연동 미구현 자리표시).
 키가 없으면 수동 폴백이 뜨지만 **기본 좌표(집하장 인근)가 그대로 저장** — 매장 실좌표가 아닌
@@ -81,13 +96,14 @@ order-create), 지급수단 선택, 포인트 적립, 출금, 레퍼럴 전 기�
 
 ## 계층 2 — P2 미구현·열화 (스펙 약속 대비)
 
-### S3. user 주문상세 — 라이더 위치 실시간·지도 실좌표 【P2】
-`apps/user/src/pages/OrderDetailPage.tsx`: ① 지도 센터가 하드코딩(마곡) — 주문의
-pickup_location을 파싱해 실좌표 센터+핀으로. ② 03-frontend U7이 약속한 "라이더 위치 Realtime"
-미배선(주석으로 유예) — rider-location이 갱신하는 `rider_profiles.last_location`을
-postgres_changes로 구독(배정 라이더 row, RLS p_rider_read_assigned 확인)해 지도에 라이더
-마커 표시. ③ placeholder의 데모 ETA("12분 후 도착") 제거 — 실데이터 없으면 미표기(00-domain
-"장식 프리뷰에 임의 시간 표기 금지" 원칙 정합). 11-map-renderer M9-b(경로선·ETA)의 전 단계.
+### S3. user 주문상세 — 지도 실좌표 + 데모 ETA 제거 【일부 완료】
+✅ **완료**: ① 지도 센터를 주문 `pickup_location` 파싱 실좌표(+핀)로 교체(useOrder에
+pickupLat/Lng 추가, core 파서). ③ 데모 ETA("12분 후 도착") 제거 — 00-domain "장식 프리뷰에
+임의 시간 표기 금지" 정합.
+⏳ **후속(M9-b)**: ② 라이더 위치 Realtime — rider-location이 갱신하는
+`rider_profiles.last_location`을 postgres_changes로 구독(배정 라이더 row, RLS
+p_rider_read_assigned 확인)해 지도에 라이더 마커 표시 + 실 ETA. 카카오모빌리티 라우팅과 함께
+11-map-renderer M9-b에서 진행.
 
 ### S4. rider 콜 목록/상세 — S1 후 실측 검증 【P2】
 S1 수정 후: 거리순 정렬·거리 표기·콜 상세 지도 센터·M9-a 내비 딥링크 좌표를 로컬 스택

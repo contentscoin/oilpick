@@ -40,7 +40,8 @@ type Step = 1 | 2 | 3;
 type CanSize = "18" | "10" | "etc";
 type TimeChip = "now" | "todayPM" | "tomorrowAM" | "custom";
 
-const DEFAULT_ADDRESS: AddressValue = { address: "", lat: 37.5509, lng: 126.8225 };
+// 좌표는 주소 검색·지오코딩으로 확정되기 전까지 null(12 S2 — 기본 좌표 저장 금지).
+const DEFAULT_ADDRESS: AddressValue = { address: "", lat: null, lng: null };
 
 const CAN_SIZE_OPTIONS: { value: CanSize; label: string; liters: number | null }[] = [
   { value: "18", label: "18L 말통", liters: 18 },
@@ -350,7 +351,12 @@ export function RequestPage() {
 
           <BigButton
             data-testid="request-step-2-next"
-            disabled={!address.address || (timeChip === "custom" && !customTime)}
+            disabled={
+              !address.address ||
+              address.lat == null ||
+              address.lng == null ||
+              (timeChip === "custom" && !customTime)
+            }
             onClick={() => setStep(3)}
           >
             다음

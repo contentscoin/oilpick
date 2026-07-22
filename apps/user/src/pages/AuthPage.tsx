@@ -47,10 +47,11 @@ async function attachStoredReferral(): Promise<void> {
 type Step = "PHONE" | "CODE" | "PROFILE";
 
 /** 기본 위/경도: 카카오 주소검색 키가 없을 때의 기본값(집하장 인근, 서울 강서구). */
+// 좌표는 주소 검색·지오코딩으로 확정되기 전까지 null(12 S2 — 기본 좌표 저장 금지).
 const DEFAULT_ADDRESS: AddressValue = {
   address: "",
-  lat: 37.5509,
-  lng: 126.8225,
+  lat: null,
+  lng: null,
 };
 
 export function AuthPage() {
@@ -308,7 +309,12 @@ export function AuthPage() {
             />
           </div>
           <AddressField value={addressValue} onChange={setAddressValue} />
-          <BigButton type="submit" loading={loading} data-testid="create-profile-button">
+          <BigButton
+            type="submit"
+            loading={loading}
+            disabled={addressValue.lat == null || addressValue.lng == null}
+            data-testid="create-profile-button"
+          >
             가입 완료
           </BigButton>
         </form>
