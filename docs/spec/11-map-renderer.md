@@ -102,7 +102,9 @@
    `{z}` 포함 여부로 템플릿을 감지해 인라인 래스터 스타일로 감싼다. 레이어: Base(일반)/gray/midnight/
    Satellite/Hybrid. 발급 절차: vworld.kr 회원가입 → 오픈API → 인증키 발급(서비스 URL·목적 입력,
    승인 후 활성) — 등록 URL과 다른 도메인 요청은 거부될 수 있으니 Vercel 3앱 도메인(+로컬 개발
-   http://localhost:5173)을 등록한다.
+   http://localhost:5173)을 등록한다. 키 유형: **개발키**(유효 6개월·3회 연장)로 개발/데모 충분,
+   **정식 런칭 시 운영키**(유효 2년)로 전환(env 키 문자열 교체+재배포만 — 코드 변경 0.
+   launch-plan 체크리스트 참조). 2026-07-22 개발키 발급됨.
 3. [x] `MapView` 내부 MapLibre 재구현(prop 인터페이스 유지: `apiKey` → `styleUrl`만 교체, center/markers/
    level/pickupLabel/etaLabel 불변). maplibre-gl dynamic import + 실패·WebGL 미지원 시 프리뷰 폴백.
 4. [ ] 라우팅 폴리라인(카카오모빌리티 Directions)은 M9-b에서.

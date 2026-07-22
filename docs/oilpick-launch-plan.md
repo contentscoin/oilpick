@@ -38,7 +38,8 @@ Supabase (Postgres + PostGIS + Realtime + Edge Functions + Storage), FCM/APNs, �
 - [ ] Apple Developer Program 등록 (사업자, 심사 1–2주 소요 → 즉시 신청)
 - [ ] Google Play Console 등록
 - [ ] Supabase 프로젝트 생성 (dev / prod 2개)
-- [ ] Firebase 프로젝트 (FCM), 카카오 개발자 앱 등록 (지도/로그인)
+- [ ] Firebase 프로젝트 (FCM), 카카오 개발자 앱 등록 (주소검색/로그인 — 지도 렌더러는 MapLibre+VWorld로 전환, 11-map-renderer.md)
+- [x] VWorld 인증키 발급(개발키 — 2026-07-22, 유효 6개월·3회 연장 가능). **런칭 시 운영키(유효 2년) 전환** + 실 도메인 서비스 URL 등록. 만료 시 지도 타일이 조용히 거부되므로 만료일 캘린더 등록
 - [ ] 도메인: oilpick.co.kr / oilpick.kr 확보
 - [ ] GitHub 저장소 + CI (GitHub Actions: lint, test, 빌드)
 
