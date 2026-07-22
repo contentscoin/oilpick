@@ -34,11 +34,19 @@ function renderPage() {
   );
 }
 
+/** 12 S2: 주소만으론 좌표가 미확정이라 step2 next가 잠긴다 — 수동 좌표 입력으로 확정한다. */
+function fillAddressCoords(lat = "37.5", lng = "127") {
+  fireEvent.click(screen.getByTestId("address-manual-coords-toggle"));
+  fireEvent.change(screen.getByTestId("address-lat-input"), { target: { value: lat } });
+  fireEvent.change(screen.getByTestId("address-lng-input"), { target: { value: lng } });
+}
+
 function goToStep3(overrides?: { address?: string }) {
   fireEvent.click(screen.getByTestId("request-step-1-next"));
   fireEvent.change(screen.getByTestId("address-input"), {
     target: { value: overrides?.address ?? "서울시 강서구 오반장로 1" },
   });
+  fillAddressCoords();
   fireEvent.click(screen.getByTestId("request-step-2-next"));
 }
 
@@ -124,6 +132,7 @@ describe("RequestPage", () => {
     renderPage();
     fireEvent.click(screen.getByTestId("request-step-1-next"));
     fireEvent.change(screen.getByTestId("address-input"), { target: { value: "서울시 강서구 1" } });
+    fillAddressCoords();
     fireEvent.click(screen.getByTestId("preferred-time-tomorrowAM"));
     fireEvent.click(screen.getByTestId("request-step-2-next"));
     fireEvent.click(screen.getByTestId("request-submit"));

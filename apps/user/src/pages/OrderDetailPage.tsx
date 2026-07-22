@@ -254,16 +254,24 @@ export function OrderDetailPage() {
         </section>
       )}
 
-      {/* 목업 요소 순서: 지도 → 라이더 카드 → 정보 스탯 카드 → 타임라인.
-          VITE_MAP_STYLE_URL이 있으면 실지도(MapLibre)가 뜨고 아래 etaLabel은 무시된다. 미설정 시에만 목업의 지도
-          영역을 재현하는 "지도 미리보기"(장식)가 렌더되며, 이때 ETA는 데모 표기다. 실제 rider-location
-          기반 ETA 계산은 후속 작업 — 그때 이 데모 문자열을 실ETA로 교체한다. */}
+      {/* 지도 → 라이더 카드 → 정보 스탯 카드 → 타임라인.
+          12 S3: 지도 센터는 주문의 실제 수거지 좌표(pickup_location 파싱)를 쓴다. 좌표가 없으면
+          서울 기본 센터로 프리뷰. 데모 ETA("12분 후 도착")는 제거했다 — 실 rider-location 기반
+          ETA(11 M9-b)가 붙기 전까지 가짜 시간을 표기하지 않는다(00-domain 원칙). */}
       {showMapAndTimeline && (
         <MapView
           styleUrl={MAP_STYLE_URL}
-          center={{ lat: 37.5509, lng: 126.8225 }}
+          center={
+            order.pickupLat != null && order.pickupLng != null
+              ? { lat: order.pickupLat, lng: order.pickupLng }
+              : { lat: 37.5665, lng: 126.978 }
+          }
+          markers={
+            order.pickupLat != null && order.pickupLng != null
+              ? [{ lat: order.pickupLat, lng: order.pickupLng }]
+              : []
+          }
           pickupLabel={order.pickupAddress}
-          etaLabel="12분 후 도착"
           style={{ minHeight: 220 }}
         />
       )}

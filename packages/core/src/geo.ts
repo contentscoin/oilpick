@@ -1,11 +1,19 @@
-// 좌표 유틸 — PostGIS EWKB 파싱 + 길찾기 앱 딥링크 조립(11-map-renderer.md M9-a).
+// 좌표 유틸 — PostGIS geography 파싱 + 길찾기 앱 딥링크 조립(11-map-renderer.md M9-a).
 // pickup_orders.pickup_location 등 geography(point,4326) 컬럼은 PostgREST(supabase-js)로
-// 읽으면 EWKB hex 문자열로 내려온다. 클라이언트에서 lat/lng이 필요한 곳(지도 센터·내비
-// 딥링크)을 위해 DB 변경 없이 여기서 파싱한다.
+// 읽으면 보통 EWKB hex 문자열로 내려오지만, PostgREST 설정/버전에 따라 GeoJSON
+// 객체({type:"Point",coordinates:[lng,lat]})로 오기도 한다. 12-stabilization.md S1:
+// 두 형태를 겸용 파싱하는 parseGeographyPoint 하나로 앱 전역을 통일한다(호출부별 중복·
+// 죽은 분기·(0,0) 폴백 제거). 클라이언트에서 lat/lng이 필요한 곳(지도 센터·거리·내비)을
+// 위해 DB 변경 없이 여기서 파싱한다.
 
 export interface LatLng {
   lat: number;
   lng: number;
+}
+
+/** 위/경도 범위 유효성 — 파싱 공통 가드. */
+function isValidLatLng(lat: number, lng: number): boolean {
+  return Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
 }
 
 const WKB_POINT = 1;
@@ -30,9 +38,31 @@ export function parseEwkbPoint(hex: string | null | undefined): LatLng | null {
   if (bytes.length < offset + 16) return null;
   const lng = view.getFloat64(offset, littleEndian);
   const lat = view.getFloat64(offset + 8, littleEndian);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+  if (!isValidLatLng(lat, lng)) return null;
   return { lat, lng };
+}
+
+/** GeoJSON Point 객체({coordinates:[lng,lat]}) → {lat,lng}. 형태가 아니면 null. */
+function parseGeoJsonPoint(raw: unknown): LatLng | null {
+  if (!raw || typeof raw !== "object" || !("coordinates" in raw)) return null;
+  const coords = (raw as { coordinates: unknown }).coordinates;
+  if (!Array.isArray(coords) || coords.length < 2) return null;
+  const lng = Number(coords[0]);
+  const lat = Number(coords[1]);
+  if (!isValidLatLng(lat, lng)) return null;
+  return { lat, lng };
+}
+
+/**
+ * PostGIS geography(point) 값을 lat/lng으로 파싱한다 — **앱 전역의 단일 진실**(S1).
+ * PostgREST가 내려주는 두 형태를 모두 수용한다:
+ *  - EWKB/WKB hex 문자열("0101000020E6100000…") → parseEwkbPoint
+ *  - GeoJSON Point 객체({type:"Point",coordinates:[lng,lat]})
+ * 어느 쪽도 아니거나 좌표가 비정상이면 null(호출부는 "좌표 없음"으로 강등 — (0,0) 폴백 금지).
+ */
+export function parseGeographyPoint(raw: unknown): LatLng | null {
+  if (typeof raw === "string") return parseEwkbPoint(raw);
+  return parseGeoJsonPoint(raw);
 }
 
 /**

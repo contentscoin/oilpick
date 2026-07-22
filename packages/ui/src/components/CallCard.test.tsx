@@ -31,6 +31,13 @@ describe("CallCard", () => {
     expect(screen.getByText("서울시 강남구 테헤란로 123")).toBeInTheDocument();
   });
 
+  it("distanceKm이 null이면 '—'로 표시한다(좌표 없음/위치 미확보, 12 S1)", () => {
+    render(<CallCard distanceKm={null} estimatedKg={20} estimatedCash={32000} />);
+    const card = screen.getByTestId("call-card");
+    expect(card).toHaveTextContent("—km");
+    expect(card).not.toHaveTextContent("0.0km");
+  });
+
   it("calls onClick when tapped", () => {
     const onClick = vi.fn();
     render(<CallCard distanceKm={1} estimatedKg={15} estimatedCash={24000} onClick={onClick} />);

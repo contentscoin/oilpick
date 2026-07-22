@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { parseGeographyPoint } from "@oilpick/core";
 import { supabase } from "../lib/supabaseClient";
 import { queryKeys } from "../lib/queryClient";
 
@@ -6,38 +7,11 @@ export interface AdminDepotRow {
   id: string;
   name: string;
   address: string;
-  lat: number;
-  lng: number;
+  /** 좌표 파싱 실패 시 null(12 S1 — (0,0) 폴백 제거). 집하장 화면은 좌표를 표시하지 않아 무해. */
+  lat: number | null;
+  lng: number | null;
   qrSecret: string;
   isActive: boolean;
-}
-
-/**
- * useDashboard.ts parseGeographyPoint와 동일한 이유로 GeoJSON과 WKB hex 둘 다 지원한다
- * (이 환경의 PostgREST 실측 응답은 WKB hex — useDashboard.ts 주석 참고).
- */
-function parsePoint(raw: unknown): { lat: number; lng: number } {
-  if (raw && typeof raw === "object" && "coordinates" in raw) {
-    const coords = (raw as { coordinates: [number, number] }).coordinates;
-    return { lat: coords[1], lng: coords[0] };
-  }
-  if (typeof raw === "string" && /^[0-9a-fA-F]+$/.test(raw) && raw.length >= 50) {
-    try {
-      const byteLen = raw.length / 2;
-      const buf = new Uint8Array(byteLen);
-      for (let i = 0; i < byteLen; i++) {
-        buf[i] = parseInt(raw.substring(i * 2, i * 2 + 2), 16);
-      }
-      const littleEndian = buf[0] === 1;
-      const view = new DataView(buf.buffer);
-      const lng = view.getFloat64(9, littleEndian);
-      const lat = view.getFloat64(17, littleEndian);
-      if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
-    } catch {
-      // fall through to default below
-    }
-  }
-  return { lat: 0, lng: 0 };
 }
 
 /** 03-frontend.md apps/admin "/depots": "CRUD + QR 인쇄 뷰(qr_secret을 QR 이미지로)". */
@@ -51,13 +25,13 @@ export function useAdminDepots() {
         .order("name", { ascending: true });
       if (error) throw error;
       return (data ?? []).map((row) => {
-        const point = parsePoint(row.location);
+        const point = parseGeographyPoint(row.location);
         return {
           id: row.id,
           name: row.name,
           address: row.address,
-          lat: point.lat,
-          lng: point.lng,
+          lat: point?.lat ?? null,
+          lng: point?.lng ?? null,
           qrSecret: row.qr_secret,
           isActive: row.is_active,
         };

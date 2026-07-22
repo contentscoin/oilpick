@@ -11,8 +11,8 @@ import { colors, elevation, gray, radius, surface } from "../tokens";
  * 이 컴포넌트는 계산된 값만 받는다.
  */
 export interface CallCardProps {
-  /** 거리(km). 소수 1자리로 표시. */
-  distanceKm: number;
+  /** 거리(km). 소수 1자리로 표시. null이면 좌표 없음/위치 미확보 — "—"로 표시. */
+  distanceKm: number | null;
   /** 예상 수거량(kg). */
   estimatedKg: number;
   /** 예상 매입 지급액(원) = requested_kg × snapshot_price_per_kg. 현장에서 현금/포인트로 지급. */
@@ -61,7 +61,7 @@ export function CallCard({
           className="oilpick-tabular-nums"
           style={{ fontSize: 22, fontWeight: 800, lineHeight: 1, color: gray[900] }}
         >
-          {distanceKm.toFixed(1)}
+          {distanceKm == null ? "—" : distanceKm.toFixed(1)}
           <span style={{ fontSize: 13, fontWeight: 600, color: colors.status.wait }}>km</span>
         </span>
       </div>

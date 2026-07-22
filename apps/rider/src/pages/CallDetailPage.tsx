@@ -79,8 +79,16 @@ export function CallDetailPage() {
 
       <MapView
         styleUrl={MAP_STYLE_URL}
-        center={{ lat: call.pickupLat, lng: call.pickupLng }}
-        markers={[{ lat: call.pickupLat, lng: call.pickupLng }]}
+        center={
+          call.pickupLat != null && call.pickupLng != null
+            ? { lat: call.pickupLat, lng: call.pickupLng }
+            : { lat: 37.5665, lng: 126.978 }
+        }
+        markers={
+          call.pickupLat != null && call.pickupLng != null
+            ? [{ lat: call.pickupLat, lng: call.pickupLng }]
+            : []
+        }
         pickupLabel={call.pickupAddress}
       />
 

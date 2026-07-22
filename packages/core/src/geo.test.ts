@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { buildKakaoRouteUrl, buildKakaoWebRouteUrl, buildTmapRouteUrl, parseEwkbPoint } from "./geo";
+import {
+  buildKakaoRouteUrl,
+  buildKakaoWebRouteUrl,
+  buildTmapRouteUrl,
+  parseEwkbPoint,
+  parseGeographyPoint,
+} from "./geo";
 
 // PostGIS: select encode(ST_AsEWKB(ST_SetSRID(ST_MakePoint(126.8225, 37.5509), 4326)), 'hex')
 const SEOUL_EWKB = "0101000020E6100000713D0AD7A3B45F40E6AE25E483C64240";
@@ -35,6 +41,31 @@ describe("parseEwkbPoint", () => {
     // lat=95로 조작한 EWKB
     const bad = "0101000020E6100000" + "0000000000C05F40" + "0000000000C05740"; // lng=127, lat=95
     expect(parseEwkbPoint(bad)).toBeNull();
+  });
+});
+
+describe("parseGeographyPoint (12 S1 — hex·GeoJSON 겸용 단일 파서)", () => {
+  it("WKB hex 문자열을 파싱한다(PostgREST 실측 형태)", () => {
+    const p = parseGeographyPoint(SEOUL_EWKB);
+    expect(p).not.toBeNull();
+    expect(p!.lat).toBeCloseTo(37.5509, 4);
+    expect(p!.lng).toBeCloseTo(126.8225, 4);
+  });
+
+  it("GeoJSON Point 객체를 파싱한다({coordinates:[lng,lat]})", () => {
+    const p = parseGeographyPoint({ type: "Point", coordinates: [126.8225, 37.5509] });
+    expect(p).not.toBeNull();
+    expect(p!.lat).toBeCloseTo(37.5509, 6);
+    expect(p!.lng).toBeCloseTo(126.8225, 6);
+  });
+
+  it("비정상 입력·범위 밖은 null(크래시·(0,0) 폴백 금지)", () => {
+    expect(parseGeographyPoint(null)).toBeNull();
+    expect(parseGeographyPoint(undefined)).toBeNull();
+    expect(parseGeographyPoint({})).toBeNull();
+    expect(parseGeographyPoint({ coordinates: [999, 999] })).toBeNull();
+    expect(parseGeographyPoint({ coordinates: [126] })).toBeNull();
+    expect(parseGeographyPoint("nothex")).toBeNull();
   });
 });
 

@@ -41,12 +41,20 @@ export function CallHomePage() {
   // 초기 로드 실패만 에러 UI로 — 백그라운드 refetch 실패는 캐시된 화면을 유지한다.
   const callsLoadFailed = callsError && calls === undefined;
 
+  // 좌표가 없는(비정상 데이터) 콜은 거리를 계산할 수 없다 — 목록 맨 뒤로 보낸다.
+  const callDistanceKm = (call: { pickupLat: number | null; pickupLng: number | null }): number | null =>
+    position && call.pickupLat != null && call.pickupLng != null
+      ? distanceKm(position, { lat: call.pickupLat, lng: call.pickupLng })
+      : null;
+
   const sortedCalls = position
-    ? [...(calls ?? [])].sort(
-        (a, b) =>
-          distanceKm(position, { lat: a.pickupLat, lng: a.pickupLng }) -
-          distanceKm(position, { lat: b.pickupLat, lng: b.pickupLng }),
-      )
+    ? [...(calls ?? [])].sort((a, b) => {
+        const da = callDistanceKm(a);
+        const db = callDistanceKm(b);
+        if (da == null) return db == null ? 0 : 1;
+        if (db == null) return -1;
+        return da - db;
+      })
     : (calls ?? []);
 
   async function handleToggleOnline() {
@@ -217,7 +225,7 @@ export function CallHomePage() {
               <CallCard
                 key={call.id}
                 data-testid={`call-card-${call.id}`}
-                distanceKm={position ? distanceKm(position, { lat: call.pickupLat, lng: call.pickupLng }) : 0}
+                distanceKm={callDistanceKm(call)}
                 estimatedKg={call.requestedKg}
                 estimatedCash={estimateCash(call.requestedKg, call.snapshotPricePerKg)}
                 address={call.pickupAddress}

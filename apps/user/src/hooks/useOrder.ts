@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { OrderStatus, PayoutMethod } from "@oilpick/core";
+import { parseGeographyPoint, type OrderStatus, type PayoutMethod } from "@oilpick/core";
 import { supabase } from "../lib/supabaseClient";
 import { queryKeys } from "../lib/queryClient";
 
@@ -13,6 +13,9 @@ export interface OrderDetail {
   requestedCans: number | null;
   requestedKg: number;
   pickupAddress: string;
+  /** 수거지 좌표(pickup_location 파싱, 12 S3) — 지도 센터. 파싱 실패 시 null. */
+  pickupLat: number | null;
+  pickupLng: number | null;
   preferredTime: string | null;
   snapshotPricePerKg: number;
   snapshotRiderFee: number;
@@ -42,6 +45,7 @@ function mapRow(row: {
   requested_cans: number | null;
   requested_kg: number;
   pickup_address: string;
+  pickup_location: string | null;
   preferred_time: string | null;
   snapshot_price_per_kg: number;
   snapshot_rider_fee: number;
@@ -60,6 +64,7 @@ function mapRow(row: {
   delivered_at: string | null;
   completed_at: string | null;
 }): OrderDetail {
+  const pickupPoint = parseGeographyPoint(row.pickup_location);
   return {
     id: row.id,
     status: row.status,
@@ -69,6 +74,8 @@ function mapRow(row: {
     requestedCans: row.requested_cans,
     requestedKg: row.requested_kg,
     pickupAddress: row.pickup_address,
+    pickupLat: pickupPoint?.lat ?? null,
+    pickupLng: pickupPoint?.lng ?? null,
     preferredTime: row.preferred_time,
     snapshotPricePerKg: row.snapshot_price_per_kg,
     snapshotRiderFee: row.snapshot_rider_fee,
@@ -90,7 +97,7 @@ function mapRow(row: {
 }
 
 const ORDER_DETAIL_COLUMNS =
-  "id, status, supplier_id, rider_id, depot_id, requested_cans, requested_kg, pickup_address, preferred_time, snapshot_price_per_kg, snapshot_rider_fee, measured_kg, final_kg, supplier_point, coupon_cost, payout_method, cash_paid_amount, photo_urls, cancel_reason, dispute_reason, created_at, accepted_at, picked_up_at, delivered_at, completed_at";
+  "id, status, supplier_id, rider_id, depot_id, requested_cans, requested_kg, pickup_address, pickup_location, preferred_time, snapshot_price_per_kg, snapshot_rider_fee, measured_kg, final_kg, supplier_point, coupon_cost, payout_method, cash_paid_amount, photo_urls, cancel_reason, dispute_reason, created_at, accepted_at, picked_up_at, delivered_at, completed_at";
 
 /**
  * 단일 주문 상세 조회 + Realtime 구독. 03-frontend.md U6~U9 "/orders/:id":

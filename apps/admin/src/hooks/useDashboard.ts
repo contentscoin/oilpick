@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { parseGeographyPoint } from "@oilpick/core";
 import { supabase } from "../lib/supabaseClient";
 import { queryKeys } from "../lib/queryClient";
 
@@ -17,7 +18,7 @@ export interface DashboardOrder {
 /**
  * 대시보드 지도용 진행중 주문 핀. 03-frontend.md "/": "카카오맵 전체 지도(진행중 주문 핀 +
  * 온라인 라이더 핀, Realtime)". pickup_location은 PostGIS geography(point) — 이 환경의
- * PostgREST는 WKB hex 문자열로 반환한다(parseGeographyPoint 주석 참고, 실측 검증됨).
+ * PostgREST는 WKB hex 문자열로 반환한다(core parseGeographyPoint가 hex·GeoJSON 겸용 파싱, 12 S1).
  */
 export function useDashboardOrders() {
   const queryClient = useQueryClient();
@@ -200,47 +201,4 @@ export function useDashboardKpi() {
     },
     refetchInterval: 30_000,
   });
-}
-
-/**
- * PostGIS geography(point,4326) select 결과 파싱.
- *
- * apps/rider/src/hooks/useOpenCalls.ts의 `parsePoint`는 "PostgREST가 geography를 GeoJSON
- * 객체로 직렬화한다"는 주석을 달고 GeoJSON만 처리했지만, 이 admin 대시보드를 실제 로컬
- * Supabase 스택(REST API, 서비스 role/anon 키 양쪽 curl로 재현) 응답으로 검증한 결과 실제로는
- * **WKB hex 문자열**("0101000020E6100000...")로 온다 — GeoJSON 분기는 이 환경에서 한 번도
- * 실행되지 않는 죽은 코드였다(대시보드 지도 목록에 방금 만든 테스트 주문이 전혀 뜨지 않는
- * 것으로 먼저 재현: parsePoint류 함수가 null을 반환해 `.filter(v => v !== null)`로 조용히
- * 걸러짐 — 에러 없이 실패해 눈에 띄지 않았다). WKB 헤더(1B endianness + 4B geom type + 4B SRID)
- * 이후 8B lng + 8B lat(double, 헤더의 endianness) 리틀/빅엔디안 모두 지원하도록 파싱하고,
- * GeoJSON 객체 형태도 함께 지원해 향후 PostgREST 버전이 바뀌어도 둘 다 커버한다.
- */
-function parseGeographyPoint(raw: unknown): { lat: number; lng: number } | null {
-  if (!raw) return null;
-
-  if (typeof raw === "object" && "coordinates" in raw) {
-    const coords = (raw as { coordinates: [number, number] }).coordinates;
-    return { lat: coords[1], lng: coords[0] };
-  }
-
-  if (typeof raw === "string" && /^[0-9a-fA-F]+$/.test(raw) && raw.length >= 50) {
-    try {
-      const byteLen = raw.length / 2;
-      const buf = new Uint8Array(byteLen);
-      for (let i = 0; i < byteLen; i++) {
-        buf[i] = parseInt(raw.substring(i * 2, i * 2 + 2), 16);
-      }
-      const littleEndian = buf[0] === 1;
-      const view = new DataView(buf.buffer);
-      // 헤더: 1B endianness + 4B geom type + 4B SRID = 9바이트, 이후 lng(8B) + lat(8B).
-      const lng = view.getFloat64(9, littleEndian);
-      const lat = view.getFloat64(17, littleEndian);
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-      return { lat, lng };
-    } catch {
-      return null;
-    }
-  }
-
-  return null;
 }
