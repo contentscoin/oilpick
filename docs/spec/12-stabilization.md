@@ -93,6 +93,10 @@ CallCard 거리 nullable("—"), CallHomePage 거리정렬·CallDetailPage 지�
    (기본값과 일치 여부) → 마이페이지 "매장 주소 수정" 화면(기존에 없으면 신설)로 재설정 유도.
 **수용 기준**: 키 유무와 무관하게 주소검색→좌표 저장이 동작, `VITE_KAKAO_KEY`는 더 이상 주소
 입력의 게이트가 아님(03-frontend·env 문서 동기화).
+**운영 검증 필요(🔴)**: VWorld Geocoder를 브라우저에서 fetch 호출 시 CORS가 막힐 수 있다
+(VWorld API는 서버 호출 전제). 프로덕션에서 주소 검색 후 좌표가 잡히는지 실측 →
+막히면 geocode.ts를 JSONP(script + callback) 또는 Edge Function 프록시로 전환. 어느 경우든
+좌표 미확정 시 제출이 막히므로 **데이터 오염은 발생하지 않는다**(최악의 경우 수동 입력 강등).
 
 ## 계층 2 — P2 미구현·열화 (스펙 약속 대비)
 
