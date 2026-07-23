@@ -4,7 +4,7 @@
 create extension if not exists postgis;
 
 -- ===== enums =====
-create type user_role as enum ('supplier','rider','admin');
+create type user_role as enum ('supplier','rider','admin','dealer'); -- [13] dealer=좌상(서브어드민)
 create type order_status as enum ('REQUESTED','ACCEPTED','ARRIVED','PICKED_UP','DELIVERED','COMPLETED','CANCELLED','DISPUTED');
 -- [08 P3·P4] 포인트 복권 — 현역: EARN(POINT 지급수단 적립)/WITHDRAW_REQUEST/WITHDRAW_CANCEL/ADJUST.
 -- [09 H5] REFERRAL(추천 활성화 시 점주 보너스, +부호·출금 가능) 추가(실 DDL: 20260715000003 alter type add value).
@@ -57,9 +57,11 @@ create table rider_profiles (
   bank_name text, bank_account text, bank_holder text,
   recycler_name text, recycler_contact text,  -- 인계 재활용업체(승인 조건, 07 F11 D5. 실 DDL: 20260709000008)
   referral_code text unique,   -- [09 H2] 라이더 추천코드(Crockford base32 8자, Edge referral-code 생성. APPROVED 코드만 attach 유효. 실 DDL: 20260715000004)
+  dealer_id uuid references profiles(id),  -- [13 I1] 소속 좌상(dealer). null=본사 직속. 셀프변경 차단(guard_rider_verify). 실 DDL: 20260722000002
   created_at timestamptz not null default now()
 );
 create index idx_rider_location on rider_profiles using gist(last_location);
+create index idx_rider_dealer on rider_profiles(dealer_id);  -- [13 I1]
 
 -- ===== 시세 =====
 create table price_ticks (
@@ -624,19 +626,31 @@ end; $$;
 create trigger trg_guard_profile_role before update on profiles
   for each row execute function guard_profile_role();
 
+-- [13 I1] dealer_id도 보호(소속 위조 차단 — 배정은 dealer-assign Edge/service_role만). 실 DDL: 20260722000002
 create or replace function guard_rider_verify() returns trigger
   language plpgsql set search_path = public as $$
 begin
   if current_user in ('service_role','postgres','supabase_admin') then return new; end if;
   if tg_op = 'INSERT' then
-    new.verify_status := 'PENDING'; new.reject_reason := null;   -- 셀프 가입은 항상 미검수
+    new.verify_status := 'PENDING'; new.reject_reason := null; new.dealer_id := null;  -- 셀프 가입은 미검수·미배정
   else
-    new.verify_status := old.verify_status; new.reject_reason := old.reject_reason;
+    new.verify_status := old.verify_status; new.reject_reason := old.reject_reason; new.dealer_id := old.dealer_id;
   end if;
   return new;
 end; $$;
 create trigger trg_guard_rider_verify before insert or update on rider_profiles
   for each row execute function guard_rider_verify();
+
+-- [13 I1] 좌상(dealer) 조직 — 소속 조회 RLS(SELECT 전용)·소유 헬퍼·실적 통계 뷰. 실 DDL: 20260722000002
+-- 쓰기(배정/승인)는 Edge(service_role) + 서버 소유권 검증. 정산 로직 없음(D5).
+create or replace function fn_dealer_owns_rider(p_rider uuid) returns boolean as
+$$ select exists(select 1 from rider_profiles rp where rp.id = p_rider and rp.dealer_id = auth.uid()) $$
+language sql security definer stable set search_path = public;
+create policy p_rider_profiles_read_by_dealer on rider_profiles for select using (dealer_id = auth.uid());
+create policy p_profiles_read_own_riders on profiles for select using (fn_dealer_owns_rider(id));
+create policy p_orders_read_by_dealer on pickup_orders for select using (rider_id is not null and fn_dealer_owns_rider(rider_id));
+create policy p_referrals_read_by_dealer on referrals for select using (fn_dealer_owns_rider(referrer_rider_id));
+-- v_dealer_rider_stats(security_invoker): 라이더별 완료수·수거kg·현금/포인트 지급합·레퍼럴 실적(표시용 통계, 정산 아님).
 
 -- 라이더당 활성 주문 1건 불변식: 동시 이중수락(TOCTOU)을 DB 유니크 제약으로 차단.
 create unique index idx_rider_single_active_order on pickup_orders (rider_id)
