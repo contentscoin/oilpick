@@ -456,6 +456,12 @@ import_map = "./functions/import_map.json"
 verify_jwt = true
 import_map = "./functions/import_map.json"
 
+# M9-b(11-map-renderer.md): 카카오모빌리티 Directions 프록시. KAKAO_MOBILITY_KEY 시크릿
+# 미설정 시 configured=false로 조용히 비활성(경로선 미표시, 라이더 위치 마커만).
+[functions.directions]
+verify_jwt = true
+import_map = "./functions/import_map.json"
+
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 

@@ -138,6 +138,15 @@ ACCEPTED 이후 모든 전이 단일 엔드포인트.
 - 출력: `{ referralId, settled, settledAt }`(`referralSettleOutputSchema`). v_referral_stats의
   `rider_reward_settled`/`rider_reward_unsettled`가 admin 정산 큐·rider 실적 표기에 쓰인다.
 
+## 19. `directions` (인증 사용자) — 11 M9-b
+> 출발→도착 도로 경로(폴리라인·거리·소요시간). 카카오모빌리티 Directions API 프록시 —
+> REST 키는 서버 시크릿 `KAKAO_MOBILITY_KEY`로만 두고 클라이언트에 노출하지 않는다(CLAUDE.md 규칙 3).
+- 입력: `{ origin: {lat,lng}, destination: {lat,lng} }`(`directionsInputSchema`). 인증만 요구(역할 무관).
+- 처리: `KAKAO_MOBILITY_KEY` 미설정 시 `{ configured:false, path:[] }`로 조용히 비활성(에러 아님).
+  설정 시 카카오모빌리티 호출 → vertexes 디코드. 상류 실패·길없음은 `path:[]`로 강등(200).
+- 출력: `{ configured, distanceMeters, durationSeconds, path:[{lat,lng}] }`(`directionsOutputSchema`).
+- 상태: **배선 완료·키 대기**. 지도 렌더 연결·실 키 응답 검증은 M9-b UI 작업(11 M9-b).
+
 ## 11~15. `coupon-*` (coupon-purchase-intent/confirm/return, coupon-refund, coupon-adjust, coupon-price-set)
 > ⚠️ **삭제됨 (08 P1·G3-⑥)** — 수거쿠폰 모델 폐기. Edge Function 코드 6종 저장소에서 삭제.
 > **프로덕션 undeploy는 08 배포 체크리스트 ⓔ**(앱 배포 완료 후 — 가동 중 구버전 앱 파손 방지).

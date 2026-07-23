@@ -118,8 +118,16 @@
   `kakaomap://route?ep={lat},{lng}&by=CAR`(주 버튼) + `tmap://route`(대안) + `map.kakao.com/link/to`
   (앱 미설치 웹 폴백). 좌표 파싱 실패(레거시)면 주소 검색 웹 링크로 강등 — 죽은 딥링크 금지.
   실제 턴바이턴은 검증된 국내 내비 앱(카카오맵/TMap)이 담당한다 — 한국 gig 앱 표준 패턴.
-- **M9-b 인앱 실시간 위치·경로 표시(후속)**: 지도에 라이더 GPS 점(Capacitor Geolocation, rider엔 이미
-  `@capacitor/geolocation` 있음) + 수거지 핀 + 카카오모빌리티 라우팅 폴리라인 + ETA. **턴바이턴은 아님**
-  (유저가 라이더 접근을 지켜보는 UX). 카카오모빌리티 Directions API 키 필요 — 확보 시 착수.
+- **M9-b 인앱 실시간 위치·경로 표시(배선 완료·키 대기)**: 지도에 라이더 GPS 점(Capacitor
+  Geolocation, rider엔 이미 `@capacitor/geolocation` 있음) + 수거지 핀 + 카카오모빌리티 라우팅
+  폴리라인 + ETA. **턴바이턴은 아님**(유저가 라이더 접근을 지켜보는 UX).
+  - **세팅 완료(2026-07-22)**: Edge Function `directions`(카카오모빌리티 프록시) + core
+    `directionsInput/OutputSchema` + user `lib/directions.requestDirections` + config 등록.
+    REST 키는 서버 시크릿 `KAKAO_MOBILITY_KEY`(CLAUDE.md 규칙 3 — 클라이언트 노출 금지).
+    **키 미설정 시 `configured:false`로 조용히 비활성**(경로선 미표시, 라이더 위치 마커만).
+    키 확보 후 `supabase secrets set KAKAO_MOBILITY_KEY=…`만 하면 재배포 없이 활성화된다.
+  - **남은 UI 작업**: OrderDetailPage 지도에 라이더 마커(rider_profiles.last_location 구독) +
+    requestDirections 경로선 + ETA 렌더 연결. `directions` Edge의 카카오모빌리티 응답 파싱은
+    실 키로 1회 검증 필요(🔴 — 현재는 계약 기준 구현).
 - **M9-c 인앱 풀 턴바이턴(비권장 유지)**: 음성·재탐색까지 내장. 고비용, 한국 규제·국내 내비 SDK 라이선스,
   백그라운드 GPS 배터리. MVP엔 과투자 — 국내 gig/배달앱도 대개 M9-a(핸드오프)를 택한다.

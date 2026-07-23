@@ -393,3 +393,24 @@ export const referralSettleOutputSchema = z.object({
   settledAt: z.string().nullable(),
 });
 export type ReferralSettleOutput = z.infer<typeof referralSettleOutputSchema>;
+
+/**
+ * directions (M9-b, 11-map-renderer.md): 출발→도착 도로 경로. 카카오모빌리티 Directions API를
+ * Edge Function이 프록시한다(REST 키는 서버 시크릿 KAKAO_MOBILITY_KEY — CLAUDE.md 규칙 3).
+ * 키 미설정 시 출력의 configured=false로 기능이 조용히 비활성(라이더 위치만 표시).
+ */
+export const directionsInputSchema = z.object({
+  origin: z.object({ lat: latSchema, lng: lngSchema }),
+  destination: z.object({ lat: latSchema, lng: lngSchema }),
+});
+export type DirectionsInput = z.infer<typeof directionsInputSchema>;
+
+export const directionsOutputSchema = z.object({
+  /** 서버에 KAKAO_MOBILITY_KEY가 설정돼 라우팅이 가능한지. false면 path는 빈 배열. */
+  configured: z.boolean(),
+  distanceMeters: z.number().int().nonnegative().nullable(),
+  durationSeconds: z.number().int().nonnegative().nullable(),
+  /** 경로 폴리라인(출발→도착). MapView가 선으로 그린다. 미구성/실패 시 빈 배열. */
+  path: z.array(z.object({ lat: latSchema, lng: lngSchema })),
+});
+export type DirectionsOutput = z.infer<typeof directionsOutputSchema>;
