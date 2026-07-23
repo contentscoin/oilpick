@@ -10,6 +10,7 @@ import {
   InfoStatCard,
   LedgerList,
   MapView,
+  BrandMark,
   Mascot,
   OfflineBanner,
   OrderTimeline,
@@ -363,12 +364,18 @@ export function DevUiPage() {
       </section>
 
       <section>
-        {/* 10-brand.md B3 — 폐유(payou) 마스코트(순수 SVG, 정식 아트 전 1차 캐릭터). */}
-        <h2>Mascot (폐유 캐릭터)</h2>
+        {/* 10-brand.md B3 — 폐유(payou) 로고 마크(제리캔+P, CEO 제공 로고 재현). */}
+        <h2>BrandMark (폐유 로고)</h2>
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 16 }}>
+          <BrandMark size={48} />
+          <BrandMark size={96} />
+          <BrandMark size={140} />
+        </div>
+        {/* 보조 캐릭터(방울 마스코트) — 로고와 별개의 친근한 캐릭터 에셋(선택). */}
+        <h2 style={{ marginTop: 20 }}>Mascot (보조 캐릭터)</h2>
         <div style={{ display: "flex", alignItems: "flex-end", gap: 16 }}>
           <Mascot size={48} />
           <Mascot size={96} />
-          <Mascot size={140} />
         </div>
       </section>
 
