@@ -45,7 +45,7 @@ export function LoginPage() {
             O
           </span>
           <div>
-            <h1 className="text-xl font-bold leading-tight text-primary">오반장 관리자</h1>
+            <h1 className="text-xl font-bold leading-tight text-primary">폐유 관리자</h1>
             <p className="text-sm text-gray-500">아이디와 비밀번호로 로그인하세요.</p>
           </div>
         </div>

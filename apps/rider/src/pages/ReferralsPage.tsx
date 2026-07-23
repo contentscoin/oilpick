@@ -37,7 +37,7 @@ export function ReferralsPage() {
   async function handleShare() {
     if (!codeData) return;
     const shareData = {
-      title: "오반장(OBJ) — 폐식용유 현장 정산",
+      title: "폐유(payou) — 폐식용유 현장 정산",
       text: `추천코드 ${codeData.code}로 가입하면 첫 수거 완료 시 ${formatPoint(REFERRAL_SUPPLIER_BONUS)} 보너스를 받아요.`,
       url: codeData.shareUrl,
     };

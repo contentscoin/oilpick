@@ -1,7 +1,7 @@
 import { colors, gray } from "../tokens";
 
 /**
- * 오반장(OBJ) 마스코트 — docs/spec/10-brand.md B3.
+ * 폐유(payou) 마스코트 — docs/spec/10-brand.md B3.
  * 기름 방울 몸체(앰버 그라디언트) + 브랜드 그린 안전모 + "반장" 완장 + 미소.
  * 순수 SVG(외부 에셋·폰트 의존 없음), 색은 디자인 토큰만 사용(홍조는 accent.deep의 투명도 확장 —
  * chart 토큰과 같은 명도 축 확장 원칙). 정식 아트 발주 전까지의 1차 인앱 캐릭터.
@@ -13,7 +13,7 @@ export interface MascotProps {
   title?: string;
 }
 
-export function Mascot({ size = 96, title = "오반장 캐릭터" }: MascotProps) {
+export function Mascot({ size = 96, title = "폐유 캐릭터" }: MascotProps) {
   const height = Math.round(size * (140 / 120));
   return (
     <svg

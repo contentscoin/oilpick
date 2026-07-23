@@ -1,6 +1,6 @@
-# 오반장(OBJ) — 구현 규칙 (코딩 에이전트 필독)
+# 폐유(payou) — 구현 규칙 (코딩 에이전트 필독)
 
-폐식용유 수거 매칭 플랫폼. 브랜드는 **오반장(한글)/OBJ(영문)** — 유저 노출 텍스트에 이 표기만 쓴다.
+폐식용유 수거 매칭 플랫폼. 브랜드는 **폐유(한글)/payou(영문)** — 유저 노출 텍스트에 이 표기만 쓴다.
 기술 식별자(@oilpick/* 패키지·kr.oilpick.* appId·oilpick-user:// 스킴·스토리지 키 등)는 코드명
 OilPick을 유지한다(`docs/spec/10-brand.md` B4가 단일 진실). 모든 설계 결정은 `docs/spec/`에 확정되어 있다.
 **스펙에 없는 설계 판단을 새로 하지 말 것.** 모호하면 스펙 문서를 먼저 찾아라.
@@ -14,7 +14,7 @@ OilPick을 유지한다(`docs/spec/10-brand.md` B4가 단일 진실). 모든 설
 - `docs/spec/07-pivot-plan.md` — 수거쿠폰 피벗(2차 고도화 F-태스크). **08이 쿠폰 모델을 폐기 — 이력 참조용**
 - `docs/spec/08-payout-pivot.md` — 현장 지급수단 피벗(3차 고도화 G-태스크). 쿠폰 폐기·포인트 복권(현금/포인트 지급, 출금 부활)·상태머신 부수효과 재정의의 단일 진실
 - `docs/spec/09-referral.md` — 라이더 추천(레퍼럴) 시스템(4차 고도화 H-태스크). 추천코드·딥링크·점주 보너스·라이더 실적/통계의 단일 진실(08 위에 순수 추가)
-- `docs/spec/10-brand.md` — 브랜드(오반장/OBJ) 표기·마스코트·적용 범위의 단일 진실
+- `docs/spec/10-brand.md` — 브랜드(폐유/payou, 이력 오반장/OBJ) 표기·로고·적용 범위의 단일 진실
 - `docs/spec/11-map-renderer.md` — 지도 렌더러(5차 고도화). **결정: MapLibre(mapcn 패턴) 교체 확정(CEO)** — 타일 env 게이트·VWorld 권장·프리뷰 폴백 유지. 내비 로드맵(M9-a 딥링크 핸드오프 완료·M9-b 인앱 트래킹 후속)의 단일 진실
 - `docs/spec/12-stabilization.md` — 3앱 기능 점검 결과 + 안정화 수정 계획(S-태스크). P1: PostGIS 좌표 파싱 죽은 분기 3곳·AddressField 미구현 분기. 계층 0(프로덕션 컷오버/초기 데이터)이 전면 증상 1순위 — **코딩 착수 전 필독**
 - `docs/spec/13-org-dealer.md` — 조직 계층 어드민–좌상(dealer, 서브어드민)–라이더(I-태스크). role 'dealer'·rider_profiles.dealer_id·RLS 조회 전용·admin 메뉴 분기의 단일 진실. 수수료 모델은 오픈 질문(CEO 확정 대기)

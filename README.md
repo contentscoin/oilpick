@@ -1,6 +1,6 @@
-# 오반장 (OBJ)
+# 폐유 (payou)
 
-> **Oil pickup, paid on the spot** — 브랜드: 한글 **오반장** / 영문 **OBJ**
+> **We pay you for used oil** — 브랜드: 한글 **폐유** / 영문 **payou**
 > (2026-07-16 리브랜딩, 구명 OilPick — 단일 진실 `docs/spec/10-brand.md`. 저장소·패키지(@oilpick/*)·
 > 앱 스킴 등 기술 식별자는 코드명 OilPick 유지 — 10-brand.md B4).
 

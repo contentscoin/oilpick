@@ -48,7 +48,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
             O
           </span>
           <div>
-            <p className="text-lg font-bold leading-tight text-primary">오반장</p>
+            <p className="text-lg font-bold leading-tight text-primary">폐유</p>
             <p className="text-xs text-gray-500" data-testid="admin-role-label">{roleLabel}</p>
           </div>
         </div>

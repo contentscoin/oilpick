@@ -363,8 +363,8 @@ export function DevUiPage() {
       </section>
 
       <section>
-        {/* 10-brand.md B3 — 오반장(OBJ) 마스코트(순수 SVG, 정식 아트 전 1차 캐릭터). */}
-        <h2>Mascot (오반장 캐릭터)</h2>
+        {/* 10-brand.md B3 — 폐유(payou) 마스코트(순수 SVG, 정식 아트 전 1차 캐릭터). */}
+        <h2>Mascot (폐유 캐릭터)</h2>
         <div style={{ display: "flex", alignItems: "flex-end", gap: 16 }}>
           <Mascot size={48} />
           <Mascot size={96} />

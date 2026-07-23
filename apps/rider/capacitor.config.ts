@@ -13,7 +13,7 @@ import type { CapacitorConfig } from "@capacitor/cli";
 // Capacitor App 플러그인의 appUrlOpen 이벤트로 oilpick-rider://calls/:id 를 수신한다.
 const config: CapacitorConfig = {
   appId: "kr.oilpick.rider",
-  appName: "오반장 라이더",
+  appName: "폐유 라이더",
   webDir: "dist",
   plugins: {
     SplashScreen: {
