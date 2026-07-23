@@ -25,10 +25,11 @@ Deno.serve((req) =>
       return errorResponse("NOT_FOUND", 404, "지원하지 않는 메서드예요.");
     }
 
+    // [13 D6] 승인은 admin + 좌상(자기 소속 라이더 한정). dealer 소속 검증은 riderProfile 조회 후.
     let ctx;
     try {
       ctx = await requireAuth(req);
-      requireRole(ctx, "admin");
+      requireRole(ctx, "admin", "dealer");
     } catch (err) {
       if (err instanceof AuthError) return errorResponse(err.code, err.status, err.message);
       throw err;
@@ -53,12 +54,17 @@ Deno.serve((req) =>
 
     const { data: riderProfile, error: fetchErr } = await admin
       .from("rider_profiles")
-      .select("id, verify_status, doc_permit_url, recycler_name, recycler_contact")
+      .select("id, verify_status, doc_permit_url, recycler_name, recycler_contact, dealer_id")
       .eq("id", riderId)
       .maybeSingle();
     if (fetchErr) throw fetchErr;
     if (!riderProfile) {
       return errorResponse("NOT_FOUND", 404, "라이더를 찾을 수 없어요.");
+    }
+
+    // [13 D6] 좌상은 자기 소속 라이더만 승인/정지할 수 있다(admin은 전권).
+    if (ctx.role === "dealer" && riderProfile.dealer_id !== ctx.uid) {
+      return errorResponse("FORBIDDEN", 403, "내 소속 라이더만 승인할 수 있어요.");
     }
 
     // ② 서류 필수화 + ③ 인계처 필수: 최초 승인(APPROVED) 시 서버 검증(07 F11 규제 게이트).

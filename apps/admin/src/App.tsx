@@ -1,9 +1,10 @@
 import { Suspense, lazy } from "react";
-import { Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { AuthGuard } from "./components/AuthGuard";
 import { AdminShell } from "./components/AdminShell";
 import { RouteFallback } from "./components/RouteFallback";
+import { useCurrentRole } from "./hooks/useCurrentRole";
 import { queryClient } from "./lib/queryClient";
 
 /**
@@ -35,17 +36,40 @@ const ReferralsPage = lazy(() =>
 const NotFoundPage = lazy(() =>
   import("./pages/NotFoundPage").then((m) => ({ default: m.NotFoundPage })),
 );
+// 13 I3·I4 좌상(dealer) 화면.
+const DealersPage = lazy(() => import("./pages/DealersPage").then((m) => ({ default: m.DealersPage })));
+const DealerHomePage = lazy(() =>
+  import("./pages/DealerHomePage").then((m) => ({ default: m.DealerHomePage })),
+);
+const DealerPerformancePage = lazy(() =>
+  import("./pages/DealerPerformancePage").then((m) => ({ default: m.DealerPerformancePage })),
+);
 
 /**
- * 03-frontend.md apps/admin 라우팅. "admin 로그인: 이메일/비밀번호. role≠admin이면 접근 차단"
- * (AuthGuard가 profiles.role을 검증). /login만 가드 밖, 나머지 전부 AuthGuard + AdminShell로 감싼다.
+ * 03-frontend.md apps/admin 라우팅 + 13 I3. /login만 가드 밖. 나머지는 AuthGuard(admin|dealer
+ * 진입) + AdminShell + RoleGate(라우트별 허용 role)로 감싼다. 기본 허용 role은 admin.
  */
-function Protected({ children }: { children: React.ReactNode }) {
+function RoleGate({ roles, children }: { roles: string[]; children: React.ReactNode }) {
+  const { role, loading } = useCurrentRole();
+  if (loading) return null;
+  if (role && !roles.includes(role)) return <Navigate to="/" replace />;
+  return <>{children}</>;
+}
+
+function Protected({ children, roles = ["admin"] }: { children: React.ReactNode; roles?: string[] }) {
   return (
     <AuthGuard>
-      <AdminShell>{children}</AdminShell>
+      <AdminShell>
+        <RoleGate roles={roles}>{children}</RoleGate>
+      </AdminShell>
     </AuthGuard>
   );
+}
+
+/** "/" — role별 홈: admin=대시보드, dealer=관할 대시보드. */
+function HomeRoute() {
+  const { role } = useCurrentRole();
+  return role === "dealer" ? <DealerHomePage /> : <DashboardPage />;
 }
 
 export function App() {
@@ -57,8 +81,24 @@ export function App() {
           <Route
             path="/"
             element={
+              <Protected roles={["admin", "dealer"]}>
+                <HomeRoute />
+              </Protected>
+            }
+          />
+          <Route
+            path="/dealers"
+            element={
               <Protected>
-                <DashboardPage />
+                <DealersPage />
+              </Protected>
+            }
+          />
+          <Route
+            path="/performance"
+            element={
+              <Protected roles={["dealer"]}>
+                <DealerPerformancePage />
               </Protected>
             }
           />
@@ -122,7 +162,7 @@ export function App() {
           <Route
             path="*"
             element={
-              <Protected>
+              <Protected roles={["admin", "dealer"]}>
                 <NotFoundPage />
               </Protected>
             }

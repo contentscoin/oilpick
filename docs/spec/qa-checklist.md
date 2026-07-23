@@ -23,6 +23,10 @@
 | 온보딩 | 슬라이드 3장, localStorage 1회 플래그 | 재방문 시 스킵 | ✅ [단위] |
 | 가입/로그인(U2) | 전화 OTP → profiles+supplier_profiles | 잘못된 코드/형식 400, E.164 변환 | ✅ [단위, test_otp] |
 | **가입 후 추천 attach(09)** | 저장된 코드로 referral-attach(best-effort) + 키 소비 | 형식 위반 스킵·실패해도 가입 성립(비차단)·무코드 무호출 | ✅ [단위 4케이스] |
+| **좌상 조직(13 I1)** | role 'dealer'·dealer_id·RLS 5정책·통계 뷰 | 좌상 자기 소속만 조회, 남/미배정 미노출, dealer_id 셀프변경 차단 | ✅ [pgTAP 14 asserts] |
+| **좌상 관리(13 I3 admin)** | /dealers 계정 생성(dealer-create)+라이더 배정(dealer-assign) | 중복 아이디 409, 비좌상 배정 400 | ⚠️ [단위: 셸 role 분기] / Edge 실호출 🔴 |
+| **좌상 관할(13 I4 dealer)** | 관할 대시보드+승인(rider-verify 자기소속)+실적 CSV | 남 소속 승인 403(서버), 정산 화면 없음(D5) | ⚠️ [단위: DealerHomePage] / Edge·RLS E2E 🔴 |
+| **라이더 소속 표시(13 I5)** | 마이페이지 "소속: {좌상 상호}" | 미배정 미표기 | ⚠️ [RLS pgTAP] / 앱 실조회 🔴 |
 | **추천 랜딩 /ref/:code(09)** | 코드 정규화·localStorage 저장·보너스 카드·가입 CTA | 무효 코드 폴백 카드(저장 안 함), 로그인 시 홈 CTA | ✅ [단위 4 + **헤드리스 Chromium 실측**] |
 | 주소 등록 | 카카오 주소검색 → lat/lng | 키 없으면 수동 텍스트 입력 폴백 | ⚠️ 폴백만(실 SDK 🔴) |
 | **지도 렌더러(11 M8)** | MapLibre GL — VITE_MAP_STYLE_URL 게이트, 미설정 시 프리뷰 폴백 | 로드/WebGL 실패 시 프리뷰 강등(크래시 금지) | ⚠️ 단위 4케이스·폴백 ✅ / 실타일 렌더·Capacitor WebView WebGL 🔴 |
@@ -138,11 +142,11 @@ T13에서 로컬 스택 advisor lint를 점검·수정했다(상세는 이력 �
 
 | 패키지 | 테스트 파일 | 테스트 수 |
 |---|---|---|
-| @oilpick/core | 11 | 386 |
-| @oilpick/ui | 28 | 108 |
-| @oilpick/user | 25 | 135 |
+| @oilpick/core | 11 | 389 |
+| @oilpick/ui | 28 | 109 |
+| @oilpick/user | 25 | 141 |
 | @oilpick/rider | 19 | 102 |
-| @oilpick/admin | 17 | 107 |
+| @oilpick/admin | 19 | 112 |
 
-DB 계층: pgTAP **9스위트 157 asserts**(supabase/tests/README.md 커버리지 참조 — CI에서 실행).
+DB 계층: pgTAP **10스위트 171 asserts**(supabase/tests/README.md 커버리지 참조 — CI에서 실행).
 숫자가 바뀌면 이 표와 supabase/tests/README.md를 함께 갱신할 것.

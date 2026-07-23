@@ -72,7 +72,9 @@ ACCEPTED 이후 모든 전이 단일 엔드포인트.
 - 처리: rider_profiles.last_location 갱신. 진행중 주문 있으면 Realtime broadcast 채널
   `order:{orderId}:location`으로 좌표 push (supplier 지도용).
 
-## 6. `rider-verify` (admin)
+## 6. `rider-verify` (admin + 좌상)
+> [13 D6] 호출자 = admin(전권) 또는 대상 라이더의 **소속 좌상**(dealer, `dealer_id = 호출자`).
+> 좌상이 남의 소속을 승인하려 하면 403 `FORBIDDEN`. 나머지 계약은 동일.
 - 입력: `{ riderId, decision: 'APPROVED'|'REJECTED'|'SUSPENDED'|'REINSTATED', rejectReason? }`
 - 처리: verify_status 갱신 + rider 푸시(§1-5 인증 승인/반려·정지/해제).
 - **07 F11 — 정지·서류·인계처**:
@@ -146,6 +148,20 @@ ACCEPTED 이후 모든 전이 단일 엔드포인트.
   설정 시 카카오모빌리티 호출 → vertexes 디코드. 상류 실패·길없음은 `path:[]`로 강등(200).
 - 출력: `{ configured, distanceMeters, durationSeconds, path:[{lat,lng}] }`(`directionsOutputSchema`).
 - 상태: **배선 완료·키 대기**. 지도 렌더 연결·실 키 응답 검증은 M9-b UI 작업(11 M9-b).
+
+## 20. `dealer-create` (admin) — 13 I2
+> 좌상(dealer) 계정 생성. role='dealer' 부여는 guard_profile_role상 service_role만 가능 → 이 Edge가 유일 경로.
+- 입력: `{ username, password, displayName, phone }`(`dealerCreateInputSchema`). role=admin 필수.
+- 처리: GoTrue 사용자 생성(email=`<username>@oilpick.local`, email_confirm) + profiles(role='dealer') insert.
+  중복 아이디 409 `CONFLICT`. profiles 실패 시 방금 만든 auth 사용자 정리(고아 방지).
+- 출력: `{ dealerId, username }`(`dealerCreateOutputSchema`).
+
+## 21. `dealer-assign` (admin + 좌상) — 13 I2·D6
+> rider_profiles.dealer_id 배정/해제. dealer_id는 guard_rider_verify상 service_role만 변경 → 이 Edge가 유일 경로.
+- 입력: `{ riderId, dealerId | null }`(`dealerAssignInputSchema`). role=admin 또는 dealer.
+- 처리: **admin** 임의 배정/해제(dealerId가 좌상 계정인지 검증). **dealer**는 미배정 라이더를 자기(self)
+  로만 배정(이미 배정 시 409 `CONFLICT`)·자기 소속만 해제(아니면 403 `FORBIDDEN`). 라이더 없음 404 `NOT_FOUND`.
+- 출력: `{ riderId, dealerId }`(`dealerAssignOutputSchema`).
 
 ## 11~15. `coupon-*` (coupon-purchase-intent/confirm/return, coupon-refund, coupon-adjust, coupon-price-set)
 > ⚠️ **삭제됨 (08 P1·G3-⑥)** — 수거쿠폰 모델 폐기. Edge Function 코드 6종 저장소에서 삭제.

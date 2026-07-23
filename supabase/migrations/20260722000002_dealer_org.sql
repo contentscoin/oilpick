@@ -53,6 +53,9 @@ create policy p_orders_read_by_dealer on pickup_orders
 -- 4) 소속 라이더의 추천 실적
 create policy p_referrals_read_by_dealer on referrals
   for select using (fn_dealer_owns_rider(referrer_rider_id));
+-- 5) 라이더가 자기 소속 좌상의 프로필(상호)을 조회(마이페이지 "소속" 표기, I5)
+create policy p_profiles_read_my_dealer on profiles
+  for select using (id = (select dealer_id from rider_profiles where id = auth.uid()));
 
 -- ── 실적 통계 뷰(security_invoker → RLS가 좌상/admin 범위를 강제) ──────────
 -- 라이더별 완료 건수·수거 kg·지급 합계(현금/포인트)·레퍼럴 실적. 금액은 표시용 통계일 뿐

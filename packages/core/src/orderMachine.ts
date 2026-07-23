@@ -25,8 +25,8 @@ export type OrderStatus =
 export const ORDER_NONE = "NONE" as const;
 export type OrderStatusOrNone = OrderStatus | typeof ORDER_NONE;
 
-/** DB enum user_role. docs/spec/01-db-schema.sql 참고. */
-export type UserRole = "supplier" | "rider" | "admin";
+/** DB enum user_role. docs/spec/01-db-schema.sql 참고. dealer=좌상(서브어드민, 13). */
+export type UserRole = "supplier" | "rider" | "admin" | "dealer";
 
 /**
  * order-create와 order-accept/order-transition에서 쓰이는 전이 액션.

@@ -6,7 +6,7 @@
 create extension if not exists pgtap with schema extensions;
 
 begin;
-select plan(13);
+select plan(14);
 
 -- ── 픽스처: 좌상 2 + 라이더 2(각 좌상 소속) + 미배정 라이더 1 + 점주 1 ──────
 insert into auth.users (id, instance_id, aud, role, email, created_at, updated_at) values
@@ -93,6 +93,13 @@ select is((select collected_kg from v_dealer_rider_stats where rider_id = 'dd000
   32::numeric, '소속 라이더1 수거 kg 집계(32)');
 select is((select cash_paid from v_dealer_rider_stats where rider_id = 'dd000000-0000-0000-0000-0000000000b1')::int,
   22400, '소속 라이더1 현금 지급 집계(22,400)');
+reset role;
+
+-- ============ (7) 라이더가 자기 소속 좌상 프로필(상호)을 조회(I5) ============
+set local role authenticated;
+select set_config('request.jwt.claims','{"sub":"dd000000-0000-0000-0000-0000000000b1","role":"authenticated"}', true);
+select is((select display_name from profiles where id = 'dd000000-0000-0000-0000-0000000000d1'),
+  '좌상1', '라이더1은 자기 소속 좌상1의 상호를 조회');
 reset role;
 
 select * from finish();

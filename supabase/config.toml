@@ -462,6 +462,15 @@ import_map = "./functions/import_map.json"
 verify_jwt = true
 import_map = "./functions/import_map.json"
 
+# [13 I2] 좌상(dealer) 조직: 계정 생성(admin) + 소속 배정(admin+좌상 자기소속).
+[functions.dealer-create]
+verify_jwt = true
+import_map = "./functions/import_map.json"
+
+[functions.dealer-assign]
+verify_jwt = true
+import_map = "./functions/import_map.json"
+
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 

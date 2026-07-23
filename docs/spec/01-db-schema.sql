@@ -650,6 +650,7 @@ create policy p_rider_profiles_read_by_dealer on rider_profiles for select using
 create policy p_profiles_read_own_riders on profiles for select using (fn_dealer_owns_rider(id));
 create policy p_orders_read_by_dealer on pickup_orders for select using (rider_id is not null and fn_dealer_owns_rider(rider_id));
 create policy p_referrals_read_by_dealer on referrals for select using (fn_dealer_owns_rider(referrer_rider_id));
+create policy p_profiles_read_my_dealer on profiles for select using (id = (select dealer_id from rider_profiles where id = auth.uid())); -- I5 라이더→소속 좌상 상호
 -- v_dealer_rider_stats(security_invoker): 라이더별 완료수·수거kg·현금/포인트 지급합·레퍼럴 실적(표시용 통계, 정산 아님).
 
 -- 라이더당 활성 주문 1건 불변식: 동시 이중수락(TOCTOU)을 DB 유니크 제약으로 차단.
