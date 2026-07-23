@@ -1,15 +1,19 @@
-<!-- 오반장(OBJ) 파비콘 — 마스코트 파생 마크(docs/spec/10-brand.md B6): 방울+안전모, 완장·홍조 생략(소형 가독성) -->
+<!-- 폐유(payou) 파비콘 — 제리캔 + P 로고 마크(docs/spec/10-brand.md B3·B6, CEO 제공 로고 SVG 재현). -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <defs>
-    <linearGradient id="objMarkBody" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#F5A623"/>
-      <stop offset="100%" stop-color="#B45309"/>
-    </linearGradient>
-  </defs>
-  <path d="M32 3 C32 3 13 29 13 43 a19 19 0 0 0 38 0 C51 29 32 3 32 3 Z" fill="url(#objMarkBody)"/>
-  <path d="M18 27 a14 12 0 0 1 28 0 Z" fill="#1B7A43"/>
-  <rect x="14.5" y="25.5" width="35" height="4.8" rx="2.4" fill="#145C32"/>
-  <circle cx="25" cy="40" r="2.3" fill="#27272a"/>
-  <circle cx="39" cy="40" r="2.3" fill="#27272a"/>
-  <path d="M26.5 46.5 q5.5 5 11 0" stroke="#27272a" stroke-width="2.2" stroke-linecap="round" fill="none"/>
+  <!-- 폐유(payou) 로고 마크 — 제리캔 + P. CEO 제공 로고(2026-07-23) SVG 재현. -->
+  <rect width="64" height="64" rx="15" fill="#1B5E3F"/>
+  <!-- 기름통 몸체 -->
+  <rect x="15.5" y="18" width="33" height="38" rx="4.5" fill="#F4EEDF" stroke="#1B5E3F" stroke-width="1.5"/>
+  <!-- 손잡이(좌상단 아치) — 크림색이라 초록 배경 위에서 보인다 -->
+  <path d="M21 18.5 v-4 a2.6 2.6 0 0 1 2.6 -2.6 h5 a2.6 2.6 0 0 1 2.6 2.6 V18.5"
+        fill="none" stroke="#F4EEDF" stroke-width="3" stroke-linecap="round"/>
+  <!-- 캡(우상단, 골드) -->
+  <rect x="36.5" y="13.5" width="8.5" height="5.5" rx="2" fill="#C9A24B"/>
+  <!-- 정면 패널 -->
+  <rect x="21" y="27" width="22" height="24" rx="3" fill="none" stroke="#1B5E3F" stroke-width="1.4"/>
+  <!-- P (기하 경로 — 폰트 비의존) -->
+  <g fill="#1B5E3F">
+    <rect x="26" y="30" width="5" height="18.5" rx="1"/>
+    <path d="M31 30 h4.5 a6.5 6 0 0 1 0 12 H31 v-4 h4 a2 2 0 0 0 0 -4 h-4 z"/>
+  </g>
 </svg>

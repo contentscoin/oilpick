@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { BigButton, Mascot, colors, elevation, gray, radius, surface, typeScale } from "@oilpick/ui";
+import { BigButton, BrandMark, colors, elevation, gray, radius, surface, typeScale } from "@oilpick/ui";
 import { REFERRAL_CODE_STORAGE_KEY, REFERRAL_SUPPLIER_BONUS, formatPoint, referralCodeSchema } from "@oilpick/core";
 import { useSession } from "../hooks/useSession";
 
@@ -51,9 +51,9 @@ export function RefLandingPage() {
       }}
     >
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {/* 브랜드 로크업 — 폐유(payou) 마스코트 + 영문 부제(10-brand.md B1~B3). */}
+        {/* 브랜드 로크업 — 폐유(payou) 로고(제리캔+P) + 영문 부제(10-brand.md B1~B3). */}
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <Mascot size={64} />
+          <BrandMark size={64} />
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
             <span style={{ fontSize: typeScale.title, fontWeight: 800, color: colors.primary.dark }}>
               폐유 <span style={{ fontSize: typeScale.caption, fontWeight: 700, color: colors.accent.deep }}>payou</span>
