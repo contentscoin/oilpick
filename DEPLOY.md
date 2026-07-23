@@ -33,6 +33,10 @@ supabase functions deploy
 supabase secrets set FCM_SERVICE_ACCOUNT="$(cat fcm-service-account.json)"
 #  - REFERRAL_BASE_URL(선택, 09): 라이더 추천 공유 링크의 웹 랜딩 베이스. 미설정 시 core 기본값
 #    https://app.oilpick.kr 사용 — 실제 user 앱 도메인이 다르면 반드시 설정(referral-code가 조립).
+#  - KAKAO_MOBILITY_KEY(선택, M9-b): 인앱 경로선·ETA용 카카오모빌리티 Directions REST 키.
+#    미설정 시 directions 함수가 configured:false로 조용히 비활성(라이더 위치 마커만 표시).
+#    키 발급 후 설정하면 재배포 없이 즉시 활성화된다. 서버 시크릿(클라이언트 번들 금지).
+# supabase secrets set KAKAO_MOBILITY_KEY="<카카오모빌리티 REST 키>"
 # supabase secrets set REFERRAL_BASE_URL="https://app.oilpick.kr"
 #  - PG 시크릿(TOSS_SECRET_KEY / PG_PROVIDER / KOEM_*)은 08 피벗(쿠폰 결제 폐기)으로 불필요 —
 #    기존 설정돼 있어도 참조하는 함수가 없다(잔존 시 secrets unset으로 정리 가능. 07 F4/F14 이력 참조).

@@ -215,6 +215,18 @@ var referralSettleOutputSchema = z.object({
   settled: z.boolean(),
   settledAt: z.string().nullable()
 });
+var directionsInputSchema = z.object({
+  origin: z.object({ lat: latSchema, lng: lngSchema }),
+  destination: z.object({ lat: latSchema, lng: lngSchema })
+});
+var directionsOutputSchema = z.object({
+  /** 서버에 KAKAO_MOBILITY_KEY가 설정돼 라우팅이 가능한지. false면 path는 빈 배열. */
+  configured: z.boolean(),
+  distanceMeters: z.number().int().nonnegative().nullable(),
+  durationSeconds: z.number().int().nonnegative().nullable(),
+  /** 경로 폴리라인(출발→도착). MapView가 선으로 그린다. 미구성/실패 시 빈 배열. */
+  path: z.array(z.object({ lat: latSchema, lng: lngSchema }))
+});
 export {
   arrivePayloadSchema,
   cancelPayloadSchema,
@@ -225,6 +237,8 @@ export {
   csStatusSchema,
   csTicketInputSchema,
   deliverPayloadSchema,
+  directionsInputSchema,
+  directionsOutputSchema,
   disputePayloadSchema,
   errorResponseSchema,
   forceCompletePayloadSchema,
