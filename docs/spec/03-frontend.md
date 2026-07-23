@@ -151,8 +151,16 @@ Realtime: `pickup_orders` 자기 행 UPDATE 구독으로 상태 자동 갱신 (�
 | `/users` | 회원 관리 | supplier/rider 탭. rider PENDING 큐: 서류 이미지 뷰어 + 승인/반려(rider-verify) |
 | `/settlement` | 정산 | withdrawals 큐(승인/반려/이체완료 처리) + point_ledger 감사 테이블 + 일별 합계 |
 | `/depots` | 집하장 | CRUD + QR 인쇄 뷰(qr_secret을 QR 이미지로) |
+| `/dealers` | 좌상 관리 [13 I3] | 좌상 계정 생성(dealer-create) + 라이더 소속 배정(dealer-assign). admin 전용 |
 | `/notify` | 공지 | 전체/역할별 푸시 발송 폼 |
-- admin 로그인: 이메일/비밀번호 (admin 계정은 시드로 생성). role≠admin이면 접근 차단.
+- admin 로그인: 아이디/비밀번호. role∈{admin, dealer}만 접근(그 외 차단). 메뉴·라우트는 role로 분기(13 I3).
+
+> **[13] 좌상(dealer, 서브어드민) 화면** — 같은 admin 웹에 좌상 계정으로 로그인하면 서브어드민 메뉴만:
+> | 경로 | 뷰 | 요점 |
+> |---|---|---|
+> | `/` | 관할 대시보드 | 소속 라이더 KPI + 목록(승인/정지/해제, rider-verify 자기소속). RLS가 범위 강제 |
+> | `/performance` | 소속 실적 | v_dealer_rider_stats 테이블 + CSV. 지급액은 표시용 통계 — **정산 화면 없음**(D5) |
+> admin 라우트(주문/시세/정산 등)는 RoleGate로 dealer 접근 시 `/`로 리다이렉트.
 
 > **07 피벗 개정 (상세는 07-pivot-plan.md 참조)**
 > - **`/price`** [F10]: 쿠폰 단가 섹션(현재 단가+coupon-price-set 폼+이력) 추가, rider_fee 입력 필드 제거.

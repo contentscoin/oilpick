@@ -24,8 +24,8 @@ supabase link --project-ref <PROJECT_REF>
 # seed.sql은 로컬 전용이라 프로덕션엔 적용되지 않는다(아래 3-1에서 admin 수동 생성).
 supabase db push
 
-# Edge Functions 배포(14개 — 08에서 coupon-* 6종 삭제·withdraw-request/withdraw-process/
-# point-adjust 부활, 09에서 referral-code/referral-attach 추가). verify_jwt 등은 supabase/config.toml을 따른다.
+# Edge Functions 배포(17개 — 08 withdraw-*/point-adjust 부활, 09 referral-code/attach/settle,
+# 11 M9-b directions, 13 dealer-create/dealer-assign). verify_jwt 등은 supabase/config.toml을 따른다.
 supabase functions deploy
 
 # 시크릿 설정
@@ -85,6 +85,8 @@ supabase secrets set FCM_SERVICE_ACCOUNT="$(cat fcm-service-account.json)"
   ⚠️ `crypt()`의 비밀번호는 반드시 강한 값으로 하고, **실제 비밀번호를 이 문서/리포지토리에 적지 말 것**.
   임시/약한 비밀번호로 만들었다면 런칭 전 교체:
   `update auth.users set encrypted_password=crypt('<강한값>',gen_salt('bf')) where email='admin@oilpick.local';`
+- **좌상(dealer) 계정**: 별도 SQL 불필요 — admin 로그인 후 웹 `/dealers`에서 생성(dealer-create Edge).
+  생성된 좌상은 같은 admin 웹에 자기 아이디/비번으로 로그인하면 서브어드민 메뉴만 보인다(13).
 - **초기 시세 tick**: admin 웹의 시세 관리에서 첫 매입가 설정(`price-set`). ⚠️ 미설정 시
   order-create가 404("현재 시세 정보를 찾을 수 없어요")로 막힌다 — 필수 초기 데이터.
   (쿠폰 단가는 08 피벗으로 폐기 — 설정 불필요.)

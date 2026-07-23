@@ -414,3 +414,47 @@ export const directionsOutputSchema = z.object({
   path: z.array(z.object({ lat: latSchema, lng: lngSchema })),
 });
 export type DirectionsOutput = z.infer<typeof directionsOutputSchema>;
+
+/** dealer-create (admin, 13 I2): 좌상 계정 생성. 아이디→<아이디>@oilpick.local(admin 로그인과 동일 매핑). */
+export const dealerCreateInputSchema = z.object({
+  username: z.string().min(3).max(32).regex(/^[a-z0-9_]+$/, "아이디는 영소문자·숫자·밑줄만 가능해요."),
+  password: z.string().min(8, "비밀번호는 8자 이상이어야 해요."),
+  displayName: z.string().min(1).max(40),
+  phone: z.string().min(1).max(20),
+});
+export type DealerCreateInput = z.infer<typeof dealerCreateInputSchema>;
+
+export const dealerCreateOutputSchema = z.object({
+  dealerId: uuidSchema,
+  username: z.string(),
+});
+export type DealerCreateOutput = z.infer<typeof dealerCreateOutputSchema>;
+
+/** dealer-assign (admin + 좌상 자기소속, 13 I2): rider_profiles.dealer_id 배정/해제. dealerId=null은 해제. */
+export const dealerAssignInputSchema = z.object({
+  riderId: uuidSchema,
+  dealerId: uuidSchema.nullable(),
+});
+export type DealerAssignInput = z.infer<typeof dealerAssignInputSchema>;
+
+export const dealerAssignOutputSchema = z.object({
+  riderId: uuidSchema,
+  dealerId: uuidSchema.nullable(),
+});
+export type DealerAssignOutput = z.infer<typeof dealerAssignOutputSchema>;
+
+/** v_dealer_rider_stats 행(좌상 실적 통계, 13 I4). 금액은 표시용 — 정산 로직 없음(D5). */
+export const dealerRiderStatsSchema = z.object({
+  rider_id: uuidSchema,
+  dealer_id: uuidSchema.nullable(),
+  rider_name: z.string().nullable(),
+  verify_status: z.string(),
+  is_online: z.boolean(),
+  completed_count: z.number().int().nonnegative(),
+  collected_kg: z.number().nonnegative(),
+  cash_paid: z.number().int().nonnegative(),
+  point_paid: z.number().int().nonnegative(),
+  referral_signed_up: z.number().int().nonnegative(),
+  referral_activated: z.number().int().nonnegative(),
+});
+export type DealerRiderStats = z.infer<typeof dealerRiderStatsSchema>;

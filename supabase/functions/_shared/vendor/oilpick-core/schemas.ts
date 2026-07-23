@@ -227,6 +227,37 @@ var directionsOutputSchema = z.object({
   /** 경로 폴리라인(출발→도착). MapView가 선으로 그린다. 미구성/실패 시 빈 배열. */
   path: z.array(z.object({ lat: latSchema, lng: lngSchema }))
 });
+var dealerCreateInputSchema = z.object({
+  username: z.string().min(3).max(32).regex(/^[a-z0-9_]+$/, "\uC544\uC774\uB514\uB294 \uC601\uC18C\uBB38\uC790\xB7\uC22B\uC790\xB7\uBC11\uC904\uB9CC \uAC00\uB2A5\uD574\uC694."),
+  password: z.string().min(8, "\uBE44\uBC00\uBC88\uD638\uB294 8\uC790 \uC774\uC0C1\uC774\uC5B4\uC57C \uD574\uC694."),
+  displayName: z.string().min(1).max(40),
+  phone: z.string().min(1).max(20)
+});
+var dealerCreateOutputSchema = z.object({
+  dealerId: uuidSchema,
+  username: z.string()
+});
+var dealerAssignInputSchema = z.object({
+  riderId: uuidSchema,
+  dealerId: uuidSchema.nullable()
+});
+var dealerAssignOutputSchema = z.object({
+  riderId: uuidSchema,
+  dealerId: uuidSchema.nullable()
+});
+var dealerRiderStatsSchema = z.object({
+  rider_id: uuidSchema,
+  dealer_id: uuidSchema.nullable(),
+  rider_name: z.string().nullable(),
+  verify_status: z.string(),
+  is_online: z.boolean(),
+  completed_count: z.number().int().nonnegative(),
+  collected_kg: z.number().nonnegative(),
+  cash_paid: z.number().int().nonnegative(),
+  point_paid: z.number().int().nonnegative(),
+  referral_signed_up: z.number().int().nonnegative(),
+  referral_activated: z.number().int().nonnegative()
+});
 export {
   arrivePayloadSchema,
   cancelPayloadSchema,
@@ -236,6 +267,11 @@ export {
   csReplyOutputSchema,
   csStatusSchema,
   csTicketInputSchema,
+  dealerAssignInputSchema,
+  dealerAssignOutputSchema,
+  dealerCreateInputSchema,
+  dealerCreateOutputSchema,
+  dealerRiderStatsSchema,
   deliverPayloadSchema,
   directionsInputSchema,
   directionsOutputSchema,

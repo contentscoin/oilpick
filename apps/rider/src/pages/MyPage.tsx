@@ -61,6 +61,12 @@ export function MyPage() {
       >
         <p style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>{profile?.displayName ?? ""}</p>
         <p style={{ margin: "4px 0 0", fontSize: 13, color: colors.status.wait }}>{profile?.vehicleNumber ?? ""}</p>
+        {/* 13 I5: 소속 좌상 상호(배정된 경우만). */}
+        {profile?.dealerName && (
+          <p data-testid="rider-dealer" style={{ margin: "4px 0 0", fontSize: 13, color: colors.status.wait }}>
+            소속: {profile.dealerName}
+          </p>
+        )}
         <button
           type="button"
           data-testid="badge-link"

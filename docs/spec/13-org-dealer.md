@@ -66,15 +66,19 @@
 - **rider 앱**: 마이페이지에 "소속: {좌상 상호}" 표시(read 1곳). 미배정이면 미표기.
 - 알림/레퍼럴 등 기존 기능은 dealer와 무관(변경 없음).
 
-## 태스크 분해 (I)
-| # | 내용 | 완료 기준 |
+## 태스크 분해 (I) — ✅ I1~I6 구현 완료(2026-07-22)
+| # | 내용 | 상태 |
 |---|---|---|
-| I1 | DB 마이그레이션(role+dealer_id+RLS 6정책+fn_is_dealer+v_dealer_rider_stats)+pgTAP, 01/00 문서 동기화 | pgTAP green(신규 asserts 포함) |
-| I2 | dealer-create/dealer-assign Edge + rider-verify dealer 확장 + 02-api 명세 + vendor | 정적 검증+config.toml 등록 |
-| I3 | admin 셸 role 분기 + /dealers 관리 화면(생성·배정) | admin/dealer 계정별 메뉴 스냅샷 테스트 |
-| I4 | dealer 서브어드민 3화면(대시보드/소속 라이더+승인/실적통계) | RLS 범위 강제 확인(남의 소속 미노출·미승인) |
-| I5 | rider 마이페이지 소속 표시 | 단위 테스트 |
-| I6 | qa-checklist·DEPLOY(초기 좌상 계정 생성 절차) 갱신 | 문서 동기화 |
+| I1 | DB(role 'dealer'+dealer_id+RLS 5 SELECT정책+fn_dealer_owns_rider+guard dealer_id+v_dealer_rider_stats)+pgTAP 14 asserts | ✅ (하네스 10스위트 171) |
+| I2 | dealer-create/dealer-assign Edge + rider-verify dealer 확장 + core 스키마 + config + vendor + 02-api §6·20·21 | ✅ (정적 검증) |
+| I3 | admin 셸 role 분기(AdminShell/AuthGuard/RoleGate) + /dealers 관리(생성·배정) | ✅ (AdminShell 5테스트) |
+| I4 | dealer 관할 대시보드(소속 라이더+승인/정지/해제) + 실적통계(/performance, CSV) | ✅ (DealerHomePage 3테스트) |
+| I5 | rider 마이페이지 "소속: {좌상 상호}" | ✅ |
+| I6 | qa-checklist·DEPLOY·03-frontend 동기화 | ✅ |
+> 설계 대비 축약: 좌상 화면은 3개 대신 2개(관할 대시보드에 소속 라이더+승인 통합, 실적통계 분리)로
+> 합쳤다 — 정산 화면이 없어(D5) 라이더 목록을 대시보드에 두는 편이 자연스럽다. 쓰기(배정/승인)는
+> RLS UPDATE 정책 대신 Edge(service_role)+서버 소유권 검증으로 일원화(guard 트리거가 dealer_id·
+> verify_status 직접 변경을 막으므로) — RLS는 SELECT 5정책만.
 
 ## 오픈 질문 — ✅ 전부 확정(2026-07-22)
 1. 수수료 모델 → **금전 로직 없음. 실적 통계만 제공, 좌상 자체 정산**(D5).

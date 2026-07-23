@@ -15,6 +15,8 @@ export interface RiderProfile {
   verifyStatus: VerifyStatus;
   rejectReason: string | null;
   isOnline: boolean;
+  /** 소속 좌상 상호(13 I5). 미배정이면 null. */
+  dealerName: string | null;
 }
 
 /**
@@ -40,11 +42,23 @@ export function useRiderProfile(userId: string | undefined) {
 
       const { data: rider, error: riderError } = await supabase
         .from("rider_profiles")
-        .select("vehicle_number, verify_status, reject_reason, is_online")
+        .select("vehicle_number, verify_status, reject_reason, is_online, dealer_id")
         .eq("id", userId)
         .maybeSingle();
       if (riderError) throw riderError;
       if (!rider) return null;
+
+      // 소속 좌상 상호(13 I5). RLS p_profiles_read_my_dealer가 자기 좌상 1행만 허용.
+      // 부가 표기이므로 조회 실패는 null로 강등(마이 화면을 깨지 않음).
+      let dealerName: string | null = null;
+      if (rider.dealer_id) {
+        const { data: dealer } = await supabase
+          .from("profiles")
+          .select("display_name")
+          .eq("id", rider.dealer_id)
+          .maybeSingle();
+        dealerName = dealer?.display_name ?? null;
+      }
 
       return {
         id: profile.id,
@@ -53,6 +67,7 @@ export function useRiderProfile(userId: string | undefined) {
         verifyStatus: rider.verify_status,
         rejectReason: rider.reject_reason,
         isOnline: rider.is_online,
+        dealerName,
       };
     },
   });

@@ -5,10 +5,12 @@ import { useAdminProfile } from "../hooks/useAdminProfile";
 import { supabase } from "../lib/supabaseClient";
 
 /**
- * 03-frontend.md apps/admin: "admin 로그인: 이메일/비밀번호. role≠admin이면 접근 차단."
- * 세션이 없으면 /login으로, 세션은 있지만 profiles.role이 admin이 아니면 접근을 막고
- * 로그아웃 처리한다(다른 role 계정으로 admin 웹에 들어오는 것을 방지).
+ * 03-frontend.md apps/admin + 13 I3: admin 웹은 role='admin'(본사) 또는 role='dealer'(좌상,
+ * 서브어드민)만 접근 가능. 그 외(supplier/rider)는 차단·로그아웃. 세션 없으면 /login.
+ * 메뉴·라우트는 role로 분기(AdminShell·App.tsx) — 여기선 웹 진입 자격만 판단한다.
  */
+const ADMIN_WEB_ROLES = ["admin", "dealer"];
+
 export function AuthGuard({ children }: { children: ReactNode }) {
   const { session, loading } = useSession();
   const userId = session?.user.id;
@@ -17,7 +19,7 @@ export function AuthGuard({ children }: { children: ReactNode }) {
   if (loading) return null;
   if (!session) return <Navigate to="/login" replace />;
   if (profileLoading) return null;
-  if (!profile || profile.role !== "admin") {
+  if (!profile || !ADMIN_WEB_ROLES.includes(profile.role as string)) {
     return <AccessDenied />;
   }
   return <>{children}</>;
