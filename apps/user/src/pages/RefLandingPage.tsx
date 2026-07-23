@@ -51,15 +51,15 @@ export function RefLandingPage() {
       }}
     >
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {/* 브랜드 로크업 — 오반장(OBJ) 마스코트 + 영문 부제(10-brand.md B1~B3). */}
+        {/* 브랜드 로크업 — 폐유(payou) 마스코트 + 영문 부제(10-brand.md B1~B3). */}
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <Mascot size={64} />
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
             <span style={{ fontSize: typeScale.title, fontWeight: 800, color: colors.primary.dark }}>
-              오반장 <span style={{ fontSize: typeScale.caption, fontWeight: 700, color: colors.accent.deep }}>OBJ</span>
+              폐유 <span style={{ fontSize: typeScale.caption, fontWeight: 700, color: colors.accent.deep }}>payou</span>
             </span>
             <span data-testid="brand-tagline" style={{ fontSize: typeScale.caption, color: colors.status.wait }}>
-              Oil pickup, paid on the spot
+              We pay you for used oil
             </span>
           </div>
         </div>

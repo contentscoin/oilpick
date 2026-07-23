@@ -39,14 +39,14 @@ describe("AddressField (12 S2)", () => {
   });
 
   it("주소 검색→지오코딩 성공 시 주소+좌표로 onChange한다", async () => {
-    mockOpenPostcodeSearch.mockResolvedValue("서울특별시 강서구 오반장로 1");
+    mockOpenPostcodeSearch.mockResolvedValue("서울특별시 강서구 화곡로 1");
     mockGeocodeAddress.mockResolvedValue({ lat: 37.5509, lng: 126.8225 });
     const onChange = vi.fn();
     render(<AddressField value={{ address: "", lat: null, lng: null }} onChange={onChange} />);
     fireEvent.click(screen.getByTestId("address-search-button"));
     await waitFor(() =>
       expect(onChange).toHaveBeenCalledWith({
-        address: "서울특별시 강서구 오반장로 1",
+        address: "서울특별시 강서구 화곡로 1",
         lat: 37.5509,
         lng: 126.8225,
       }),
@@ -54,13 +54,13 @@ describe("AddressField (12 S2)", () => {
   });
 
   it("지오코딩 실패 시 좌표 null + 수동 입력 유도(기본 좌표 저장 금지)", async () => {
-    mockOpenPostcodeSearch.mockResolvedValue("서울특별시 강서구 오반장로 1");
+    mockOpenPostcodeSearch.mockResolvedValue("서울특별시 강서구 화곡로 1");
     mockGeocodeAddress.mockResolvedValue(null);
     const onChange = vi.fn();
     render(<AddressField value={{ address: "", lat: null, lng: null }} onChange={onChange} />);
     fireEvent.click(screen.getByTestId("address-search-button"));
     await waitFor(() =>
-      expect(onChange).toHaveBeenCalledWith({ address: "서울특별시 강서구 오반장로 1", lat: null, lng: null }),
+      expect(onChange).toHaveBeenCalledWith({ address: "서울특별시 강서구 화곡로 1", lat: null, lng: null }),
     );
     expect(await screen.findByTestId("address-lat-input")).toBeInTheDocument();
   });

@@ -63,7 +63,7 @@ export function AddressField({ value, onChange }: AddressFieldProps) {
           data-testid="address-input"
           type="text"
           required
-          placeholder="예: 서울특별시 강서구 오반장로 1"
+          placeholder="예: 서울특별시 강서구 화곡로 1"
           value={value.address}
           // 주소를 손으로 고치면 좌표는 다시 미확정(검색으로 재확정 필요) — 오염 방지.
           onChange={(e) => onChange({ address: e.target.value, lat: null, lng: null })}

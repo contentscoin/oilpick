@@ -146,7 +146,7 @@ export function HomePage() {
       >
         {/* 헤더: 로고 + 알림 벨/이력 */}
         <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: 4 }}>
-          <h1 style={{ fontSize: typeScale.title, fontWeight: 800, margin: 0, color: colors.primary.dark }}>오반장</h1>
+          <h1 style={{ fontSize: typeScale.title, fontWeight: 800, margin: 0, color: colors.primary.dark }}>폐유</h1>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <button
               type="button"

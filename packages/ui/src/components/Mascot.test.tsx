@@ -2,14 +2,14 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { Mascot } from "./Mascot";
 
-// 오반장(OBJ) 마스코트 — docs/spec/10-brand.md B3. 순수 SVG·접근성 라벨·크기 비율.
+// 폐유(payou) 마스코트 — docs/spec/10-brand.md B3. 순수 SVG·접근성 라벨·크기 비율.
 
 describe("Mascot", () => {
-  it("접근성 라벨과 함께 렌더된다(기본 '오반장 캐릭터')", () => {
+  it("접근성 라벨과 함께 렌더된다(기본 '폐유 캐릭터')", () => {
     render(<Mascot />);
     const svg = screen.getByTestId("obj-mascot");
     expect(svg).toHaveAttribute("role", "img");
-    expect(svg).toHaveAttribute("aria-label", "오반장 캐릭터");
+    expect(svg).toHaveAttribute("aria-label", "폐유 캐릭터");
     // "반장" 완장 텍스트가 포함된다(브랜드 콘셉트 핵심 요소).
     expect(screen.getByText("반장")).toBeInTheDocument();
   });

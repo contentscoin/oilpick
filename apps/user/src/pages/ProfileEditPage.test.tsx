@@ -18,7 +18,7 @@ const CURRENT = {
   displayName: "김사장",
   storeName: "행복식당",
   bizNumber: "123-45-67890",
-  address: "서울시 강서구 오반장로 1",
+  address: "서울시 강서구 화곡로 1",
 };
 
 function renderPage() {
