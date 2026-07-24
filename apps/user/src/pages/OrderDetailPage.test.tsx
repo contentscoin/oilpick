@@ -4,9 +4,10 @@ import { ToastProvider } from "@oilpick/ui";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { OrderDetailPage } from "./OrderDetailPage";
 
-const { mockUseOrder, mockUseAssignedRiderCard, mockInvokeEdgeFunction, mockUseSession, mockUseUnreadCount } = vi.hoisted(() => ({
+const { mockUseOrder, mockUseAssignedRiderCard, mockUseRiderLocation, mockInvokeEdgeFunction, mockUseSession, mockUseUnreadCount } = vi.hoisted(() => ({
   mockUseOrder: vi.fn(),
   mockUseAssignedRiderCard: vi.fn(),
+  mockUseRiderLocation: vi.fn(),
   mockInvokeEdgeFunction: vi.fn(),
   mockUseSession: vi.fn(),
   mockUseUnreadCount: vi.fn(),
@@ -14,6 +15,7 @@ const { mockUseOrder, mockUseAssignedRiderCard, mockInvokeEdgeFunction, mockUseS
 
 vi.mock("../hooks/useOrder", () => ({ useOrder: mockUseOrder }));
 vi.mock("../hooks/useAssignedRiderCard", () => ({ useAssignedRiderCard: mockUseAssignedRiderCard }));
+vi.mock("../hooks/useRiderLocation", () => ({ useRiderLocation: mockUseRiderLocation }));
 vi.mock("../lib/edgeFunction", () => ({ invokeEdgeFunction: mockInvokeEdgeFunction }));
 vi.mock("../hooks/useSession", () => ({ useSession: mockUseSession }));
 vi.mock("../hooks/useUnreadCount", () => ({ useUnreadCount: mockUseUnreadCount }));
@@ -39,6 +41,7 @@ const BASE_ORDER = {
   disputeReason: null as string | null,
   createdAt: "2026-07-01T00:00:00Z",
   acceptedAt: null as string | null,
+  arrivedAt: null as string | null,
   pickedUpAt: null as string | null,
   deliveredAt: null as string | null,
   completedAt: null as string | null,
@@ -63,6 +66,7 @@ describe("OrderDetailPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockUseAssignedRiderCard.mockReturnValue({ data: null });
+    mockUseRiderLocation.mockReturnValue(null);
     mockUseSession.mockReturnValue({ session: { user: { id: "supplier-1" } }, loading: false });
     mockUseUnreadCount.mockReturnValue(0);
   });

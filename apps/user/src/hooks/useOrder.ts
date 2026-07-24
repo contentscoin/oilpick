@@ -31,6 +31,8 @@ export interface OrderDetail {
   disputeReason: string | null;
   createdAt: string;
   acceptedAt: string | null;
+  /** [14 J1] ARRIVE 전이 시각 — 타임라인 'ARRIVED' 노드 시각. */
+  arrivedAt: string | null;
   pickedUpAt: string | null;
   deliveredAt: string | null;
   completedAt: string | null;
@@ -60,6 +62,7 @@ function mapRow(row: {
   dispute_reason: string | null;
   created_at: string;
   accepted_at: string | null;
+  arrived_at: string | null;
   picked_up_at: string | null;
   delivered_at: string | null;
   completed_at: string | null;
@@ -90,6 +93,7 @@ function mapRow(row: {
     disputeReason: row.dispute_reason,
     createdAt: row.created_at,
     acceptedAt: row.accepted_at,
+    arrivedAt: row.arrived_at,
     pickedUpAt: row.picked_up_at,
     deliveredAt: row.delivered_at,
     completedAt: row.completed_at,
@@ -97,7 +101,7 @@ function mapRow(row: {
 }
 
 const ORDER_DETAIL_COLUMNS =
-  "id, status, supplier_id, rider_id, depot_id, requested_cans, requested_kg, pickup_address, pickup_location, preferred_time, snapshot_price_per_kg, snapshot_rider_fee, measured_kg, final_kg, supplier_point, coupon_cost, payout_method, cash_paid_amount, photo_urls, cancel_reason, dispute_reason, created_at, accepted_at, picked_up_at, delivered_at, completed_at";
+  "id, status, supplier_id, rider_id, depot_id, requested_cans, requested_kg, pickup_address, pickup_location, preferred_time, snapshot_price_per_kg, snapshot_rider_fee, measured_kg, final_kg, supplier_point, coupon_cost, payout_method, cash_paid_amount, photo_urls, cancel_reason, dispute_reason, created_at, accepted_at, arrived_at, picked_up_at, delivered_at, completed_at";
 
 /**
  * 단일 주문 상세 조회 + Realtime 구독. 03-frontend.md U6~U9 "/orders/:id":

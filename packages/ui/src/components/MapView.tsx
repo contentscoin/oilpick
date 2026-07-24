@@ -23,6 +23,21 @@ export interface MapMarker {
   label?: string;
 }
 
+/** [14 J1] 라이더 실시간 위치 마커. lat/lng는 최신 좌표, stale=60초 무갱신(흐리게 표시). */
+export interface RiderMarker {
+  lat: number;
+  lng: number;
+  stale?: boolean;
+}
+
+/** maplibre Marker 인스턴스 중 이 컴포넌트가 쓰는 최소 표면(dynamic import라 구조적 타입만 선언). */
+interface RiderMarkerInstance {
+  setLngLat: (lngLat: [number, number]) => RiderMarkerInstance;
+  addTo: (map: unknown) => RiderMarkerInstance;
+  remove?: () => void;
+  getElement?: () => HTMLElement | undefined;
+}
+
 export interface MapViewProps {
   /** MapLibre 스타일 JSON URL 또는 {z}/{x}/{y} 래스터 타일 템플릿. 없으면 프리뷰 폴백. */
   styleUrl?: string;
@@ -36,6 +51,11 @@ export interface MapViewProps {
   pickupLabel?: string;
   /** 프리뷰에 표시할 ETA 라벨(예 "12분 후 도착"). 실제 rider-location 데이터가 있을 때만 전달. */
   etaLabel?: string;
+  /**
+   * [14 J1] 라이더 실시간 위치(useRiderLocation broadcast). 실지도에서는 앰버 마커를 제자리
+   * 갱신하고, 프리뷰 폴백에서는 "라이더 이동 중" 라이브 칩을 표시한다. null이면 표시하지 않는다.
+   */
+  riderMarker?: RiderMarker | null;
 }
 
 /** {z}/{x}/{y} 템플릿이면 인라인 래스터 스타일로, 아니면 스타일 URL 그대로. */
@@ -129,9 +149,14 @@ export function MapView({
   style,
   pickupLabel,
   etaLabel,
+  riderMarker,
 }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<"idle" | "ready" | "placeholder">("idle");
+  // [14 J1] 라이더 마커를 제자리 갱신하려면 로드 이펙트 밖에서 맵·maplibre 모듈에 접근해야 한다.
+  const mapRef = useRef<{ remove: () => void } | null>(null);
+  const maplibreRef = useRef<{ Marker: new (opts?: Record<string, unknown>) => RiderMarkerInstance } | null>(null);
+  const riderMarkerRef = useRef<RiderMarkerInstance | null>(null);
 
   useEffect(() => {
     if (!styleUrl) {
@@ -159,6 +184,8 @@ export function MapView({
             .setLngLat([marker.lng, marker.lat])
             .addTo(map as never);
         });
+        mapRef.current = map;
+        maplibreRef.current = maplibregl as never;
         setStatus("ready");
       } catch {
         // 모듈 로드 실패·WebGL 미지원 등 — 프리뷰 폴백(크래시 금지)
@@ -167,11 +194,35 @@ export function MapView({
     })();
     return () => {
       cancelled = true;
+      riderMarkerRef.current?.remove?.();
+      riderMarkerRef.current = null;
+      mapRef.current = null;
+      maplibreRef.current = null;
       map?.remove();
     };
     // center/markers/level은 최초 로드 시점 값만 사용(초기 마운트 1회 렌더) — 이후 변경은
     // 이 로드 이펙트를 재실행하지 않는다(카카오 구현과 동일 계약).
   }, [styleUrl]);
+
+  // [14 J1] 라이더 실시간 마커 — 좌표가 바뀔 때마다 앰버 마커를 제자리 갱신(맵 재로드 없이).
+  // riderMarker 미전달 시 no-op(기존 사용처·테스트 무영향). 프리뷰 폴백은 아래 라이브 칩으로 처리.
+  useEffect(() => {
+    const map = mapRef.current;
+    const maplibre = maplibreRef.current;
+    if (status !== "ready" || !map || !maplibre) return;
+    if (!riderMarker) {
+      riderMarkerRef.current?.remove?.();
+      riderMarkerRef.current = null;
+      return;
+    }
+    if (!riderMarkerRef.current) {
+      riderMarkerRef.current = new maplibre.Marker({ color: colors.accent.DEFAULT });
+      riderMarkerRef.current.addTo(map as never);
+    }
+    riderMarkerRef.current.setLngLat([riderMarker.lng, riderMarker.lat]);
+    const el = riderMarkerRef.current.getElement?.();
+    if (el) el.style.opacity = riderMarker.stale ? "0.4" : "1";
+  }, [riderMarker, status]);
 
   if (status === "placeholder") {
     return (
@@ -190,6 +241,41 @@ export function MapView({
         }}
       >
         <MapPreview />
+
+        {/* [14 J1] 라이더 실시간 위치 라이브 칩 — 프리뷰 폴백엔 실좌표 마커가 없으므로 상태로 대체.
+            좌표 수신 = "이동 중", 60초 무갱신 = "위치 갱신 대기"(흐리게). */}
+        {riderMarker && (
+          <span
+            data-testid="map-view-rider-live"
+            style={{
+              position: "absolute",
+              top: 12,
+              right: 12,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "6px 12px",
+              borderRadius: radius.pill,
+              backgroundColor: "#fff",
+              boxShadow: elevation.card,
+              fontSize: 13,
+              fontWeight: 700,
+              color: gray[900],
+              opacity: riderMarker.stale ? 0.55 : 1,
+            }}
+          >
+            <span
+              aria-hidden
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                backgroundColor: riderMarker.stale ? gray[400] : colors.accent.DEFAULT,
+              }}
+            />
+            {riderMarker.stale ? "위치 갱신 대기" : "라이더 이동 중"}
+          </span>
+        )}
 
         {/* ETA pill(실제 ETA 데이터가 있을 때만) */}
         {etaLabel && (

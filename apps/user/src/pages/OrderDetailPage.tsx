@@ -6,6 +6,7 @@ import { MAP_STYLE_URL } from "../lib/env";
 import { invokeEdgeFunction } from "../lib/edgeFunction";
 import { useOrder } from "../hooks/useOrder";
 import { useAssignedRiderCard } from "../hooks/useAssignedRiderCard";
+import { useRiderLocation } from "../hooks/useRiderLocation";
 import { useSession } from "../hooks/useSession";
 import { useUnreadCount } from "../hooks/useUnreadCount";
 
@@ -27,6 +28,8 @@ export function OrderDetailPage() {
   const navigate = useNavigate();
   const { data: order, isLoading } = useOrder(id);
   const { data: rider } = useAssignedRiderCard(order?.riderId);
+  // [14 J1] 라이더가 이동 중(ACCEPTED/ARRIVED)일 때만 실시간 위치를 구독한다(그 외엔 null).
+  const riderLoc = useRiderLocation(id, order?.status === "ACCEPTED" || order?.status === "ARRIVED");
   const { session } = useSession();
   // 06 E7: 헤더 벨 미읽음 배지 — 홈과 동일한 useUnreadCount로 공통화.
   const unread = useUnreadCount(session?.user.id);
@@ -165,13 +168,16 @@ export function OrderDetailPage() {
       ? `${rider.displayName} 라이더가 매장으로 이동 중이에요`
       : undefined;
 
-  // 타임라인 각 스텝의 실제 시각. 스키마에 arrived_at/completed_at 컬럼이 없어(01-db-schema.sql)
-  // ARRIVED/COMPLETED 노드는 값이 없으면 OrderTimeline이 "-"로 렌더한다(데이터 조작 금지).
+  // 타임라인 각 스텝의 실제 시각. [14 J1] arrived_at 컬럼이 생겨 ARRIVED 노드가 '-'를 벗어난다.
+  // COMPLETED는 신규 주문 completed_at 우선, 레거시(구경로)는 delivered_at 폴백. 값이 없으면
+  // OrderTimeline이 "-"로 렌더한다(데이터 조작 금지).
   const timelineTimestamps: Partial<Record<OrderStatus, string>> = {};
   if (order.createdAt) timelineTimestamps.REQUESTED = formatTimeOfDay(order.createdAt);
   if (order.acceptedAt) timelineTimestamps.ACCEPTED = formatTimeOfDay(order.acceptedAt);
+  if (order.arrivedAt) timelineTimestamps.ARRIVED = formatTimeOfDay(order.arrivedAt);
   if (order.pickedUpAt) timelineTimestamps.PICKED_UP = formatTimeOfDay(order.pickedUpAt);
-  if (order.deliveredAt) timelineTimestamps.COMPLETED = formatTimeOfDay(order.deliveredAt);
+  const completedTs = order.completedAt ?? order.deliveredAt;
+  if (completedTs) timelineTimestamps.COMPLETED = formatTimeOfDay(completedTs);
 
   return (
     <main style={{ display: "flex", flexDirection: "column", gap: 20, padding: 20, maxWidth: 480, margin: "0 auto" }}>
@@ -271,6 +277,7 @@ export function OrderDetailPage() {
               ? [{ lat: order.pickupLat, lng: order.pickupLng }]
               : []
           }
+          riderMarker={riderLoc ? { lat: riderLoc.lat, lng: riderLoc.lng, stale: riderLoc.stale } : null}
           pickupLabel={order.pickupAddress}
           style={{ minHeight: 220 }}
         />

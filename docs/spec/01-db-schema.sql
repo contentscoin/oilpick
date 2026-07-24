@@ -111,7 +111,8 @@ create table pickup_orders (
   dispute_reason text,
   broadcast_radius_km int not null default 3,
   created_at timestamptz not null default now(),
-  accepted_at timestamptz, picked_up_at timestamptz, delivered_at timestamptz,
+  accepted_at timestamptz, arrived_at timestamptz,  -- [14 J1] arrived_at: ARRIVE 전이 시각(타임라인 표기)
+  picked_up_at timestamptz, delivered_at timestamptz,
   completed_at timestamptz                  -- [07 F2] 완료 시각. 레거시 완료 시각 조회는 coalesce(completed_at, delivered_at, picked_up_at)
 );
 create index idx_orders_status on pickup_orders (status, created_at desc);
@@ -128,6 +129,26 @@ create table order_events (
   created_at timestamptz not null default now()
 );
 create index idx_order_events_order on order_events (order_id, created_at);
+
+-- ===== 수거 바코드 1급(추적) [14 J1] =====
+-- 현장 스캔 바코드(+촬영 GPS)를 바코드별 역추적 질의가 가능하도록 정규화 적재. 원본 payload는
+-- order_events에 영구 보존(이중 기록 — 감사·복원용). 쓰기는 fn_transition_order(SUBMIT_MEASURE)의
+-- replace-set(delete→insert)로만 — 쓰기 RLS 정책 없음(service_role 전용, 절대 규칙 1 미러).
+-- 20260724000001_tracking.sql.
+create table pickup_items (
+  id bigint generated always as identity primary key,
+  order_id uuid not null references pickup_orders(id) on delete cascade,
+  rider_id uuid not null references rider_profiles(id),
+  barcode text not null,
+  geo_lat double precision,
+  geo_lng double precision,
+  captured_at timestamptz,                  -- 디바이스 촬영 시각(있으면). 서버 적재 시각은 created_at
+  created_at timestamptz not null default now(),
+  unique (order_id, barcode)                -- 주문 내 바코드 중복 방지 + replace-set 멱등축
+);
+create index idx_pickup_items_order on pickup_items (order_id);
+create index idx_pickup_items_barcode on pickup_items (barcode);
+-- RLS: read = admin + 주문 당사자(supplier/rider). write 정책 없음(service_role RPC만).
 
 -- ===== 포인트 원장 (append-only) =====
 -- [08 P3·P4] 현역 복권 — POINT 지급수단의 EARN(fn_transition_order CONFIRM_MEASURE/FORCE_COMPLETE),
