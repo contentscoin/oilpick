@@ -143,7 +143,7 @@ function OilPriceSection() {
               <XAxis dataKey="time" fontSize={11} tick={{ fill: "#71717a" }} />
               <YAxis fontSize={11} tick={{ fill: "#71717a" }} domain={["auto", "auto"]} />
               <Tooltip />
-              <Line type="monotone" dataKey="pricePerKg" stroke="#1B7A43" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="pricePerKg" stroke="#1C5A38" strokeWidth={2} dot={false} />
             </LineChart>
           </ResponsiveContainer>
         </div>

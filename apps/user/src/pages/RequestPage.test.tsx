@@ -59,11 +59,13 @@ describe("RequestPage", () => {
     mockUseRecentAddresses.mockReturnValue({ data: [] });
   });
 
-  it("starts at step 1 with the step indicator, can-size preset, and qty stepper", () => {
+  it("starts at step 1 with the step indicator and the 통(can) qty stepper only (no 통크기/kg toggle)", () => {
     renderPage();
     expect(screen.getByTestId("request-step-1")).toBeInTheDocument();
-    expect(screen.getByTestId("can-size-preset")).toBeInTheDocument();
     expect(screen.getByTestId("qty-stepper")).toBeInTheDocument();
+    // [14 §6] 통 개수만 선택 — 통크기 프리셋과 kg 직접입력은 제거됐다.
+    expect(screen.queryByTestId("can-size-preset")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("custom-kg-input")).not.toBeInTheDocument();
     // 1/2/3 도트 + 라벨 스텝 인디케이터.
     expect(screen.getByTestId("request-step-indicator")).toBeInTheDocument();
     expect(screen.getByTestId("request-step-dot-1")).toBeInTheDocument();
@@ -79,25 +81,6 @@ describe("RequestPage", () => {
     // +1통 → 2통 = 30kg × 700 = 21,000원.
     fireEvent.click(screen.getByTestId("qty-stepper-increment"));
     expect(screen.getByTestId("request-estimate-cash")).toHaveTextContent("21,000원");
-  });
-
-  it("recomputes the estimate when the 10L can-size preset is selected (proportional kg)", () => {
-    renderPage();
-    fireEvent.click(screen.getByTestId("can-size-10"));
-    // 1통 10L = 8.3kg × 700 = 5,810원.
-    expect(screen.getByTestId("request-estimate-cash")).toHaveTextContent("5,810원");
-  });
-
-  it("supports the 기타 preset with a direct kg input", () => {
-    renderPage();
-    fireEvent.click(screen.getByTestId("can-size-etc"));
-    expect(screen.queryByTestId("qty-stepper")).not.toBeInTheDocument();
-    // step1 next is disabled until a valid kg is entered.
-    expect(screen.getByTestId("request-step-1-next")).toBeDisabled();
-    fireEvent.change(screen.getByTestId("custom-kg-input"), { target: { value: "40" } });
-    // 40kg × 700 = 28,000원.
-    expect(screen.getByTestId("request-estimate-cash")).toHaveTextContent("28,000원");
-    expect(screen.getByTestId("request-step-1-next")).not.toBeDisabled();
   });
 
   it("prefills the address and coords when a recent-address chip is tapped", async () => {

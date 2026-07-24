@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Toast, type ToastProps } from "./Toast";
+import { frameFixedStyle } from "./MobileFrame";
 
 /**
  * 06 E6 — Toast의 전역 프로바이더 승격. 큐/타이머 관리를 이 프로바이더가 맡고(Toast 컴포넌트
@@ -87,10 +88,11 @@ export function ToastProvider({ children, offsetBottom = 24 }: ToastProviderProp
           data-testid="toast-stack"
           aria-live="polite"
           style={{
-            position: "fixed",
-            left: 16,
-            right: 16,
+            // [12 §8] 프레임 폭 중앙 정렬 + 좌우 16px 여백(box-sizing으로 프레임 안쪽 유지).
+            ...frameFixedStyle,
             bottom: offsetBottom,
+            padding: "0 16px",
+            boxSizing: "border-box",
             display: "flex",
             flexDirection: "column",
             gap: 8,

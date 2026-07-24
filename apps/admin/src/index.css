@@ -17,7 +17,7 @@
      outline은 시스템 색으로 유지된다 ③ outline은 요소의 border-radius를 그대로 따라가
      모양을 강제로 바꾸지 않는다. */
   :focus-visible {
-    outline: 3px solid rgba(27, 122, 67, 0.45);
+    outline: 3px solid rgba(28, 90, 56, 0.5);
     outline-offset: 1px;
   }
 }

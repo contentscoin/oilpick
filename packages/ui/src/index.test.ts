@@ -3,7 +3,7 @@ import * as UI from "./index";
 
 describe("@oilpick/ui barrel", () => {
   it("exports design tokens and all components", () => {
-    expect(UI.colors.primary.DEFAULT).toBe("#1B7A43");
+    expect(UI.colors.primary.DEFAULT).toBe("#1C5A38");
     expect(UI.radius.card).toBe(16);
     expect(UI.PriceCard).toBeTypeOf("function");
     expect(UI.OrderTimeline).toBeTypeOf("function");

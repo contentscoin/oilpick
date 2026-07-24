@@ -29,6 +29,7 @@ import {
   type LatLng,
   type OrderStatus,
   type PayoutMethod,
+  type PickupGeo,
 } from "@oilpick/core";
 import { MAP_STYLE_URL } from "../lib/env";
 import { invokeEdgeFunction } from "../lib/edgeFunction";
@@ -399,6 +400,22 @@ function PayoutMethodSelect({
   );
 }
 
+/**
+ * [12 §4] 촬영/스캔 시점 디바이스 GPS 1회 취득(promise 래핑). 권한 거부·미지원 시 null(수집 스킵,
+ * 크래시 없음). EXIF에 의존하지 않고 디바이스 GPS를 바코드/사진 메타로 첨부한다(위변조·유실 방지).
+ */
+function captureGeo(): Promise<PickupGeo | null> {
+  if (typeof navigator === "undefined" || !("geolocation" in navigator)) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude, capturedAt: new Date(pos.timestamp).toISOString() }),
+      () => resolve(null),
+      // maximumAge 60s: 최근 fix(위치 푸셔가 15s마다 갱신) 재사용 → 즉시 반환. highAccuracy는 지연이 커서 off.
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 },
+    );
+  });
+}
+
 function ArrivedPanel({
   orderId,
   measuredKg,
@@ -419,6 +436,10 @@ function ArrivedPanel({
   const [kg, setKg] = useState("");
   const [payout, setPayout] = useState<PayoutMethod | null>(submittedPayoutMethod);
   const [photos, setPhotos] = useState<PhotoAsset[]>([]);
+  // [12 §4] 바코드+GPS 수거이력(캡처 전용 — 지급/정산과 무관). barcodes 리스트 + 첫 캡처 시점 디바이스 GPS.
+  const [barcodes, setBarcodes] = useState<string[]>([]);
+  const [barcodeInput, setBarcodeInput] = useState("");
+  const [geo, setGeo] = useState<PickupGeo | null>(null);
   const [submitting, setSubmitting] = useState(false);
   // 08 P2: 재제출(수단 변경) 모드 — 대기 배너 대신 폼을 다시 연다(중재 확정 전까지 허용).
   const [resubmitting, setResubmitting] = useState(false);
@@ -427,6 +448,25 @@ function ArrivedPanel({
   // 06 E8-③: 순차 업로드 진행 카운트("사진 N/M 업로드 중"). 업로드 중이 아니면 null.
   const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null);
   const { showToast } = useToast();
+
+  // [12 §4] 바코드 1건 추가(스캔/수동 공통). 중복·공백 무시. 첫 추가 시 디바이스 GPS를 1회 취득.
+  async function addBarcode(raw: string) {
+    const code = raw.trim();
+    if (!code) return;
+    setBarcodes((prev) => (prev.includes(code) ? prev : [...prev, code]));
+    setBarcodeInput("");
+    if (!geo) {
+      const g = await captureGeo();
+      if (g) setGeo(g);
+    }
+  }
+  function removeBarcode(code: string) {
+    setBarcodes((prev) => prev.filter((c) => c !== code));
+  }
+  async function handleScanBarcode() {
+    const content = await scanQrCode();
+    if (content) await addBarcode(content);
+  }
 
   // 07 §1-3: 중재로 kg가 확정된(final_kg) 주문은 SUBMIT_MEASURE 재제출이 서버에서 거부된다.
   // 폼을 숨기고 확정 무게 + 지급 안내 + 사장님 확인 대기를 안내한다(수단별 카피 — 08 §1-5).
@@ -544,6 +584,11 @@ function ArrivedPanel({
       setError("현장 사진을 1장 이상 첨부해주세요.");
       return;
     }
+    // [12 §4] 첫 제출 시 폐식용유 바코드 ≥1건 필수(수거 시 입력). 재제출은 면제(기존 수거이력 보존).
+    if (!resubmitting && barcodes.length === 0) {
+      setError("폐식용유 바코드를 1개 이상 스캔하거나 입력해주세요.");
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -571,6 +616,11 @@ function ArrivedPanel({
       // 업로드 완료 → 전이 호출 동안은 기본 loading("처리 중...")으로 복귀.
       setUploadProgress(null);
 
+      // [12 §4] 바코드 추가 직후 빠르게 제출하면 addBarcode의 비동기 GPS 취득이 아직 끝나지 않아
+      // geo가 null일 수 있다 → 제출 시점에 마지막으로 한 번 더 시도(maximumAge 캐시로 즉시 반환).
+      const geoForSubmit = geo ?? (await captureGeo());
+      if (geoForSubmit && !geo) setGeo(geoForSubmit);
+
       const result = await invokeEdgeFunction("order-transition", {
         orderId,
         action: "SUBMIT_MEASURE",
@@ -578,6 +628,9 @@ function ArrivedPanel({
           measuredKg: parsedKg,
           photoUrls: uploadedUrls.length > 0 ? uploadedUrls : existingPhotoUrls,
           payoutMethod: payout,
+          // [12 §4] 바코드/GPS 수거이력(있을 때만). RPC가 order_events.payload에 보존.
+          ...(barcodes.length > 0 ? { barcodes } : {}),
+          ...(geoForSubmit ? { geo: geoForSubmit } : {}),
         },
       });
       if (result.ok) {
@@ -670,6 +723,93 @@ function ArrivedPanel({
           현장 사진 {existingPhotoUrls.length > 0 ? "(기존 사진 재사용 가능)" : "(필수)"}
         </span>
         <PhotoUploader photos={photos} onChange={setPhotos} maxCount={3} />
+      </Card>
+
+      {/* [12 §4] 폐식용유 바코드 + GPS 수거이력(캡처 전용). 스캔(네이티브) 또는 수동 입력, 첫 추가 시 위치 기록. */}
+      <Card style={{ gap: 10 }}>
+        <span style={{ fontSize: 14, fontWeight: 600, color: gray[800] }}>
+          폐식용유 바코드 {resubmitting ? "(재제출 — 선택)" : "(필수)"}
+        </span>
+        <p style={{ margin: 0, fontSize: 12, color: colors.status.wait }}>
+          통에 붙은 바코드를 스캔하거나 직접 입력하세요. 첫 추가 시 현재 위치(GPS)가 함께 기록돼요.
+        </p>
+        <div style={{ display: "flex", gap: 8 }}>
+          <input
+            data-testid="barcode-input"
+            type="text"
+            placeholder="바코드 번호"
+            value={barcodeInput}
+            onChange={(e) => setBarcodeInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void addBarcode(barcodeInput);
+              }
+            }}
+            style={{ ...inputStyle, flex: 1 }}
+          />
+          <button
+            type="button"
+            data-testid="barcode-add"
+            onClick={() => void addBarcode(barcodeInput)}
+            disabled={!barcodeInput.trim()}
+            style={{
+              minWidth: 64,
+              borderRadius: radius.button,
+              border: `1px solid ${colors.primary.DEFAULT}`,
+              backgroundColor: "#fff",
+              color: colors.primary.DEFAULT,
+              fontWeight: 700,
+              cursor: barcodeInput.trim() ? "pointer" : "not-allowed",
+              opacity: barcodeInput.trim() ? 1 : 0.5,
+            }}
+          >
+            추가
+          </button>
+        </div>
+        {isScannerAvailable() && (
+          <BigButton type="button" variant="secondary" onClick={handleScanBarcode}>
+            바코드 스캔
+          </BigButton>
+        )}
+        {barcodes.length > 0 && (
+          <ul
+            data-testid="barcode-list"
+            style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 6 }}
+          >
+            {barcodes.map((code) => (
+              <li
+                key={code}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 8,
+                  padding: "8px 12px",
+                  borderRadius: radius.button,
+                  backgroundColor: gray[50],
+                }}
+              >
+                <span className="oilpick-tabular-nums" style={{ fontSize: 13, color: gray[900] }}>
+                  🏷️ {code}
+                </span>
+                <button
+                  type="button"
+                  aria-label={`${code} 삭제`}
+                  onClick={() => removeBarcode(code)}
+                  style={{ background: "none", border: "none", color: colors.status.wait, fontSize: 18, cursor: "pointer", minHeight: 32, minWidth: 32 }}
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {geo && (
+          <p data-testid="barcode-geo" style={{ margin: 0, fontSize: 12, color: colors.status.wait }}>
+            📍 위치 기록됨 ({geo.lat.toFixed(5)}, {geo.lng.toFixed(5)})
+          </p>
+        )}
       </Card>
 
       {error && (

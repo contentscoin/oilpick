@@ -37,17 +37,10 @@ import { AddressField, type AddressValue } from "../components/AddressField";
  */
 
 type Step = 1 | 2 | 3;
-type CanSize = "18" | "10" | "etc";
 type TimeChip = "now" | "todayPM" | "tomorrowAM" | "custom";
 
 // 좌표는 주소 검색·지오코딩으로 확정되기 전까지 null(12 S2 — 기본 좌표 저장 금지).
 const DEFAULT_ADDRESS: AddressValue = { address: "", lat: null, lng: null };
-
-const CAN_SIZE_OPTIONS: { value: CanSize; label: string; liters: number | null }[] = [
-  { value: "18", label: "18L 말통", liters: 18 },
-  { value: "10", label: "10L", liters: 10 },
-  { value: "etc", label: "기타(직접 입력)", liters: null },
-];
 
 const STEP_LABELS: Record<Step, string> = { 1: "수량", 2: "장소·시간", 3: "확인" };
 
@@ -84,9 +77,7 @@ export function RequestPage() {
   const { data: recentAddresses } = useRecentAddresses(userId);
 
   const [step, setStep] = useState<Step>(1);
-  const [canSize, setCanSize] = useState<CanSize>("18");
   const [cans, setCans] = useState(1);
-  const [customKg, setCustomKg] = useState("");
   const [address, setAddress] = useState<AddressValue>(DEFAULT_ADDRESS);
   const [addressInitialized, setAddressInitialized] = useState(false);
   const [timeChip, setTimeChip] = useState<TimeChip>("now");
@@ -101,18 +92,12 @@ export function RequestPage() {
     setAddress((prev) => (prev.address ? prev : { ...prev, address: profile.address }));
   }
 
-  const parsedKg = Number(customKg);
-  const customKgValid = Number.isFinite(parsedKg) && parsedKg >= 1 && parsedKg <= 500;
-  const estimatedKg =
-    canSize === "etc"
-      ? customKgValid
-        ? parsedKg
-        : 0
-      : estimateKg(cans, canSize === "10" ? 10 : 18);
+  // [14 §6] 통 개수만 선택 → estimateKg(cans) = 통 × KG_PER_CAN(18L 말통 기준). kg 직접입력·통크기 토글 제거.
+  const estimatedKg = estimateKg(cans);
   const estimatedCash = latestTick ? estimateCash(estimatedKg, latestTick.pricePerKg) : 0;
   const preferredTimeValue = resolvePreferredTime(timeChip, customTime);
 
-  const step1Valid = canSize === "etc" ? customKgValid : cans >= 1;
+  const step1Valid = cans >= 1;
 
   function applyRecentAddress(recent: RecentAddress) {
     setAddress({ address: recent.address, lat: recent.lat, lng: recent.lng });
@@ -123,7 +108,7 @@ export function RequestPage() {
     setError(null);
 
     const parsed = orderCreateInputSchema.safeParse({
-      requestedCans: canSize === "etc" ? undefined : cans,
+      requestedCans: cans,
       requestedKg: estimatedKg,
       address: address.address,
       lat: address.lat,
@@ -197,64 +182,13 @@ export function RequestPage() {
 
       {step === 1 && (
         <section data-testid="request-step-1" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <h2 style={{ fontSize: 16, margin: 0 }}>수거 수량을 알려주세요</h2>
+          <h2 style={{ fontSize: 16, margin: 0 }}>수거할 통 개수를 알려주세요</h2>
 
-          {/* 통 크기 프리셋(18L 말통/10L/기타). */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <span style={{ fontSize: 14, fontWeight: 600 }}>통 크기</span>
-            <div data-testid="can-size-preset" style={{ display: "flex", gap: 8 }}>
-              {CAN_SIZE_OPTIONS.map((opt) => {
-                const selected = canSize === opt.value;
-                return (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    data-testid={`can-size-${opt.value}`}
-                    aria-pressed={selected}
-                    onClick={() => setCanSize(opt.value)}
-                    style={{
-                      flex: 1,
-                      minHeight: 48,
-                      borderRadius: radius.button,
-                      border: `1px solid ${selected ? colors.primary.DEFAULT : surface.border}`,
-                      backgroundColor: selected ? colors.primary.light : "#fff",
-                      color: selected ? colors.primary.dark : "#333",
-                      fontWeight: 600,
-                      fontSize: 13,
-                      cursor: "pointer",
-                    }}
-                  >
-                    {opt.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {canSize === "etc" ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <label htmlFor="custom-kg-input" style={{ fontSize: 14, fontWeight: 600 }}>
-                예상 무게 (kg)
-              </label>
-              <input
-                id="custom-kg-input"
-                data-testid="custom-kg-input"
-                type="number"
-                inputMode="decimal"
-                step="0.1"
-                min="1"
-                max="500"
-                placeholder="예: 40"
-                value={customKg}
-                onChange={(e) => setCustomKg(e.target.value)}
-                className={inputClassName}
-                style={inputStyle}
-              />
-              <p style={{ margin: 0, fontSize: 12, color: colors.status.wait }}>1~500kg 사이로 입력해주세요.</p>
-            </div>
-          ) : (
-            <QtyStepper value={cans} onChange={setCans} />
-          )}
+          {/* [14 §6] 18L 말통 개수만 선택. 통크기·kg 직접입력 제거 — 정확한 무게는 현장 계량으로 확정. */}
+          <QtyStepper value={cans} onChange={setCans} />
+          <p style={{ margin: 0, fontSize: 13, color: colors.status.wait }}>
+            18L 말통 기준이에요. 정확한 무게는 현장 계량으로 확정돼요.
+          </p>
 
           <BigButton data-testid="request-step-1-next" disabled={!step1Valid} onClick={() => setStep(2)}>
             다음
@@ -369,14 +303,7 @@ export function RequestPage() {
           <h2 style={{ fontSize: 16, margin: 0 }}>요청 내용을 확인해주세요</h2>
 
           <div style={{ borderRadius: radius.card, backgroundColor: gray[50], padding: 16, display: "flex", flexDirection: "column", gap: 8 }}>
-            <Row
-              label="수량"
-              value={
-                canSize === "etc"
-                  ? `약 ${formatKg(estimatedKg)}`
-                  : `${cans}통 (${CAN_SIZE_OPTIONS.find((o) => o.value === canSize)?.label} · 약 ${formatKg(estimatedKg)})`
-              }
-            />
+            <Row label="수량" value={`${cans}통 (약 ${formatKg(estimatedKg)})`} />
             <Row label="수거 주소" value={address.address} />
             <Row label="희망 시간" value={preferredTimeValue} />
           </div>

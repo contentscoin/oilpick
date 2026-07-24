@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
+import { PayouSymbol } from "@oilpick/ui";
 import { supabase } from "../lib/supabaseClient";
 import { useCurrentRole } from "../hooks/useCurrentRole";
 import { NotificationsBell } from "./NotificationsBell";
@@ -44,9 +45,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
     <div className="flex min-h-screen bg-surface-app">
       <aside className="flex w-56 shrink-0 flex-col border-r border-gray-100 bg-white shadow-card">
         <div className="flex items-center gap-2.5 px-5 py-6">
-          <span className="flex h-9 w-9 items-center justify-center rounded-card bg-primary-light text-base font-bold text-primary">
-            O
-          </span>
+          <PayouSymbol size={36} />
           <div>
             <p className="text-lg font-bold leading-tight text-primary">폐유</p>
             <p className="text-xs text-gray-500" data-testid="admin-role-label">{roleLabel}</p>

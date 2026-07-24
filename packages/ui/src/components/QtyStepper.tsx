@@ -1,12 +1,13 @@
-import { useState } from "react";
 import { estimateKg, formatKg, KG_PER_CAN } from "@oilpick/core";
-import { colors, elevation, radius } from "../tokens";
+import { colors, elevation } from "../tokens";
 
 /**
- * 03-frontend.md "packages/ui 컴포넌트" — QtyStepper(통/kg 토글).
- * U3 홈/U5 요청 스텝에서 수량 입력에 쓰인다. "통" 단위 입력을 estimateKg로 kg 환산해
- * 보조 표기하며, onChange는 항상 통 수(정수)를 전달한다(00-domain.md "계량/수량 규칙" —
+ * 03-frontend.md "packages/ui 컴포넌트" — QtyStepper(통 수량 스테퍼).
+ * U3 홈/U5 요청 스텝에서 수량 입력에 쓰인다. onChange는 항상 통 수(정수)를 전달하고,
+ * "통" 입력을 estimateKg로 kg 환산해 보조 표기한다(00-domain.md "계량/수량 규칙" —
  * 실제 확정 kg은 현장 계량 기준이라 이 컴포넌트는 예상치 표시 전용).
+ * [12 §6] 통/kg 토글 제거 — 수거신청은 통 개수만 선택한다. max 기본값은 스키마 상한
+ * (requestedKg ≤ 500)에 맞춰 33통(33×15=495kg)으로 클램프.
  */
 export interface QtyStepperProps {
   value: number;
@@ -16,35 +17,11 @@ export interface QtyStepperProps {
   className?: string;
 }
 
-export function QtyStepper({ value, onChange, min = 1, max = 99, className }: QtyStepperProps) {
-  const [unit, setUnit] = useState<"can" | "kg">("can");
+export function QtyStepper({ value, onChange, min = 1, max = 33, className }: QtyStepperProps) {
   const clamp = (n: number) => Math.min(max, Math.max(min, n));
 
   return (
     <div className={className} data-testid="qty-stepper">
-      <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-        {(["can", "kg"] as const).map((u) => (
-          <button
-            key={u}
-            type="button"
-            data-testid={`qty-stepper-unit-${u}`}
-            onClick={() => setUnit(u)}
-            aria-pressed={unit === u}
-            style={{
-              flex: 1,
-              minHeight: 48,
-              borderRadius: radius.button,
-              border: `1px solid ${unit === u ? colors.primary.DEFAULT : "#e4e4e7"}`,
-              backgroundColor: unit === u ? colors.primary.light : "#fff",
-              color: unit === u ? colors.primary.dark : "#333",
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            {u === "can" ? "통" : "kg"}
-          </button>
-        ))}
-      </div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 16 }}>
         <button
           type="button"

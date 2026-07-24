@@ -40,10 +40,18 @@ var orderAcceptOutputSchema = z.object({
 });
 var arrivePayloadSchema = z.undefined().or(z.object({}).strict());
 var payoutMethodSchema = z.enum(["CASH", "POINT"]);
+var pickupGeoSchema = z.object({
+  lat: latSchema,
+  lng: lngSchema,
+  capturedAt: z.string().optional()
+  // ISO8601 촬영 시각(디바이스). 서버 now()와 별개 기록.
+});
 var submitMeasurePayloadSchema = z.object({
   measuredKg: kgSchema,
   photoUrls: z.array(z.string().url()).min(1),
-  payoutMethod: payoutMethodSchema
+  payoutMethod: payoutMethodSchema,
+  barcodes: z.array(z.string().min(1)).max(50).optional(),
+  geo: pickupGeoSchema.optional()
 });
 var confirmMeasurePayloadSchema = z.undefined().or(z.object({}).strict());
 var disputePayloadSchema = z.object({
@@ -290,6 +298,7 @@ export {
   orderTransitionInputSchema,
   orderTransitionOutputSchema,
   payoutMethodSchema,
+  pickupGeoSchema,
   pointAdjustInputSchema,
   pointAdjustOutputSchema,
   priceSetInputSchema,

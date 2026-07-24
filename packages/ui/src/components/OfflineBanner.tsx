@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { colors } from "../tokens";
+import { frameFixedStyle } from "./MobileFrame";
 
 /**
  * 03-frontend.md "공통 규칙" — 오프라인 감지 배너.
@@ -58,10 +59,9 @@ export function OfflineBanner({
       data-testid="offline-banner"
       className={className}
       style={{
-        position: "fixed",
+        // [12 §8] 뷰포트 고정을 유지하되 모바일 프레임 폭(420)에 중앙 정렬(데스크톱).
+        ...frameFixedStyle,
         top: 0,
-        left: 0,
-        right: 0,
         zIndex: 1000,
         /* 노치/상태바 아래로 내용이 깔리지 않게 상단 safe-area만큼 패딩(배경은 최상단까지 채움). */
         padding: "calc(10px + env(safe-area-inset-top, 0px)) 16px 10px",

@@ -1,7 +1,7 @@
 import { Suspense, lazy } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { OfflineBanner, ToastProvider } from "@oilpick/ui";
+import { MobileFrame, OfflineBanner, ToastProvider } from "@oilpick/ui";
 import { CallAlertListener } from "./components/CallAlertListener";
 import { AuthGuard } from "./components/AuthGuard";
 import { RiderShell } from "./components/RiderShell";
@@ -61,6 +61,8 @@ export function App() {
     <QueryClientProvider client={queryClient}>
       {/* 06 E6 — 액션 피드백 토스트 전역 프로바이더. offsetBottom은 하단 탭바를 피한 값. */}
       <ToastProvider offsetBottom={76}>
+      {/* [12 §8] 모바일 고정 프레임 — 라이더 전 라우트를 420px 폭으로 감싼다. */}
+      <MobileFrame>
       {/* 03-frontend.md "공통 규칙" 오프라인 배너 — 셸 래핑과 무관하게 항상 최상단에 고정. */}
       <OfflineBanner />
       {/* 06 E3 — 콜 도착 포그라운드 알림(배너/사운드/진동) 전역 리스너. */}
@@ -174,6 +176,7 @@ export function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
+      </MobileFrame>
       </ToastProvider>
     </QueryClientProvider>
   );

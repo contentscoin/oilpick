@@ -77,11 +77,25 @@ export const arrivePayloadSchema = z.undefined().or(z.object({}).strict());
 export const payoutMethodSchema = z.enum(["CASH", "POINT"]);
 export type PayoutMethod = z.infer<typeof payoutMethodSchema>;
 
+/**
+ * [14 §4] 바코드+GPS 현장 수거이력. 수거 시 촬영/스캔한 폐식용유 바코드와 촬영 시점 디바이스 GPS.
+ * 지급/정산과 무관 — 캡처 전용. RPC가 order_events.payload 보존 + pickup_items 1급 적재(J1).
+ */
+export const pickupGeoSchema = z.object({
+  lat: latSchema,
+  lng: lngSchema,
+  capturedAt: z.string().optional(), // ISO8601 촬영 시각(디바이스). 서버 now()와 별개 기록.
+});
+export type PickupGeo = z.infer<typeof pickupGeoSchema>;
+
 // 08 P2: payoutMethod 필수(신 클라이언트 강제). RPC는 생략 시 CASH 폴백으로 구버전 번들과 호환.
+// [14 §4] barcodes·geo는 선택(구버전 번들·재제출 호환). 있으면 order_events.payload + pickup_items에 보존.
 export const submitMeasurePayloadSchema = z.object({
   measuredKg: kgSchema,
   photoUrls: z.array(z.string().url()).min(1),
   payoutMethod: payoutMethodSchema,
+  barcodes: z.array(z.string().min(1)).max(50).optional(),
+  geo: pickupGeoSchema.optional(),
 });
 
 export const confirmMeasurePayloadSchema = z.undefined().or(z.object({}).strict());
