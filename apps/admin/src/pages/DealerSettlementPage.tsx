@@ -1,12 +1,36 @@
 import { useMemo, useState } from "react";
 import { formatKrw, formatPoint, formatRelativeTime } from "@oilpick/core";
 import type { DealerStatement } from "@oilpick/core";
+import { supabase } from "../lib/supabaseClient";
 import {
   useDealers,
   useDealerSettlements,
   useDealerStatements,
   useDealerSettlementMutations,
 } from "../hooks/useDealersAdmin";
+
+/** [14 J3] 청구 상세 주문을 CSV로 내려받는다(v_dealer_settlement_orders). 회계 대사용. */
+async function downloadSettlementCsv(settlementId: string) {
+  const { data, error } = await supabase
+    .from("v_dealer_settlement_orders")
+    .select("order_id, payout_method, cash_paid_amount, purchase_amount, net_amount, completed_at")
+    .eq("dealer_settlement_id", settlementId)
+    .order("completed_at", { ascending: true });
+  if (error || !data) return;
+  const header = "order_id,payout_method,waste_amount,purchase_amount,net_amount,completed_at";
+  const rows = data.map(
+    (r) =>
+      `${r.order_id},${r.payout_method ?? ""},${r.cash_paid_amount ?? 0},${r.purchase_amount ?? 0},${r.net_amount ?? 0},${r.completed_at ?? ""}`,
+  );
+  const csv = [header, ...rows].join("\n");
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `dealer-settlement-${settlementId.slice(0, 8)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 /**
  * [14 J3]【admin】 좌상 정산 — 좌상별 계정(보증금·한도·임계·요율) 설정 + 사용 명세 + 청구/정산/무효.
@@ -109,28 +133,40 @@ export function DealerSettlementPage() {
                     <td className="py-2 font-medium tabular-nums text-primary">{formatKrw(s.net_due)}</td>
                     <td className="py-2 text-gray-500">{formatRelativeTime(s.claimed_at)}</td>
                     <td className="py-2">
-                      {s.status === "CLAIMED" && (
-                        <div className="flex gap-2">
+                      <div className="flex gap-2">
+                        {s.status === "CLAIMED" && (
+                          <>
+                            <button
+                              type="button"
+                              data-testid={`settle-${s.id}`}
+                              disabled={busy === `settle-${s.id}`}
+                              onClick={() => handleClaim(`settle-${s.id}`, { action: "settle", settlementId: s.id })}
+                              className="rounded-button bg-primary px-3 py-1 text-xs font-semibold text-white disabled:opacity-60"
+                            >
+                              정산 완료
+                            </button>
+                            <button
+                              type="button"
+                              data-testid={`void-${s.id}`}
+                              disabled={busy === `void-${s.id}`}
+                              onClick={() => handleClaim(`void-${s.id}`, { action: "void", settlementId: s.id })}
+                              className="rounded-button border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-500 disabled:opacity-60"
+                            >
+                              무효
+                            </button>
+                          </>
+                        )}
+                        {s.status !== "VOID" && (
                           <button
                             type="button"
-                            data-testid={`settle-${s.id}`}
-                            disabled={busy === `settle-${s.id}`}
-                            onClick={() => handleClaim(`settle-${s.id}`, { action: "settle", settlementId: s.id })}
-                            className="rounded-button bg-primary px-3 py-1 text-xs font-semibold text-white disabled:opacity-60"
+                            data-testid={`csv-${s.id}`}
+                            onClick={() => void downloadSettlementCsv(s.id)}
+                            className="rounded-button border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-500"
                           >
-                            정산 완료
+                            CSV
                           </button>
-                          <button
-                            type="button"
-                            data-testid={`void-${s.id}`}
-                            disabled={busy === `void-${s.id}`}
-                            onClick={() => handleClaim(`void-${s.id}`, { action: "void", settlementId: s.id })}
-                            className="rounded-button border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-500 disabled:opacity-60"
-                          >
-                            무효
-                          </button>
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

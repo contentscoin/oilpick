@@ -173,3 +173,18 @@ ACCEPTED 이후 모든 전이 단일 엔드포인트.
 - `sendPush(userIds[], title, body, link)`: profiles.fcm_token 조회 → FCM HTTP v1 멀티캐스트
   + notifications insert. 토큰 만료(UNREGISTERED) 시 fcm_token null 처리.
 - FCM 서비스 계정 키는 Supabase secrets `FCM_SERVICE_ACCOUNT`.
+
+## 14 신유·상계·좌상 정산 엔드포인트 (J-태스크, 14-fresh-oil-settlement.md 단일 진실)
+
+- **order-create** 확장: 입력 += `purchaseCans?`(신유 구매 통수 1..50). `requestedKg`는 0 허용(구매-only).
+  구매 동반 시 최신 `fresh_oil_price_ticks` 스냅샷(부재 404) + `order_kind`(PICKUP/PURCHASE/MIXED) 판정.
+- **order-transition / SUBMIT_MEASURE** payload += `deliveredCans?`(구매 동반 필수 0..50), `barcodes?`, `geo?`.
+  넷팅·게이트는 `fn_settle_trade`(CONFIRM_MEASURE/FORCE_COMPLETE). 부족/한도초과 시 INSUFFICIENT_BALANCE/
+  DEALER_LIMIT_EXCEEDED(롤백).
+- **price-set** 분기: `kind='FRESH'`면 `{ pricePerCan }` → fresh_oil_price_ticks. 미지정=폐유 시세(기존).
+- **dealer-account-set**(admin): `{ dealerId, depositAmount, creditLimit, claimThreshold, feeRateBp }` →
+  fn_set_dealer_account upsert.
+- **dealer-claim**(admin): `{ action:'create', dealerId }` / `{ action:'settle'|'void', settlementId }` →
+  fn_create/settle/void_dealer_claim. create=미정산 주문 집계·스탬핑, void=스탬프 해제(풀 복귀).
+- 조회 뷰: `v_dealer_statement`(usage/limit/headroom/over_threshold), `v_dealer_settlement_orders`(청구 상세/CSV).
+  RLS: 좌상 본인 + admin.

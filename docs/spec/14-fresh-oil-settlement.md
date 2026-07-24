@@ -128,13 +128,17 @@ barcode 인덱스. RLS select = 관련자(supplier/rider/**스냅샷 dealer**/ad
 
 ## 7. 마일스톤 (J0~J4)
 
-- **J0** 브랜치 정리·슬림 리베이스(§4/§6/§8 + tokens 조화 + Payou* + BrandMark 제거·이관). **완료.**
-- **J1** 트래킹: arrived_at + pickup_items + RPC 적재 + useRiderLocation/MapView. pgTAP `11_tracking_test.sql`.
-- **J2** 구매·상계 코어: fresh_oil_price_ticks + 주문 컬럼 + TRADE_PURCHASE + order-create/RPC + user·rider UI.
-  pgTAP `12_purchase_netting_test.sql`(net 3부호×CASH/POINT·멱등·부족롤백·경합·레거시 회귀).
-- **J3** 좌상 정산: dealer_id 스냅샷 + accounts/settlements + 게이트 + 청구 RPC 3종 + Edge 2종 + 뷰 + 화면.
-  pgTAP `13_dealer_settlement_test.sql`(재배정 귀속불변·게이트 경계·상쇄·스탬핑·멱등·컬럼↔원장 합치).
-- **J4** 마감: CSV·뷰 append·문서 동기화·벤더 재확인·적대적 리뷰·PR.
+- **J0** 브랜치 정리·슬림 리베이스(§4/§6/§8 + tokens 조화 + Payou* + BrandMark 제거·이관). **완료**(97b07e7).
+- **J1** 트래킹: arrived_at + pickup_items + RPC 적재 + useRiderLocation/MapView. pgTAP `11_tracking_test.sql`. **완료**(35c45a9).
+- **J2** 구매·상계 코어: fresh_oil_price_ticks + 주문 컬럼 + TRADE_PURCHASE + order-create/RPC(fn_settle_trade) + user·rider·admin UI.
+  pgTAP `12_purchase_netting_test.sql`(net 3부호×CASH/POINT·부족롤백·레거시 회귀·게이트). **완료**(2d0988c).
+- **J3** 좌상 정산: dealer_id ACCEPT 스냅샷(트리거) + accounts/settlements + 크레딧 게이트(advisory lock) + 청구 RPC 3종
+  + Edge 2종(dealer-account-set·dealer-claim) + 뷰 2종 + admin/dealer 화면. RLS 라이브조인→스냅샷 재정의.
+  pgTAP `13_dealer_settlement_test.sql`(재배정 귀속불변·게이트 경계·본사직속·청구집계fee·스탬핑·멱등·무효). **완료**(70e33c3).
+- **J4** 마감: CSV(v_dealer_settlement_orders) + 문서 동기화(01/02/14) + 벤더 재확인 + 적대적 리뷰 + PR. **완료.**
+
+> 게이트: 각 마일스톤 build/lint/test 전부 통과(코어389·admin112·rider104·ui109·user140). pgTAP는 로컬 Docker
+> 부재로 미실행(작성 완료 — 호스티드/CI 스택에서 실행). Edge는 Deno이므로 pnpm 게이트 밖(벤더=core 일치 확인으로 대체).
 
 ## 8. 엣지케이스 (해결 확정)
 
