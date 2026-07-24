@@ -11,6 +11,7 @@ create type order_status as enum ('REQUESTED','ACCEPTED','ARRIVED','PICKED_UP','
 -- 레거시 전용(신규 발행 없음): HOLD/RELEASE(구모델 수거비), PURCHASE(미래 예약).
 create type ledger_type as enum ('EARN','HOLD','RELEASE','WITHDRAW_REQUEST','WITHDRAW_CANCEL','ADJUST','PURCHASE','REFERRAL','TRADE_PURCHASE'); -- [14 J2] TRADE_PURCHASE=신유 대금 포인트 차감(음수). PURCHASE(쇼핑몰 결제)와 별개
 create type order_kind as enum ('PICKUP','PURCHASE','MIXED'); -- [14 J2] 주문 종류. null=레거시=PICKUP
+create type dealer_settlement_status as enum ('CLAIMED','SETTLED','VOID'); -- [14 J3] 좌상 정산 청구 상태
 -- [09 H2] 라이더 추천 상태(SIGNED_UP=가입, ACTIVATED=첫 수거 완료·보너스 발행, CANCELLED)
 create type referral_status as enum ('SIGNED_UP','ACTIVATED','CANCELLED');
 -- [07 F2] SUSPENDED 추가(실 마이그레이션은 별도 파일의 alter type add value — 사용 트랜잭션과 분리. 액션·정책은 07 F11)
@@ -114,6 +115,8 @@ create table pickup_orders (
   delivered_cans int,                        -- 현장 실배달 통수(0..50). SUBMIT_MEASURE에서 기록
   purchase_amount int,                       -- 신유 대금 = delivered_cans × snapshot_fresh_can_price(정수곱). COMPLETED 시 기록
   net_amount int,                            -- 상계 순액 = cash_paid_amount − purchase_amount(음수=점주 지불). COMPLETED 시 기록
+  dealer_id uuid references profiles(id),    -- [14 J3] ACCEPT 시 rider 소속 좌상 스냅샷(시점 고정). null=본사 직속. 트리거 trg_snapshot_dealer_on_accept
+  dealer_settlement_id uuid,                 -- [14 J3] 정산 청구 귀속(dealer_settlements.id). null=미정산. FK는 20260724000006에서
   photo_urls text[] not null default '{}',
   cancel_reason text,
   dispute_reason text,
@@ -143,6 +146,36 @@ create table fresh_oil_price_ticks (
 );
 create index idx_fresh_oil_price_ticks_effective on fresh_oil_price_ticks (effective_at desc);
 -- RLS: read all(using true) / insert admin(is_admin()). Realtime publication 추가. 20260724000003_fresh_oil.sql.
+
+-- ===== 좌상 정산 체인 [14 J3] (20260724000006/7) =====
+-- 좌상 크레딧 = 보증금 담보 B2B 외상채권(선불수단 아님). credit_limit 계약별 수기, fee_rate_bp 초기 0.
+create table dealer_accounts (
+  dealer_id uuid primary key references profiles(id),
+  deposit_amount int not null default 0 check (deposit_amount >= 0),  -- 보증금(원)
+  credit_limit int not null default 0 check (credit_limit >= 0),      -- 사용한도(P)
+  claim_threshold int not null default 5000000 check (claim_threshold > 0), -- 자동청구 배지 임계(P)
+  fee_rate_bp int not null default 0 check (fee_rate_bp between 0 and 10000), -- 요율(bp)
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles(id)
+);
+-- RLS: read=본인+admin. 쓰기=service_role RPC(fn_set_dealer_account)만.
+
+-- 정산 청구(원장). 주문 귀속=pickup_orders.dealer_settlement_id 스탬핑(날짜범위 아님).
+create table dealer_settlements (
+  id uuid primary key default gen_random_uuid(),
+  dealer_id uuid not null references profiles(id),
+  status dealer_settlement_status not null default 'CLAIMED',
+  point_minted int not null default 0,   -- Σ(net>0, POINT) 점주 수령=회사→좌상 청구
+  point_spent int not null default 0,    -- Σ(-net for net<0, POINT) 점주 지불=청구 상쇄
+  fee_amount int not null default 0,     -- round(Σcash_paid_amount × fee_rate_bp / 10000)
+  net_due int not null default 0,        -- point_minted − point_spent + fee_amount(음수=회사→좌상 지급)
+  period_start timestamptz, period_end timestamptz,
+  claimed_at timestamptz not null default now(), claimed_by uuid references profiles(id),
+  settled_at timestamptz, settled_by uuid references profiles(id),
+  voided_at timestamptz, voided_by uuid references profiles(id)
+);
+-- RLS: read=본인+admin. 쓰기=service_role RPC(fn_create/settle/void_dealer_claim)만.
+-- 뷰: v_dealer_statement(usage/limit/headroom/over_threshold), v_dealer_settlement_orders(청구 상세/CSV).
 
 create table order_events (
   id bigint generated always as identity primary key,

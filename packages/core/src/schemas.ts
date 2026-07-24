@@ -507,3 +507,69 @@ export const dealerRiderStatsSchema = z.object({
   referral_activated: z.number().int().nonnegative(),
 });
 export type DealerRiderStats = z.infer<typeof dealerRiderStatsSchema>;
+
+// ===== 좌상 정산 체인 (14 J3) =====
+
+/** dealer-account-set (admin): 좌상 보증금·한도·임계·요율 upsert. 금액은 정수(원/P). */
+export const dealerAccountSetInputSchema = z.object({
+  dealerId: uuidSchema,
+  depositAmount: z.number().int().min(0),
+  creditLimit: z.number().int().min(0),
+  claimThreshold: z.number().int().positive(),
+  feeRateBp: z.number().int().min(0).max(10000), // 요율(bp, 1bp=0.01%). 초기 0
+});
+export type DealerAccountSetInput = z.infer<typeof dealerAccountSetInputSchema>;
+
+export const dealerAccountSchema = z.object({
+  dealer_id: uuidSchema,
+  deposit_amount: z.number().int(),
+  credit_limit: z.number().int(),
+  claim_threshold: z.number().int(),
+  fee_rate_bp: z.number().int(),
+});
+export type DealerAccount = z.infer<typeof dealerAccountSchema>;
+
+/** dealer-claim (admin): 좌상 정산 청구 생성/정산/무효. create=dealerId, settle/void=settlementId. */
+export const dealerClaimInputSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("create"), dealerId: uuidSchema }),
+  z.object({ action: z.literal("settle"), settlementId: uuidSchema }),
+  z.object({ action: z.literal("void"), settlementId: uuidSchema }),
+]);
+export type DealerClaimInput = z.infer<typeof dealerClaimInputSchema>;
+
+export const dealerSettlementStatusSchema = z.enum(["CLAIMED", "SETTLED", "VOID"]);
+export type DealerSettlementStatus = z.infer<typeof dealerSettlementStatusSchema>;
+
+/** dealer_settlements 행(청구 이력). net_due 음수=회사→좌상 지급. */
+export const dealerSettlementSchema = z.object({
+  id: uuidSchema,
+  dealer_id: uuidSchema,
+  status: dealerSettlementStatusSchema,
+  point_minted: z.number().int(),
+  point_spent: z.number().int(),
+  fee_amount: z.number().int(),
+  net_due: z.number().int(),
+  period_start: z.string().nullable(),
+  period_end: z.string().nullable(),
+  claimed_at: z.string(),
+  settled_at: z.string().nullable(),
+  voided_at: z.string().nullable(),
+});
+export type DealerSettlement = z.infer<typeof dealerSettlementSchema>;
+
+/** v_dealer_statement 행(좌상 명세 — 사용액/한도/여유/임계초과). */
+export const dealerStatementSchema = z.object({
+  dealer_id: uuidSchema,
+  deposit_amount: z.number().int(),
+  credit_limit: z.number().int(),
+  claim_threshold: z.number().int(),
+  fee_rate_bp: z.number().int(),
+  point_minted: z.number().int(),
+  point_spent: z.number().int(),
+  usage: z.number().int(),
+  headroom: z.number().int(),
+  over_threshold: z.boolean(),
+  unsettled_order_count: z.number().int().nonnegative(),
+  unsettled_gross: z.number().int(),
+});
+export type DealerStatement = z.infer<typeof dealerStatementSchema>;

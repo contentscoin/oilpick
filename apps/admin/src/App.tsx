@@ -44,6 +44,13 @@ const DealerHomePage = lazy(() =>
 const DealerPerformancePage = lazy(() =>
   import("./pages/DealerPerformancePage").then((m) => ({ default: m.DealerPerformancePage })),
 );
+// 14 J3 좌상 정산 화면.
+const DealerSettlementPage = lazy(() =>
+  import("./pages/DealerSettlementPage").then((m) => ({ default: m.DealerSettlementPage })),
+);
+const DealerStatementPage = lazy(() =>
+  import("./pages/DealerStatementPage").then((m) => ({ default: m.DealerStatementPage })),
+);
 
 /**
  * 03-frontend.md apps/admin 라우팅 + 13 I3. /login만 가드 밖. 나머지는 AuthGuard(admin|dealer
@@ -99,6 +106,22 @@ export function App() {
             element={
               <Protected roles={["dealer"]}>
                 <DealerPerformancePage />
+              </Protected>
+            }
+          />
+          <Route
+            path="/dealer-settlement"
+            element={
+              <Protected>
+                <DealerSettlementPage />
+              </Protected>
+            }
+          />
+          <Route
+            path="/statement"
+            element={
+              <Protected roles={["dealer"]}>
+                <DealerStatementPage />
               </Protected>
             }
           />

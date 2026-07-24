@@ -31,12 +31,14 @@ insert into rider_profiles (id, biz_number, vehicle_number, verify_status, deale
   ('dd000000-0000-0000-0000-0000000000b3','b','03다3','PENDING',null)
   on conflict (id) do nothing;
 
--- 소속 라이더1의 완료 주문 1건(통계 소스)
+-- 소속 라이더1의 완료 주문 1건(통계 소스). [14 J3] 좌상 주문 읽기 RLS가 스냅샷(dealer_id) 기준으로
+-- 바뀌어(라이브조인 폐기), 이 주문에 dealer_id=좌상1을 스냅샷해 둔다(ACCEPT 트리거가 하는 일을 픽스처가 대신).
 insert into pickup_orders
-  (id, supplier_id, rider_id, status, requested_kg, pickup_address, pickup_location,
+  (id, supplier_id, rider_id, dealer_id, status, requested_kg, pickup_address, pickup_location,
    snapshot_price_per_kg, snapshot_rider_fee, measured_kg, final_kg, payout_method, cash_paid_amount, completed_at)
 values
   ('dd000000-0000-0000-0000-00000000e001','dd000000-0000-0000-0000-0000000000a1','dd000000-0000-0000-0000-0000000000b1',
+   'dd000000-0000-0000-0000-0000000000d1',
    'COMPLETED', 30, 'a', ST_SetSRID(ST_MakePoint(127,37.5),4326)::geography,
    700, 5000, 32, 32, 'CASH', 22400, now());
 

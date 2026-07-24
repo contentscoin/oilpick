@@ -286,6 +286,55 @@ var dealerRiderStatsSchema = z.object({
   referral_signed_up: z.number().int().nonnegative(),
   referral_activated: z.number().int().nonnegative()
 });
+var dealerAccountSetInputSchema = z.object({
+  dealerId: uuidSchema,
+  depositAmount: z.number().int().min(0),
+  creditLimit: z.number().int().min(0),
+  claimThreshold: z.number().int().positive(),
+  feeRateBp: z.number().int().min(0).max(1e4)
+  // 요율(bp, 1bp=0.01%). 초기 0
+});
+var dealerAccountSchema = z.object({
+  dealer_id: uuidSchema,
+  deposit_amount: z.number().int(),
+  credit_limit: z.number().int(),
+  claim_threshold: z.number().int(),
+  fee_rate_bp: z.number().int()
+});
+var dealerClaimInputSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("create"), dealerId: uuidSchema }),
+  z.object({ action: z.literal("settle"), settlementId: uuidSchema }),
+  z.object({ action: z.literal("void"), settlementId: uuidSchema })
+]);
+var dealerSettlementStatusSchema = z.enum(["CLAIMED", "SETTLED", "VOID"]);
+var dealerSettlementSchema = z.object({
+  id: uuidSchema,
+  dealer_id: uuidSchema,
+  status: dealerSettlementStatusSchema,
+  point_minted: z.number().int(),
+  point_spent: z.number().int(),
+  fee_amount: z.number().int(),
+  net_due: z.number().int(),
+  period_start: z.string().nullable(),
+  period_end: z.string().nullable(),
+  claimed_at: z.string(),
+  settled_at: z.string().nullable(),
+  voided_at: z.string().nullable()
+});
+var dealerStatementSchema = z.object({
+  dealer_id: uuidSchema,
+  deposit_amount: z.number().int(),
+  credit_limit: z.number().int(),
+  claim_threshold: z.number().int(),
+  fee_rate_bp: z.number().int(),
+  point_minted: z.number().int(),
+  point_spent: z.number().int(),
+  usage: z.number().int(),
+  headroom: z.number().int(),
+  over_threshold: z.boolean(),
+  unsettled_order_count: z.number().int().nonnegative(),
+  unsettled_gross: z.number().int()
+});
 export {
   arrivePayloadSchema,
   cancelPayloadSchema,
@@ -295,11 +344,17 @@ export {
   csReplyOutputSchema,
   csStatusSchema,
   csTicketInputSchema,
+  dealerAccountSchema,
+  dealerAccountSetInputSchema,
   dealerAssignInputSchema,
   dealerAssignOutputSchema,
+  dealerClaimInputSchema,
   dealerCreateInputSchema,
   dealerCreateOutputSchema,
   dealerRiderStatsSchema,
+  dealerSettlementSchema,
+  dealerSettlementStatusSchema,
+  dealerStatementSchema,
   deliverPayloadSchema,
   directionsInputSchema,
   directionsOutputSchema,
