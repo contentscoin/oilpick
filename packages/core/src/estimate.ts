@@ -26,5 +26,26 @@ export function estimateCash(kg: number, pricePerKg: number): number {
   return Math.round(kg * pricePerKg);
 }
 
+/**
+ * [14 §5] 신유 대금(원) = 배달 통수 × 통당가. 정수곱(반올림 없음 — 서버 fn_settle_trade와 동일 계약).
+ * cans는 정수 통수, pricePerCan은 18L 1통 고시가(원).
+ */
+export function estimatePurchase(cans: number, pricePerCan: number): number {
+  return Math.round(cans) * pricePerCan;
+}
+
+/**
+ * [14 §5] 현장 상계 순액(원) = 폐유 총액 − 신유 대금. 양수=점주 수령, 0=정확 상계, 음수=점주 지불.
+ * UI 미리보기용 — 확정은 현장 계량 후 서버(fn_settle_trade)가 기록한다.
+ */
+export function estimateNet(
+  kg: number,
+  pricePerKg: number,
+  cans: number,
+  pricePerCan: number,
+): number {
+  return estimateCash(kg, pricePerKg) - estimatePurchase(cans, pricePerCan);
+}
+
 // [07 F13] estimatePoint(deprecated 별칭) 제거 — 구모델 소비처(HomePage/RequestPage 등)는
 // F8·F9에서 estimateCash 원화 카피로 전환 완료, 잔존 참조 0.

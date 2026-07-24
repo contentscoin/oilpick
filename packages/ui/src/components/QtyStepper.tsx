@@ -15,9 +15,14 @@ export interface QtyStepperProps {
   min?: number;
   max?: number;
   className?: string;
+  /**
+   * [14 J2] 값 아래 보조 표기. undefined=기본 kg 환산(폐유 통수), null=표기 없음,
+   * 문자열=대체 문구(신유 구매 통수엔 kg 환산 대신 통당가 등을 넣는다).
+   */
+  subLabel?: string | null;
 }
 
-export function QtyStepper({ value, onChange, min = 1, max = 33, className }: QtyStepperProps) {
+export function QtyStepper({ value, onChange, min = 1, max = 33, className, subLabel }: QtyStepperProps) {
   const clamp = (n: number) => Math.min(max, Math.max(min, n));
 
   return (
@@ -52,9 +57,15 @@ export function QtyStepper({ value, onChange, min = 1, max = 33, className }: Qt
           >
             {value}통
           </p>
-          <p style={{ margin: "4px 0 0", fontSize: 13, color: colors.status.wait }} data-testid="qty-stepper-kg">
-            약 {formatKg(estimateKg(value))} (통당 {KG_PER_CAN}kg)
-          </p>
+          {subLabel === undefined ? (
+            <p style={{ margin: "4px 0 0", fontSize: 13, color: colors.status.wait }} data-testid="qty-stepper-kg">
+              약 {formatKg(estimateKg(value))} (통당 {KG_PER_CAN}kg)
+            </p>
+          ) : subLabel === null ? null : (
+            <p style={{ margin: "4px 0 0", fontSize: 13, color: colors.status.wait }} data-testid="qty-stepper-sublabel">
+              {subLabel}
+            </p>
+          )}
         </div>
         <button
           type="button"

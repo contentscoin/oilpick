@@ -9,10 +9,10 @@ import {
   YAxis,
 } from "recharts";
 import { formatKrw, formatRelativeTime } from "@oilpick/core";
-import { usePriceHistory } from "../hooks/usePriceAdmin";
+import { usePriceHistory, useFreshOilPriceHistory } from "../hooks/usePriceAdmin";
 import { invokeEdgeFunction } from "../lib/edgeFunction";
 import { QueryError } from "../components/QueryError";
-import type { PriceSetOutput } from "@oilpick/core";
+import type { PriceSetOutput, FreshOilPriceSetOutput } from "@oilpick/core";
 
 /**
  * 03-frontend.md apps/admin "/price" + 08 G7-④ 개정:
@@ -30,7 +30,128 @@ export function PricePage() {
       </div>
 
       <OilPriceSection />
+      <FreshOilPriceSection />
     </div>
+  );
+}
+
+/**
+ * [14 J2] 신유(새 식용유) 고시가 섹션. 18L 1종 단일 SKU — price-set(kind='FRESH')로 tick 등록.
+ * 폐유 시세와 동일하게 정정 불가·신규 tick만(스냅샷 원칙). 미설정 시 user 앱 구매 UI는 숨겨진다.
+ */
+function FreshOilPriceSection() {
+  const { data: history, isLoading, isError, refetch } = useFreshOilPriceHistory(30);
+  const loadFailed = isError && history === undefined;
+  const [pricePerCan, setPricePerCan] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  const latest = history?.[0];
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setSuccess(null);
+    const priceNum = Number(pricePerCan);
+    if (!Number.isInteger(priceNum) || priceNum <= 0) {
+      setError("판매가는 양의 정수로 입력해주세요.");
+      return;
+    }
+    setSubmitting(true);
+    const result = await invokeEdgeFunction<FreshOilPriceSetOutput>("price-set", {
+      kind: "FRESH",
+      pricePerCan: priceNum,
+    });
+    setSubmitting(false);
+    if (!result.ok) {
+      setError(result.message);
+      return;
+    }
+    setSuccess("새 기름 판매가가 등록되었어요.");
+    setPricePerCan("");
+    refetch();
+  }
+
+  return (
+    <section className="flex flex-col gap-4">
+      <div>
+        <h2 className="text-xl font-bold text-gray-900">새 기름 판매가</h2>
+        <p className="text-sm text-gray-500">18L 1통 기준 판매가예요. 설정하면 점주 앱에서 구매 신청이 열려요.</p>
+      </div>
+
+      <TickCorrectionNotice testId="tick-correction-notice-fresh" />
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="rounded-card bg-white p-6 shadow-card">
+          <p className="text-sm text-gray-500">현재 판매가(18L 1통)</p>
+          <p className="mt-1 text-4xl font-bold tabular-nums text-primary" data-testid="fresh-price-current">
+            {latest ? formatKrw(latest.pricePerCan) : "-"}
+            <span className="text-base font-medium">/통</span>
+          </p>
+          {latest && (
+            <p className="mt-1 text-xs text-gray-500">{formatRelativeTime(latest.effectiveAt)} 갱신</p>
+          )}
+          {!latest && !isLoading && (
+            <p className="mt-1 text-xs text-status-danger">아직 미설정 — 점주 앱 구매 UI가 숨겨져 있어요.</p>
+          )}
+        </div>
+
+        <form onSubmit={handleSubmit} className="rounded-card bg-white p-6 shadow-card">
+          <h3 className="mb-4 text-lg font-semibold text-gray-900">새 판매가 등록</h3>
+          <label className="mb-4 block">
+            <span className="mb-1 block text-sm font-medium text-gray-700">판매가(원/18L 1통)</span>
+            <input
+              type="number"
+              min={1}
+              required
+              value={pricePerCan}
+              onChange={(e) => setPricePerCan(e.target.value)}
+              className="w-full rounded-button border border-gray-200 px-3 py-2.5 text-base outline-none focus:border-primary"
+              data-testid="fresh-price-input"
+            />
+          </label>
+          {error && <p className="mb-3 text-sm font-medium text-status-danger">{error}</p>}
+          {success && <p className="mb-3 text-sm font-medium text-primary">{success}</p>}
+          <button
+            type="submit"
+            disabled={submitting}
+            className="h-12 w-full rounded-button bg-primary text-base font-semibold text-white shadow-card disabled:opacity-60"
+            data-testid="fresh-price-submit"
+          >
+            {submitting ? "등록 중..." : "판매가 등록"}
+          </button>
+        </form>
+      </div>
+
+      <div className="rounded-card bg-white p-6 shadow-card">
+        <h3 className="mb-4 text-lg font-semibold text-gray-900">이력 (최근 {history?.length ?? 0}건)</h3>
+        {loadFailed ? (
+          <QueryError onRetry={refetch} message="판매가 이력을 불러오지 못했어요" />
+        ) : isLoading ? (
+          <p className="text-sm text-gray-500">불러오는 중...</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full whitespace-nowrap text-left text-sm" data-testid="fresh-price-history-table">
+              <thead>
+                <tr className="border-b border-gray-100 text-gray-500">
+                  <th className="py-2 font-medium">일시</th>
+                  <th className="py-2 font-medium">판매가(18L 1통)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(history ?? []).map((tick) => (
+                  <tr key={tick.id} className="border-b border-gray-50 transition-colors hover:bg-gray-50">
+                    <td className="py-2 text-gray-600">{new Date(tick.effectiveAt).toLocaleString("ko-KR")}</td>
+                    <td className="py-2 font-medium tabular-nums text-primary">{formatKrw(tick.pricePerCan)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 

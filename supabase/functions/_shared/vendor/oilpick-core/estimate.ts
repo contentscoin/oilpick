@@ -12,7 +12,15 @@ function estimateKg(cans, canSizeL = CAN_SIZE_L_DEFAULT) {
 function estimateCash(kg, pricePerKg) {
   return Math.round(kg * pricePerKg);
 }
+function estimatePurchase(cans, pricePerCan) {
+  return Math.round(cans) * pricePerCan;
+}
+function estimateNet(kg, pricePerKg, cans, pricePerCan) {
+  return estimateCash(kg, pricePerKg) - estimatePurchase(cans, pricePerCan);
+}
 export {
   estimateCash,
-  estimateKg
+  estimateKg,
+  estimateNet,
+  estimatePurchase
 };

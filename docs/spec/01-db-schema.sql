@@ -9,7 +9,8 @@ create type order_status as enum ('REQUESTED','ACCEPTED','ARRIVED','PICKED_UP','
 -- [08 P3·P4] 포인트 복권 — 현역: EARN(POINT 지급수단 적립)/WITHDRAW_REQUEST/WITHDRAW_CANCEL/ADJUST.
 -- [09 H5] REFERRAL(추천 활성화 시 점주 보너스, +부호·출금 가능) 추가(실 DDL: 20260715000003 alter type add value).
 -- 레거시 전용(신규 발행 없음): HOLD/RELEASE(구모델 수거비), PURCHASE(미래 예약).
-create type ledger_type as enum ('EARN','HOLD','RELEASE','WITHDRAW_REQUEST','WITHDRAW_CANCEL','ADJUST','PURCHASE','REFERRAL');
+create type ledger_type as enum ('EARN','HOLD','RELEASE','WITHDRAW_REQUEST','WITHDRAW_CANCEL','ADJUST','PURCHASE','REFERRAL','TRADE_PURCHASE'); -- [14 J2] TRADE_PURCHASE=신유 대금 포인트 차감(음수). PURCHASE(쇼핑몰 결제)와 별개
+create type order_kind as enum ('PICKUP','PURCHASE','MIXED'); -- [14 J2] 주문 종류. null=레거시=PICKUP
 -- [09 H2] 라이더 추천 상태(SIGNED_UP=가입, ACTIVATED=첫 수거 완료·보너스 발행, CANCELLED)
 create type referral_status as enum ('SIGNED_UP','ACTIVATED','CANCELLED');
 -- [07 F2] SUSPENDED 추가(실 마이그레이션은 별도 파일의 alter type add value — 사용 트랜잭션과 분리. 액션·정책은 07 F11)
@@ -104,8 +105,15 @@ create table pickup_orders (
   measured_kg numeric(8,1),                 -- 라이더 계량
   final_kg numeric(8,1),                    -- 확정(중재 반영) — 지급액/EARN 계산 기준
   supplier_point int,                       -- 레거시(구모델) — 지급된 EARN
-  payout_method payout_method,              -- [08 P2] 현장 지급수단('CASH'|'POINT'). SUBMIT_MEASURE에서 라이더 선택. null=레거시(완료 시 CASH 간주)
-  cash_paid_amount int,                     -- [08 P3] 확정 지급액 = round(final_kg × snapshot_price_per_kg). POINT 지급도 이 컬럼(1P=1원). COMPLETED 시 기록
+  payout_method payout_method,              -- [08 P2] 현장 지급수단('CASH'|'POINT'). SUBMIT_MEASURE에서 라이더 선택. null=레거시(완료 시 CASH 간주). [14 J2] 상계 후 NET 잔액의 정산 수단(양방향)으로 의미 확장
+  cash_paid_amount int,                     -- [08 P3] 확정 지급액. [14 J2] 의미 동결 = 폐유 총액 round(final_kg × snapshot_price_per_kg). 상계 결과는 net_amount에. COMPLETED 시 기록
+  -- [14 J2] 신유 구매·현장 상계(fresh_oil). order_kind null=레거시=PICKUP.
+  order_kind order_kind,                     -- 주문 종류(PICKUP/PURCHASE/MIXED). null=레거시=PICKUP
+  purchase_requested_cans int,               -- 신청 신유 통수(1..50). snapshot_fresh_can_price와 동반(CHECK)
+  snapshot_fresh_can_price int,              -- 신청 시점 신유 통당가 스냅샷(원). 이후 시세 변동 무영향
+  delivered_cans int,                        -- 현장 실배달 통수(0..50). SUBMIT_MEASURE에서 기록
+  purchase_amount int,                       -- 신유 대금 = delivered_cans × snapshot_fresh_can_price(정수곱). COMPLETED 시 기록
+  net_amount int,                            -- 상계 순액 = cash_paid_amount − purchase_amount(음수=점주 지불). COMPLETED 시 기록
   photo_urls text[] not null default '{}',
   cancel_reason text,
   dispute_reason text,
@@ -113,11 +121,28 @@ create table pickup_orders (
   created_at timestamptz not null default now(),
   accepted_at timestamptz, arrived_at timestamptz,  -- [14 J1] arrived_at: ARRIVE 전이 시각(타임라인 표기)
   picked_up_at timestamptz, delivered_at timestamptz,
-  completed_at timestamptz                  -- [07 F2] 완료 시각. 레거시 완료 시각 조회는 coalesce(completed_at, delivered_at, picked_up_at)
+  completed_at timestamptz,                 -- [07 F2] 완료 시각. 레거시 완료 시각 조회는 coalesce(completed_at, delivered_at, picked_up_at)
+  -- [14 J2] 신유 구매·상계 제약: 신청 통수↔신유가 스냅샷 동반, 범위 가드.
+  constraint chk_purchase_snapshot_paired check ((purchase_requested_cans is null) = (snapshot_fresh_can_price is null)),
+  constraint chk_purchase_requested_cans_range check (purchase_requested_cans is null or (purchase_requested_cans between 1 and 50)),
+  constraint chk_snapshot_fresh_can_price_pos check (snapshot_fresh_can_price is null or snapshot_fresh_can_price > 0),
+  constraint chk_delivered_cans_range check (delivered_cans is null or (delivered_cans between 0 and 50))
 );
 create index idx_orders_status on pickup_orders (status, created_at desc);
 create index idx_orders_supplier on pickup_orders (supplier_id, created_at desc);
 create index idx_orders_rider on pickup_orders (rider_id, created_at desc);
+
+-- ===== 신유(새 식용유) 고시가 tick [14 J2] =====
+-- price_ticks 패턴 미러: 전체 read / admin insert / 정정불가(신규 tick만). 단일 SKU(18L 1종).
+-- price_per_can = 18L 1통 판매가(원). 신청 시 pickup_orders.snapshot_fresh_can_price로 스냅샷.
+create table fresh_oil_price_ticks (
+  id bigint generated always as identity primary key,
+  price_per_can int not null check (price_per_can > 0),
+  effective_at timestamptz not null default now(),
+  created_by uuid not null references profiles(id)
+);
+create index idx_fresh_oil_price_ticks_effective on fresh_oil_price_ticks (effective_at desc);
+-- RLS: read all(using true) / insert admin(is_admin()). Realtime publication 추가. 20260724000003_fresh_oil.sql.
 
 create table order_events (
   id bigint generated always as identity primary key,

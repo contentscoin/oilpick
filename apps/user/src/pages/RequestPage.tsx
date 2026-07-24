@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   BigButton,
   ConfirmSheet,
@@ -15,6 +15,7 @@ import {
 import {
   estimateCash,
   estimateKg,
+  estimatePurchase,
   formatKg,
   formatKrw,
   orderCreateInputSchema,
@@ -23,6 +24,7 @@ import {
 import { invokeEdgeFunction } from "../lib/edgeFunction";
 import { useSession } from "../hooks/useSession";
 import { useLatestPriceTick } from "../hooks/usePriceTicks";
+import { useFreshOilPrice } from "../hooks/useFreshOilPrice";
 import { useProfile } from "../hooks/useProfile";
 import { useRecentAddresses, type RecentAddress } from "../hooks/useRecentAddresses";
 import { AddressField, type AddressValue } from "../components/AddressField";
@@ -69,22 +71,27 @@ function resolvePreferredTime(chip: TimeChip, customTime: string): string {
 
 export function RequestPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  // [14 J2] ?mode=purchase면 신유 단독 신청 모드로 진입 — 폐유 0, 신유 1통에서 시작.
+  const purchaseMode = searchParams.get("mode") === "purchase";
   const { session } = useSession();
   const userId = session?.user.id;
 
   const { data: profile } = useProfile(userId);
   const { data: latestTick } = useLatestPriceTick();
+  const { data: freshTick } = useFreshOilPrice();
   const { data: recentAddresses } = useRecentAddresses(userId);
 
   const [step, setStep] = useState<Step>(1);
-  const [cans, setCans] = useState(1);
+  const [cans, setCans] = useState(purchaseMode ? 0 : 1);
+  const [purchaseCans, setPurchaseCans] = useState(purchaseMode ? 1 : 0);
   const [address, setAddress] = useState<AddressValue>(DEFAULT_ADDRESS);
   const [addressInitialized, setAddressInitialized] = useState(false);
   const [timeChip, setTimeChip] = useState<TimeChip>("now");
   const [customTime, setCustomTime] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<{ orderId: string; cash: number } | null>(null);
+  const [success, setSuccess] = useState<{ orderId: string; label: string; amount: number } | null>(null);
 
   // step2 진입 시 1회, 프로필 주소를 기본값으로 채운다(03-frontend.md "기본값: 프로필 주소").
   if (!addressInitialized && profile?.address) {
@@ -92,12 +99,25 @@ export function RequestPage() {
     setAddress((prev) => (prev.address ? prev : { ...prev, address: profile.address }));
   }
 
-  // [14 §6] 통 개수만 선택 → estimateKg(cans) = 통 × KG_PER_CAN(18L 말통 기준). kg 직접입력·통크기 토글 제거.
+  // [14 §6] 통 개수만 선택 → estimateKg(cans) = 통 × KG_PER_CAN(18L 말통 기준).
   const estimatedKg = estimateKg(cans);
-  const estimatedCash = latestTick ? estimateCash(estimatedKg, latestTick.pricePerKg) : 0;
+  const wasteCash = latestTick ? estimateCash(estimatedKg, latestTick.pricePerKg) : 0;
+  // [14 J2] 신유 구매 대금·상계 미리보기(신유 tick 있을 때만 신청 가능).
+  const canBuyFresh = freshTick != null;
+  const hasPurchase = canBuyFresh && purchaseCans >= 1;
+  const purchaseAmount = hasPurchase && freshTick ? estimatePurchase(purchaseCans, freshTick.pricePerCan) : 0;
+  const netEstimate = wasteCash - purchaseAmount; // 양수=점주 수령, 음수=점주 결제
+  // sticky 푸터: 상계가 있으면 순액(수령/결제), 순수 수거면 예상 수령액.
+  const footerLabel = hasPurchase
+    ? netEstimate >= 0
+      ? "예상 수령액(상계 후)"
+      : "예상 결제액(상계 후)"
+    : "예상 수령액";
+  const footerAmount = hasPurchase ? Math.abs(netEstimate) : wasteCash;
   const preferredTimeValue = resolvePreferredTime(timeChip, customTime);
 
-  const step1Valid = cans >= 1;
+  // 폐유 수거 또는 신유 구매 중 하나는 있어야 다음 단계로 진행 가능(구매-only 허용).
+  const step1Valid = cans >= 1 || hasPurchase;
 
   function applyRecentAddress(recent: RecentAddress) {
     setAddress({ address: recent.address, lat: recent.lat, lng: recent.lng });
@@ -108,8 +128,10 @@ export function RequestPage() {
     setError(null);
 
     const parsed = orderCreateInputSchema.safeParse({
-      requestedCans: cans,
+      // 구매-only(폐유 0)면 requestedCans는 보내지 않는다(positive 제약). requestedKg는 0.
+      requestedCans: cans >= 1 ? cans : undefined,
       requestedKg: estimatedKg,
+      purchaseCans: hasPurchase ? purchaseCans : undefined,
       address: address.address,
       lat: address.lat,
       lng: address.lng,
@@ -129,8 +151,14 @@ export function RequestPage() {
       return;
     }
 
-    // 07 F9-⑤: 성공 시 즉시 이동하지 않고 완료 시트를 띄운다(예상 수령액 안내 + 다음 행동 선택).
-    setSuccess({ orderId: result.data.orderId, cash: result.data.estimatedCash });
+    // 07 F9-⑤: 성공 시 즉시 이동하지 않고 완료 시트를 띄운다(예상 금액 안내 + 다음 행동 선택).
+    // [14 J2] 상계가 있으면 순액(수령/결제)을, 순수 수거면 예상 수령액을 안내한다.
+    const successInfo = hasPurchase
+      ? netEstimate >= 0
+        ? { label: "예상 수령액(상계 후)", amount: netEstimate }
+        : { label: "예상 결제액(상계 후)", amount: -netEstimate }
+      : { label: "예상 수령액", amount: result.data.estimatedCash };
+    setSuccess({ orderId: result.data.orderId, ...successInfo });
   }
 
   return (
@@ -184,11 +212,43 @@ export function RequestPage() {
         <section data-testid="request-step-1" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <h2 style={{ fontSize: 16, margin: 0 }}>수거할 통 개수를 알려주세요</h2>
 
-          {/* [14 §6] 18L 말통 개수만 선택. 통크기·kg 직접입력 제거 — 정확한 무게는 현장 계량으로 확정. */}
-          <QtyStepper value={cans} onChange={setCans} />
+          {/* [14 §6] 18L 말통 개수만 선택. 통크기·kg 직접입력 제거 — 정확한 무게는 현장 계량으로 확정.
+              [14 J2] min 0 허용 — 신유만 받는 경우 폐유 0으로 둘 수 있다. */}
+          <QtyStepper
+            value={cans}
+            onChange={setCans}
+            min={0}
+            subLabel={cans === 0 ? "폐유 없이 새 기름만 받기" : undefined}
+          />
           <p style={{ margin: 0, fontSize: 13, color: colors.status.wait }}>
             18L 말통 기준이에요. 정확한 무게는 현장 계량으로 확정돼요.
           </p>
+
+          {/* [14 J2] 신유(새 식용유) 구매 — 고시가 tick이 있을 때만 노출. */}
+          {canBuyFresh && freshTick && (
+            <div
+              data-testid="request-fresh-section"
+              style={{ display: "flex", flexDirection: "column", gap: 12, borderTop: `1px solid ${surface.border}`, paddingTop: 16 }}
+            >
+              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <h2 style={{ fontSize: 16, margin: 0 }}>새 기름도 받으시겠어요?</h2>
+                <p style={{ margin: 0, fontSize: 13, color: colors.status.wait }}>
+                  18L 1통 · {formatKrw(freshTick.pricePerCan)} — 수거 대금과 상계돼요.
+                </p>
+              </div>
+              <QtyStepper
+                value={purchaseCans}
+                onChange={setPurchaseCans}
+                min={0}
+                max={50}
+                subLabel={
+                  purchaseCans === 0
+                    ? "필요 없으면 0으로 두세요"
+                    : `${formatKrw(purchaseAmount)} · 18L ${purchaseCans}통`
+                }
+              />
+            </div>
+          )}
 
           <BigButton data-testid="request-step-1-next" disabled={!step1Valid} onClick={() => setStep(2)}>
             다음
@@ -303,7 +363,14 @@ export function RequestPage() {
           <h2 style={{ fontSize: 16, margin: 0 }}>요청 내용을 확인해주세요</h2>
 
           <div style={{ borderRadius: radius.card, backgroundColor: gray[50], padding: 16, display: "flex", flexDirection: "column", gap: 8 }}>
-            <Row label="수량" value={`${cans}통 (약 ${formatKg(estimatedKg)})`} />
+            {cans >= 1 && <Row label="폐유 수거" value={`${cans}통 (약 ${formatKg(estimatedKg)})`} />}
+            {hasPurchase && <Row label="새 기름 구매" value={`${purchaseCans}통 · ${formatKrw(purchaseAmount)}`} />}
+            {hasPurchase && (
+              <Row
+                label={netEstimate >= 0 ? "예상 수령액(상계)" : "예상 결제액(상계)"}
+                value={formatKrw(Math.abs(netEstimate))}
+              />
+            )}
             <Row label="수거 주소" value={address.address} />
             <Row label="희망 시간" value={preferredTimeValue} />
           </div>
@@ -330,16 +397,16 @@ export function RequestPage() {
       >
         <div style={{ maxWidth: 480, margin: "0 auto", padding: "12px 20px", display: "flex", flexDirection: "column", gap: 2 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-            <span style={{ fontSize: 14, color: colors.status.wait }}>예상 수령액</span>
+            <span style={{ fontSize: 14, color: colors.status.wait }}>{footerLabel}</span>
             <span
               data-testid="request-estimate-cash"
               className="oilpick-tabular-nums"
               style={{ fontSize: 22, fontWeight: 800, color: colors.primary.dark }}
             >
-              {formatKrw(estimatedCash)}
+              {formatKrw(footerAmount)}
             </span>
           </div>
-          <p style={{ margin: 0, fontSize: 12, color: colors.status.wait }}>현장 계량 기준으로 확정돼요</p>
+          <p style={{ margin: 0, fontSize: 12, color: colors.status.wait }}>현장 계량·상계 기준으로 확정돼요</p>
         </div>
       </div>
 
@@ -348,7 +415,7 @@ export function RequestPage() {
         open={success != null}
         onClose={() => navigate("/", { replace: true })}
         title="요청이 접수됐어요"
-        description={`예상 수령액 ${formatKrw(success?.cash ?? 0)} · 현장 계량 기준으로 확정돼요.`}
+        description={`${success?.label ?? "예상 수령액"} ${formatKrw(success?.amount ?? 0)} · 현장 계량·상계 기준으로 확정돼요.`}
         confirmLabel="주문 상세 보기"
         cancelLabel="홈으로"
         onConfirm={() => success && navigate(`/orders/${success.orderId}`, { replace: true })}

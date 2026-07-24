@@ -23,8 +23,6 @@ export const errorResponseSchema = z.object({
 // ===== 공통 필드 =====
 
 const uuidSchema = z.string().uuid();
-/** requestedKg 1~500 (02-api.md order-create 검증). */
-const requestedKgSchema = z.number().min(1).max(500);
 /** kg은 소수 1자리(numeric(8,1), 01-db-schema.sql). */
 const kgSchema = z.number().nonnegative();
 const latSchema = z.number().min(-90).max(90);
@@ -32,14 +30,22 @@ const lngSchema = z.number().min(-180).max(180);
 
 // ===== 1. order-create (supplier) =====
 
-export const orderCreateInputSchema = z.object({
-  requestedCans: z.number().int().positive().optional(),
-  requestedKg: requestedKgSchema,
-  address: z.string().min(1),
-  lat: latSchema,
-  lng: lngSchema,
-  preferredTime: z.string().min(1),
-});
+export const orderCreateInputSchema = z
+  .object({
+    requestedCans: z.number().int().positive().optional(),
+    // [14 J2] 구매-only 주문은 폐유 0 → requestedKg 0 허용(폐유 성분 상한 500kg은 유지).
+    requestedKg: z.number().min(0).max(500),
+    // [14 J2] 신유 구매 통수(18L 1종 단일 SKU, 1..50). 있으면 order_kind=PURCHASE/MIXED.
+    purchaseCans: z.number().int().min(1).max(50).optional(),
+    address: z.string().min(1),
+    lat: latSchema,
+    lng: lngSchema,
+    preferredTime: z.string().min(1),
+  })
+  // 폐유 수거(requestedKg≥1)와 신유 구매(purchaseCans≥1) 중 최소 하나는 있어야 한다("둘 다 0" 차단).
+  .refine((v) => v.requestedKg >= 1 || (v.purchaseCans ?? 0) >= 1, {
+    message: "폐유 수거 또는 신유 구매 중 하나는 선택해야 해요.",
+  });
 export type OrderCreateInput = z.infer<typeof orderCreateInputSchema>;
 
 // 08 G3-①: couponCost 필드 삭제(쿠폰 모델 폐기 — coupon_cost 스냅샷 중지, 08 P1).
@@ -96,6 +102,8 @@ export const submitMeasurePayloadSchema = z.object({
   payoutMethod: payoutMethodSchema,
   barcodes: z.array(z.string().min(1)).max(50).optional(),
   geo: pickupGeoSchema.optional(),
+  // [14 J2] 현장 실배달 신유 통수(구매 동반 주문 필수 0..50 — 필수 강제는 RPC가 order_kind로 판정).
+  deliveredCans: z.number().int().min(0).max(50).optional(),
 });
 
 export const confirmMeasurePayloadSchema = z.undefined().or(z.object({}).strict());
@@ -238,6 +246,33 @@ export const priceSetOutputSchema = z.object({
   effectiveAt: z.string(),
 });
 export type PriceSetOutput = z.infer<typeof priceSetOutputSchema>;
+
+/** [14 J2] pickup_orders.order_kind. null=레거시=PICKUP. 수거만/구매만/수거+구매. */
+export const orderKindSchema = z.enum(["PICKUP", "PURCHASE", "MIXED"]);
+export type OrderKind = z.infer<typeof orderKindSchema>;
+
+// ===== 9-b. price-set kind=FRESH (신유 고시가, 14 J2) =====
+// price-set Edge가 body.kind로 분기 — 'FRESH'면 아래 스키마로 검증해 fresh_oil_price_ticks에 insert.
+// 단일 SKU(18L 1종) — price_per_can = 18L 1통 판매가(원). price_ticks 패턴과 동일(정정불가·신규 tick만).
+export const freshOilPriceSetInputSchema = z.object({
+  pricePerCan: z.number().int().positive(),
+});
+export type FreshOilPriceSetInput = z.infer<typeof freshOilPriceSetInputSchema>;
+
+export const freshOilPriceSetOutputSchema = z.object({
+  id: z.number().int(),
+  pricePerCan: z.number().int().positive(),
+  effectiveAt: z.string(),
+});
+export type FreshOilPriceSetOutput = z.infer<typeof freshOilPriceSetOutputSchema>;
+
+/** fresh_oil_price_ticks 최신 tick 조회 모델(useFreshOilPrice). 없으면 신유 구매 UI를 숨긴다. */
+export const freshOilPriceTickSchema = z.object({
+  id: z.number().int(),
+  pricePerCan: z.number().int().positive(),
+  effectiveAt: z.string(),
+});
+export type FreshOilPriceTick = z.infer<typeof freshOilPriceTickSchema>;
 
 // ===== 10. point-adjust (admin) =====
 

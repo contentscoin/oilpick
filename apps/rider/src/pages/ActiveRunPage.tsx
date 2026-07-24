@@ -7,6 +7,7 @@ import {
   OrderTimeline,
   PayoutMethodChip,
   PhotoUploader,
+  QtyStepper,
   colors,
   elevation,
   gray,
@@ -22,11 +23,13 @@ import {
   buildKakaoWebRouteUrl,
   buildTmapRouteUrl,
   estimateCash,
+  estimatePurchase,
   formatKg,
   formatKrw,
   formatPoint,
   humanizeSupabaseError,
   type LatLng,
+  type OrderKind,
   type OrderStatus,
   type PayoutMethod,
   type PickupGeo,
@@ -110,6 +113,9 @@ export function ActiveRunPage() {
           snapshotPricePerKg={run.snapshotPricePerKg}
           submittedPayoutMethod={run.payoutMethod}
           existingPhotoUrls={run.photoUrls}
+          orderKind={run.orderKind}
+          purchaseRequestedCans={run.purchaseRequestedCans}
+          snapshotFreshCanPrice={run.snapshotFreshCanPrice}
         />
       )}
       {run.status === "DISPUTED" && (
@@ -423,6 +429,9 @@ function ArrivedPanel({
   snapshotPricePerKg,
   submittedPayoutMethod,
   existingPhotoUrls,
+  orderKind,
+  purchaseRequestedCans,
+  snapshotFreshCanPrice,
 }: {
   orderId: string;
   measuredKg: number | null;
@@ -432,9 +441,16 @@ function ArrivedPanel({
   submittedPayoutMethod: PayoutMethod | null;
   /** 이미 제출된 현장 사진 — 재제출 시 새 사진이 없으면 재사용(서버는 매 제출 ≥1장 요구). */
   existingPhotoUrls: string[];
+  /** [14 J2] 신유 구매 동반 여부·수량/가격 스냅샷 — deliveredCans 입력·상계 미리보기. */
+  orderKind: OrderKind | null;
+  purchaseRequestedCans: number | null;
+  snapshotFreshCanPrice: number | null;
 }) {
+  // [14 J2] 구매 동반(PURCHASE/MIXED)이면 현장 배달 통수를 입력받고 폐유 수령액과 상계한다.
+  const purchaseInvolved = orderKind === "PURCHASE" || orderKind === "MIXED";
   const [kg, setKg] = useState("");
   const [payout, setPayout] = useState<PayoutMethod | null>(submittedPayoutMethod);
+  const [deliveredCans, setDeliveredCans] = useState(purchaseRequestedCans ?? 0);
   const [photos, setPhotos] = useState<PhotoAsset[]>([]);
   // [12 §4] 바코드+GPS 수거이력(캡처 전용 — 지급/정산과 무관). barcodes 리스트 + 첫 캡처 시점 디바이스 GPS.
   const [barcodes, setBarcodes] = useState<string[]>([]);
@@ -569,8 +585,9 @@ function ArrivedPanel({
     e.preventDefault();
     setError(null);
 
-    const parsedKg = Number(kg);
-    if (!kg || Number.isNaN(parsedKg) || parsedKg <= 0) {
+    // [14 J2] 구매 동반이면 폐유 없이 신유만 받을 수 있어 kg 0 허용(빈 값=0). 순수 수거는 >0 필수.
+    const parsedKg = kg === "" && purchaseInvolved ? 0 : Number(kg);
+    if (Number.isNaN(parsedKg) || parsedKg < 0 || (!purchaseInvolved && parsedKg <= 0)) {
       setError("계량값을 확인해주세요.");
       return;
     }
@@ -579,13 +596,18 @@ function ArrivedPanel({
       setError("지급 수단(현금/포인트)을 선택해주세요.");
       return;
     }
+    // [14 J2] 구매 동반 시 배달 통수(0..50) 범위 검증(서버 RPC도 강제).
+    if (purchaseInvolved && (deliveredCans < 0 || deliveredCans > 50)) {
+      setError("배달한 새 기름 통수를 확인해주세요.");
+      return;
+    }
     // 재제출은 기존 사진 재사용 허용(서버는 매 제출 photoUrls ≥1장 요구).
     if (photos.length === 0 && existingPhotoUrls.length === 0) {
       setError("현장 사진을 1장 이상 첨부해주세요.");
       return;
     }
-    // [12 §4] 첫 제출 시 폐식용유 바코드 ≥1건 필수(수거 시 입력). 재제출은 면제(기존 수거이력 보존).
-    if (!resubmitting && barcodes.length === 0) {
+    // [12 §4] 첫 제출 시 폐식용유 바코드 ≥1건 필수(수거 시 입력). 재제출·폐유 없는 신유 단독은 면제.
+    if (!resubmitting && parsedKg > 0 && barcodes.length === 0) {
       setError("폐식용유 바코드를 1개 이상 스캔하거나 입력해주세요.");
       return;
     }
@@ -628,6 +650,8 @@ function ArrivedPanel({
           measuredKg: parsedKg,
           photoUrls: uploadedUrls.length > 0 ? uploadedUrls : existingPhotoUrls,
           payoutMethod: payout,
+          // [14 J2] 구매 동반 주문은 현장 배달 통수를 함께 제출(상계 계산의 신유 성분).
+          ...(purchaseInvolved ? { deliveredCans } : {}),
           // [12 §4] 바코드/GPS 수거이력(있을 때만). RPC가 order_events.payload에 보존.
           ...(barcodes.length > 0 ? { barcodes } : {}),
           ...(geoForSubmit ? { geo: geoForSubmit } : {}),
@@ -657,6 +681,10 @@ function ArrivedPanel({
   const payoutAmount = kg ? estimateCash(Number(kg), snapshotPricePerKg) : 0;
   const showEstimate = Boolean(kg) && !Number.isNaN(Number(kg));
   const isPointSelected = payout === "POINT";
+  // [14 J2] 신유 대금·상계 미리보기(구매 동반 시). netAmount 양수=점주 지급, 음수=점주 청구.
+  const purchaseAmount =
+    purchaseInvolved && snapshotFreshCanPrice != null ? estimatePurchase(deliveredCans, snapshotFreshCanPrice) : 0;
+  const netAmount = payoutAmount - purchaseAmount;
 
   return (
     <form data-testid="run-arrived-panel" onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -717,6 +745,52 @@ function ArrivedPanel({
           </p>
         )}
       </Card>
+
+      {/* [14 J2] 신유 배달 통수 + 현장 상계 미리보기(구매 동반 주문만). */}
+      {purchaseInvolved && (
+        <Card testId="run-purchase-panel" style={{ gap: 12 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <span style={{ fontSize: 14, fontWeight: 600, color: gray[800] }}>새 기름 배달 통수</span>
+            <span style={{ fontSize: 12, color: colors.status.wait }}>
+              신청 {purchaseRequestedCans ?? 0}통 · 18L 1통 {snapshotFreshCanPrice != null ? formatKrw(snapshotFreshCanPrice) : "-"}
+            </span>
+          </div>
+          <QtyStepper
+            value={deliveredCans}
+            onChange={setDeliveredCans}
+            min={0}
+            max={50}
+            subLabel={snapshotFreshCanPrice != null ? `${formatKrw(purchaseAmount)} · 18L ${deliveredCans}통` : null}
+          />
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingTop: 12, borderTop: `1px solid ${surface.border}` }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: colors.status.wait }}>
+              <span>폐유 수령액</span>
+              <span className="oilpick-tabular-nums">{formatKrw(payoutAmount)}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: colors.status.wait }}>
+              <span>새 기름 대금</span>
+              <span className="oilpick-tabular-nums">− {formatKrw(purchaseAmount)}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", paddingTop: 6, borderTop: `1px dashed ${surface.border}` }}>
+              <span style={{ fontSize: 14, fontWeight: 700, color: gray[900] }}>
+                {netAmount >= 0 ? "점주에게 지급" : "점주에게 받기"}
+              </span>
+              <span
+                data-testid="run-net-amount"
+                className="oilpick-tabular-nums"
+                style={{ fontSize: 18, fontWeight: 800, color: netAmount >= 0 ? colors.primary.dark : colors.accent.deep }}
+              >
+                {formatKrw(Math.abs(netAmount))}
+              </span>
+            </div>
+            {isPointSelected && netAmount < 0 && (
+              <p style={{ margin: 0, fontSize: 12, color: colors.status.wait }}>
+                포인트 잔액이 부족하면 제출이 거부돼요 — 그때는 현금으로 다시 제출하세요.
+              </p>
+            )}
+          </div>
+        </Card>
+      )}
 
       <Card style={{ gap: 10 }}>
         <span style={{ fontSize: 14, fontWeight: 600, color: gray[800] }}>

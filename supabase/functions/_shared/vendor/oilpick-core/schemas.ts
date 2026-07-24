@@ -13,17 +13,21 @@ var errorResponseSchema = z.object({
   message: z.string()
 });
 var uuidSchema = z.string().uuid();
-var requestedKgSchema = z.number().min(1).max(500);
 var kgSchema = z.number().nonnegative();
 var latSchema = z.number().min(-90).max(90);
 var lngSchema = z.number().min(-180).max(180);
 var orderCreateInputSchema = z.object({
   requestedCans: z.number().int().positive().optional(),
-  requestedKg: requestedKgSchema,
+  // [14 J2] 구매-only 주문은 폐유 0 → requestedKg 0 허용(폐유 성분 상한 500kg은 유지).
+  requestedKg: z.number().min(0).max(500),
+  // [14 J2] 신유 구매 통수(18L 1종 단일 SKU, 1..50). 있으면 order_kind=PURCHASE/MIXED.
+  purchaseCans: z.number().int().min(1).max(50).optional(),
   address: z.string().min(1),
   lat: latSchema,
   lng: lngSchema,
   preferredTime: z.string().min(1)
+}).refine((v) => v.requestedKg >= 1 || (v.purchaseCans ?? 0) >= 1, {
+  message: "\uD3D0\uC720 \uC218\uAC70 \uB610\uB294 \uC2E0\uC720 \uAD6C\uB9E4 \uC911 \uD558\uB098\uB294 \uC120\uD0DD\uD574\uC57C \uD574\uC694."
 });
 var orderCreateOutputSchema = z.object({
   orderId: uuidSchema,
@@ -51,7 +55,9 @@ var submitMeasurePayloadSchema = z.object({
   photoUrls: z.array(z.string().url()).min(1),
   payoutMethod: payoutMethodSchema,
   barcodes: z.array(z.string().min(1)).max(50).optional(),
-  geo: pickupGeoSchema.optional()
+  geo: pickupGeoSchema.optional(),
+  // [14 J2] 현장 실배달 신유 통수(구매 동반 주문 필수 0..50 — 필수 강제는 RPC가 order_kind로 판정).
+  deliveredCans: z.number().int().min(0).max(50).optional()
 });
 var confirmMeasurePayloadSchema = z.undefined().or(z.object({}).strict());
 var disputePayloadSchema = z.object({
@@ -139,6 +145,20 @@ var priceSetInputSchema = z.object({
 var priceSetOutputSchema = z.object({
   id: z.number().int(),
   pricePerKg: z.number().int().positive(),
+  effectiveAt: z.string()
+});
+var orderKindSchema = z.enum(["PICKUP", "PURCHASE", "MIXED"]);
+var freshOilPriceSetInputSchema = z.object({
+  pricePerCan: z.number().int().positive()
+});
+var freshOilPriceSetOutputSchema = z.object({
+  id: z.number().int(),
+  pricePerCan: z.number().int().positive(),
+  effectiveAt: z.string()
+});
+var freshOilPriceTickSchema = z.object({
+  id: z.number().int(),
+  pricePerCan: z.number().int().positive(),
   effectiveAt: z.string()
 });
 var pointAdjustInputSchema = z.object({
@@ -286,6 +306,9 @@ export {
   disputePayloadSchema,
   errorResponseSchema,
   forceCompletePayloadSchema,
+  freshOilPriceSetInputSchema,
+  freshOilPriceSetOutputSchema,
+  freshOilPriceTickSchema,
   notifyBroadcastInputSchema,
   notifyBroadcastOutputSchema,
   okResponseSchema,
@@ -295,6 +318,7 @@ export {
   orderCreateOutputSchema,
   orderExpireOutputSchema,
   orderFaultSchema,
+  orderKindSchema,
   orderTransitionInputSchema,
   orderTransitionOutputSchema,
   payoutMethodSchema,

@@ -12,14 +12,16 @@ import type { PriceTickRow } from "../hooks/usePriceAdmin";
  * - 06 E10-④: 정정 안내 배너(과거 tick 수정 금지 — 신규 tick 재등록 유도)
  */
 
-const { mockInvoke, mockPriceHistory } = vi.hoisted(() => ({
+const { mockInvoke, mockPriceHistory, mockFreshHistory } = vi.hoisted(() => ({
   mockInvoke: vi.fn(),
   mockPriceHistory: vi.fn(),
+  mockFreshHistory: vi.fn(),
 }));
 
 vi.mock("../lib/edgeFunction", () => ({ invokeEdgeFunction: mockInvoke }));
 vi.mock("../hooks/usePriceAdmin", () => ({
   usePriceHistory: () => mockPriceHistory(),
+  useFreshOilPriceHistory: () => mockFreshHistory(),
 }));
 
 // recharts ResponsiveContainer는 jsdom에서 크기 0으로 경고만 내므로 차트는 목킹한다.
@@ -39,12 +41,15 @@ function setup({
   priceTicks?: PriceTickRow[];
 } = {}) {
   mockPriceHistory.mockReturnValue({ data: priceTicks, isLoading: false, refetch: vi.fn() });
+  // [14 J2] 신유 섹션 훅 기본값(빈 이력) — 기존 폐유 시세 테스트에는 영향 없다.
+  mockFreshHistory.mockReturnValue({ data: [], isLoading: false, isError: false, refetch: vi.fn() });
   return render(<PricePage />);
 }
 
 afterEach(() => {
   mockInvoke.mockReset();
   mockPriceHistory.mockReset();
+  mockFreshHistory.mockReset();
 });
 
 describe("PricePage 시세 섹션 (rider_fee 제거)", () => {
@@ -100,7 +105,9 @@ describe("PricePage 정정 안내 배너 (06 E10-④)", () => {
   it("시세 섹션에 상시 배너를 렌더한다", () => {
     setup();
     expect(screen.getByTestId("tick-correction-notice-oil")).toBeInTheDocument();
-    // 과거 tick 수정 금지(스냅샷 원칙) + 신규 tick 재등록 유도 문구.
-    expect(screen.getAllByText(/과거 tick은 수정할 수 없어요/)).toHaveLength(1);
+    // [14 J2] 신유 섹션에도 동일 배너 — 폐유·신유 두 섹션 각각 1개씩.
+    expect(screen.getByTestId("tick-correction-notice-fresh")).toBeInTheDocument();
+    // 과거 tick 수정 금지(스냅샷 원칙) + 신규 tick 재등록 유도 문구(두 섹션).
+    expect(screen.getAllByText(/과거 tick은 수정할 수 없어요/)).toHaveLength(2);
   });
 });

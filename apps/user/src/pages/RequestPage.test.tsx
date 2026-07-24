@@ -4,18 +4,26 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { RequestPage } from "./RequestPage";
 
-const { mockUseSession, mockUseProfile, mockUseLatestPriceTick, mockUseRecentAddresses, mockInvokeEdgeFunction } =
-  vi.hoisted(() => ({
-    mockUseSession: vi.fn(),
-    mockUseProfile: vi.fn(),
-    mockUseLatestPriceTick: vi.fn(),
-    mockUseRecentAddresses: vi.fn(),
-    mockInvokeEdgeFunction: vi.fn(),
-  }));
+const {
+  mockUseSession,
+  mockUseProfile,
+  mockUseLatestPriceTick,
+  mockUseFreshOilPrice,
+  mockUseRecentAddresses,
+  mockInvokeEdgeFunction,
+} = vi.hoisted(() => ({
+  mockUseSession: vi.fn(),
+  mockUseProfile: vi.fn(),
+  mockUseLatestPriceTick: vi.fn(),
+  mockUseFreshOilPrice: vi.fn(),
+  mockUseRecentAddresses: vi.fn(),
+  mockInvokeEdgeFunction: vi.fn(),
+}));
 
 vi.mock("../hooks/useSession", () => ({ useSession: mockUseSession }));
 vi.mock("../hooks/useProfile", () => ({ useProfile: mockUseProfile }));
 vi.mock("../hooks/usePriceTicks", () => ({ useLatestPriceTick: mockUseLatestPriceTick }));
+vi.mock("../hooks/useFreshOilPrice", () => ({ useFreshOilPrice: mockUseFreshOilPrice }));
 vi.mock("../hooks/useRecentAddresses", () => ({ useRecentAddresses: mockUseRecentAddresses }));
 vi.mock("../lib/edgeFunction", () => ({ invokeEdgeFunction: mockInvokeEdgeFunction }));
 
@@ -56,6 +64,8 @@ describe("RequestPage", () => {
     mockUseSession.mockReturnValue({ session: { user: { id: "user-1" } }, loading: false });
     mockUseProfile.mockReturnValue({ data: { id: "user-1", displayName: "김사장", storeName: "행복식당", address: "" } });
     mockUseLatestPriceTick.mockReturnValue({ data: { id: 1, pricePerKg: 700, riderFee: 5000, effectiveAt: "2026-07-01T00:00:00Z" } });
+    // 기본은 신유 고시가 없음 → 구매 UI 숨김(순수 수거 기존 동작 유지). 구매 케이스는 개별 테스트에서 주입.
+    mockUseFreshOilPrice.mockReturnValue({ data: undefined });
     mockUseRecentAddresses.mockReturnValue({ data: [] });
   });
 
@@ -171,5 +181,35 @@ describe("RequestPage", () => {
     expect(await screen.findByTestId("request-error")).toHaveTextContent("진행 중인 주문이 너무 많아요");
     expect(screen.getByTestId("request-step-3")).toBeInTheDocument();
     expect(screen.queryByTestId("confirm-sheet")).not.toBeInTheDocument();
+  });
+
+  it("[14 J2] shows the fresh-oil purchase section and nets it against the pickup, sending purchaseCans", async () => {
+    mockUseFreshOilPrice.mockReturnValue({ data: { id: 1, pricePerCan: 26000, effectiveAt: "2026-07-01T00:00:00Z" } });
+    mockInvokeEdgeFunction.mockResolvedValue({
+      ok: true,
+      data: { orderId: "order-1", snapshotPricePerKg: 700, estimatedCash: 10500 },
+    });
+    renderPage();
+
+    // 신유 고시가가 있으면 구매 섹션이 노출된다.
+    expect(screen.getByTestId("request-fresh-section")).toBeInTheDocument();
+
+    // 신유 +1통(두 번째 스테퍼) → 폐유 1통(10,500원) − 신유 1통(26,000원) = −15,500원(결제액).
+    fireEvent.click(screen.getAllByTestId("qty-stepper-increment")[1]!);
+    expect(screen.getByTestId("request-estimate-cash")).toHaveTextContent("15,500원");
+
+    // 스텝 진행 후 제출 → order-create에 purchaseCans 포함(requestedKg는 폐유 1통=15).
+    fireEvent.click(screen.getByTestId("request-step-1-next"));
+    fireEvent.change(screen.getByTestId("address-input"), { target: { value: "서울시 강서구 1" } });
+    fillAddressCoords();
+    fireEvent.click(screen.getByTestId("request-step-2-next"));
+    fireEvent.click(screen.getByTestId("request-submit"));
+
+    await waitFor(() =>
+      expect(mockInvokeEdgeFunction).toHaveBeenCalledWith(
+        "order-create",
+        expect.objectContaining({ purchaseCans: 1, requestedKg: 15 }),
+      ),
+    );
   });
 });
