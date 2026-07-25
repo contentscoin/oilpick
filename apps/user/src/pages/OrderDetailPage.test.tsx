@@ -4,10 +4,11 @@ import { ToastProvider } from "@oilpick/ui";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { OrderDetailPage } from "./OrderDetailPage";
 
-const { mockUseOrder, mockUseAssignedRiderCard, mockUseRiderLocation, mockInvokeEdgeFunction, mockUseSession, mockUseUnreadCount } = vi.hoisted(() => ({
+const { mockUseOrder, mockUseAssignedRiderCard, mockUseRiderLocation, mockUseDirections, mockInvokeEdgeFunction, mockUseSession, mockUseUnreadCount } = vi.hoisted(() => ({
   mockUseOrder: vi.fn(),
   mockUseAssignedRiderCard: vi.fn(),
   mockUseRiderLocation: vi.fn(),
+  mockUseDirections: vi.fn(),
   mockInvokeEdgeFunction: vi.fn(),
   mockUseSession: vi.fn(),
   mockUseUnreadCount: vi.fn(),
@@ -16,6 +17,7 @@ const { mockUseOrder, mockUseAssignedRiderCard, mockUseRiderLocation, mockInvoke
 vi.mock("../hooks/useOrder", () => ({ useOrder: mockUseOrder }));
 vi.mock("../hooks/useAssignedRiderCard", () => ({ useAssignedRiderCard: mockUseAssignedRiderCard }));
 vi.mock("../hooks/useRiderLocation", () => ({ useRiderLocation: mockUseRiderLocation }));
+vi.mock("../hooks/useDirections", () => ({ useDirections: mockUseDirections }));
 vi.mock("../lib/edgeFunction", () => ({ invokeEdgeFunction: mockInvokeEdgeFunction }));
 vi.mock("../hooks/useSession", () => ({ useSession: mockUseSession }));
 vi.mock("../hooks/useUnreadCount", () => ({ useUnreadCount: mockUseUnreadCount }));
@@ -67,6 +69,8 @@ describe("OrderDetailPage", () => {
     vi.clearAllMocks();
     mockUseAssignedRiderCard.mockReturnValue({ data: null });
     mockUseRiderLocation.mockReturnValue(null);
+    // [11 M9-b] 기본은 라우팅 비활성(키 미설정 상황) — 선·ETA 미표시.
+    mockUseDirections.mockReturnValue({ data: undefined });
     mockUseSession.mockReturnValue({ session: { user: { id: "supplier-1" } }, loading: false });
     mockUseUnreadCount.mockReturnValue(0);
   });
@@ -156,6 +160,31 @@ describe("OrderDetailPage", () => {
     const cta = screen.getByTestId("order-call-rider");
     expect(cta).toHaveAttribute("href", "tel:01011112222");
     expect(cta).toHaveTextContent("라이더에게 전화");
+  });
+
+  it("[11 M9-b] 라우팅 미구성(키 없음)이면 ETA를 표기하지 않는다 — 가짜 시간 금지", () => {
+    mockUseOrder.mockReturnValue({ data: { ...BASE_ORDER, status: "ACCEPTED", riderId: "rider-1" }, isLoading: false });
+    mockUseRiderLocation.mockReturnValue({ lat: 37.55, lng: 126.9, updatedAt: "2026-07-01T00:00:00Z", stale: false });
+    mockUseDirections.mockReturnValue({
+      data: { configured: false, distanceMeters: null, durationSeconds: null, path: [] },
+    });
+    renderPage();
+    expect(screen.queryByTestId("map-view-eta")).not.toBeInTheDocument();
+  });
+
+  it("[11 M9-b] 실 라우팅 값이 오면 ETA 칩을 표기한다", () => {
+    mockUseOrder.mockReturnValue({ data: { ...BASE_ORDER, status: "ACCEPTED", riderId: "rider-1" }, isLoading: false });
+    mockUseRiderLocation.mockReturnValue({ lat: 37.55, lng: 126.9, updatedAt: "2026-07-01T00:00:00Z", stale: false });
+    mockUseDirections.mockReturnValue({
+      data: {
+        configured: true,
+        distanceMeters: 3200,
+        durationSeconds: 720,
+        path: [{ lat: 37.55, lng: 126.9 }, { lat: 37.56, lng: 126.91 }],
+      },
+    });
+    renderPage();
+    expect(screen.getByTestId("map-view-eta")).toHaveTextContent("12분 후 도착");
   });
 
   it("does not show a cancel button for ACCEPTED orders (supplier cannot cancel after acceptance)", () => {

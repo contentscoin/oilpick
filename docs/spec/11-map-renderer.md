@@ -107,7 +107,7 @@
    launch-plan 체크리스트 참조). 2026-07-22 개발키 발급됨.
 3. [x] `MapView` 내부 MapLibre 재구현(prop 인터페이스 유지: `apiKey` → `styleUrl`만 교체, center/markers/
    level/pickupLabel/etaLabel 불변). maplibre-gl dynamic import + 실패·WebGL 미지원 시 프리뷰 폴백.
-4. [ ] 라우팅 폴리라인(카카오모빌리티 Directions)은 M9-b에서.
+4. [x] 라우팅 폴리라인(카카오모빌리티 Directions) — M9-b에서 `MapView.routePath`로 구현(2026-07-25).
 5. [x] 테스트 재작성(MapView 4케이스: 게이트·[lng,lat] 초기화 계약·래스터 템플릿 래핑·실패 폴백).
    [ ] Capacitor iOS/Android 실기기 WebGL 검증(qa-checklist 🔴 — 실기기 필요).
 6. [x] 번들: dynamic import로 초기 로드 영향 0(타일 미설정 시 maplibre 청크 자체를 안 받음).
@@ -126,8 +126,16 @@
     REST 키는 서버 시크릿 `KAKAO_MOBILITY_KEY`(CLAUDE.md 규칙 3 — 클라이언트 노출 금지).
     **키 미설정 시 `configured:false`로 조용히 비활성**(경로선 미표시, 라이더 위치 마커만).
     키 확보 후 `supabase secrets set KAKAO_MOBILITY_KEY=…`만 하면 재배포 없이 활성화된다.
-  - **남은 UI 작업**: OrderDetailPage 지도에 라이더 마커(rider_profiles.last_location 구독) +
-    requestDirections 경로선 + ETA 렌더 연결. `directions` Edge의 카카오모빌리티 응답 파싱은
-    실 키로 1회 검증 필요(🔴 — 현재는 계약 기준 구현).
+  - **UI 연결 완료(2026-07-25)**: OrderDetailPage 지도에 ① 라이더 마커 ② 경로선 ③ ETA를 모두 붙였다.
+    - 라이더 위치는 `rider_profiles.last_location` 구독이 아니라 **broadcast 채널
+      `order:{id}:location`**(rider-location Edge가 실제 push하는 경로) 구독으로 구현 —
+      `useRiderLocation`, private 채널 + realtime.messages RLS(당사자만). 60초 무갱신 시 마커 흐림.
+    - 경로·ETA는 `useDirections`(신규 훅) → `requestDirections`. 15초 위치 푸시가 라우팅 API를 난타하지
+      않도록 **좌표를 소수 3자리(≈110m)로 절삭해 쿼리 키를 만들고 staleTime 60초**를 둔다. ARRIVED
+      이후·좌표 stale이면 조회하지 않는다.
+    - MapView에 `routePath`(GeoJSON LineString 레이어, 스타일 로드 후 추가·이후 setData만 교체) +
+      실지도 ETA 칩을 추가. core `formatEta`(null 입력→null 반환으로 "가짜 시간" 원천 차단).
+  - 🔴 **남은 검증**: `directions` Edge의 카카오모빌리티 응답 파싱은 **실 키로 1회 실측 필요**
+    (현재는 계약 기준 구현 + 키 미설정 경로만 테스트로 고정).
 - **M9-c 인앱 풀 턴바이턴(비권장 유지)**: 음성·재탐색까지 내장. 고비용, 한국 규제·국내 내비 SDK 라이선스,
   백그라운드 GPS 배터리. MVP엔 과투자 — 국내 gig/배달앱도 대개 M9-a(핸드오프)를 택한다.

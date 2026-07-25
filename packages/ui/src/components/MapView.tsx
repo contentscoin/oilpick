@@ -38,6 +38,27 @@ interface RiderMarkerInstance {
   getElement?: () => HTMLElement | undefined;
 }
 
+/** [11 M9-b] 경로선 갱신에 쓰는 maplibre Map의 최소 표면. */
+interface MapInstance {
+  remove: () => void;
+  on?: (ev: string, cb: () => void) => void;
+  getSource?: (id: string) => { setData: (d: unknown) => void } | undefined;
+  addSource?: (id: string, spec: unknown) => void;
+  addLayer?: (spec: unknown) => void;
+}
+
+const ROUTE_SOURCE_ID = "oilpick-route";
+const ROUTE_LAYER_ID = "oilpick-route-line";
+
+/** 경로 좌표 → GeoJSON LineString Feature. */
+function routeGeoJson(path: { lat: number; lng: number }[]) {
+  return {
+    type: "Feature",
+    properties: {},
+    geometry: { type: "LineString", coordinates: path.map((p) => [p.lng, p.lat]) },
+  };
+}
+
 export interface MapViewProps {
   /** MapLibre 스타일 JSON URL 또는 {z}/{x}/{y} 래스터 타일 템플릿. 없으면 프리뷰 폴백. */
   styleUrl?: string;
@@ -56,6 +77,11 @@ export interface MapViewProps {
    * 갱신하고, 프리뷰 폴백에서는 "라이더 이동 중" 라이브 칩을 표시한다. null이면 표시하지 않는다.
    */
   riderMarker?: RiderMarker | null;
+  /**
+   * [11 M9-b] 라이더→수거지 도로 경로(directions Edge). 실지도에만 선으로 그린다.
+   * KAKAO_MOBILITY_KEY 미설정 시 Edge가 빈 배열을 주므로 자연히 미표시(조용한 비활성).
+   */
+  routePath?: { lat: number; lng: number }[];
 }
 
 /** {z}/{x}/{y} 템플릿이면 인라인 래스터 스타일로, 아니면 스타일 URL 그대로. */
@@ -150,11 +176,15 @@ export function MapView({
   pickupLabel,
   etaLabel,
   riderMarker,
+  routePath,
 }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<"idle" | "ready" | "placeholder">("idle");
+  // [11 M9-b] addSource/addLayer는 스타일 로드 완료 후에만 가능하다(status='ready'는 Map 생성
+  // 직후라 아직 스타일이 안 붙어 있을 수 있다 — 마커는 무관하지만 레이어는 이 플래그가 필요).
+  const [styleLoaded, setStyleLoaded] = useState(false);
   // [14 J1] 라이더 마커를 제자리 갱신하려면 로드 이펙트 밖에서 맵·maplibre 모듈에 접근해야 한다.
-  const mapRef = useRef<{ remove: () => void } | null>(null);
+  const mapRef = useRef<MapInstance | null>(null);
   const maplibreRef = useRef<{ Marker: new (opts?: Record<string, unknown>) => RiderMarkerInstance } | null>(null);
   const riderMarkerRef = useRef<RiderMarkerInstance | null>(null);
 
@@ -164,7 +194,7 @@ export function MapView({
       return;
     }
     let cancelled = false;
-    let map: { remove: () => void } | null = null;
+    let map: MapInstance | null = null;
     (async () => {
       try {
         // css는 실지도 경로에서만 로드(프리뷰 폴백 앱은 maplibre 청크 자체를 안 받는다).
@@ -173,19 +203,26 @@ export function MapView({
           import("maplibre-gl/dist/maplibre-gl.css"),
         ]);
         if (cancelled || !containerRef.current) return;
+        // maplibre 실타입 → 이 컴포넌트가 쓰는 최소 표면(MapInstance)으로 좁힌다(dynamic import
+        // 라 실타입을 직접 참조하지 않는 기존 관례와 동일).
         map = new maplibregl.Map({
           container: containerRef.current,
           style: resolveStyle(styleUrl) as never,
           center: [center.lng, center.lat],
           zoom: Math.min(19, Math.max(3, 19 - level)),
-        });
+        }) as unknown as MapInstance;
         markers.forEach((marker) => {
           new maplibregl.Marker({ color: colors.primary.DEFAULT })
             .setLngLat([marker.lng, marker.lat])
             .addTo(map as never);
         });
-        mapRef.current = map;
+        const created = map;
+        mapRef.current = created;
         maplibreRef.current = maplibregl as never;
+        // 스타일 로드 완료 시점을 따로 알린다(경로 레이어 추가 조건).
+        created.on?.("load", () => {
+          if (!cancelled) setStyleLoaded(true);
+        });
         setStatus("ready");
       } catch {
         // 모듈 로드 실패·WebGL 미지원 등 — 프리뷰 폴백(크래시 금지)
@@ -198,6 +235,7 @@ export function MapView({
       riderMarkerRef.current = null;
       mapRef.current = null;
       maplibreRef.current = null;
+      setStyleLoaded(false);
       map?.remove();
     };
     // center/markers/level은 최초 로드 시점 값만 사용(초기 마운트 1회 렌더) — 이후 변경은
@@ -223,6 +261,28 @@ export function MapView({
     const el = riderMarkerRef.current.getElement?.();
     if (el) el.style.opacity = riderMarker.stale ? "0.4" : "1";
   }, [riderMarker, status]);
+
+  // [11 M9-b] 도로 경로선 — 좌표가 바뀌면 소스 데이터만 교체(레이어 재생성 없이).
+  // routePath가 비면(키 미설정·라우팅 실패) 빈 LineString으로 지워 선이 남지 않게 한다.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (status !== "ready" || !styleLoaded || !map) return;
+    const data = routeGeoJson(routePath ?? []);
+    const existing = map.getSource?.(ROUTE_SOURCE_ID);
+    if (existing) {
+      existing.setData(data);
+      return;
+    }
+    if (!routePath || routePath.length === 0) return; // 그릴 게 없으면 레이어도 만들지 않는다
+    map.addSource?.(ROUTE_SOURCE_ID, { type: "geojson", data });
+    map.addLayer?.({
+      id: ROUTE_LAYER_ID,
+      type: "line",
+      source: ROUTE_SOURCE_ID,
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": colors.primary.DEFAULT, "line-width": 4, "line-opacity": 0.85 },
+    });
+  }, [routePath, status, styleLoaded]);
 
   if (status === "placeholder") {
     return (
@@ -337,18 +397,44 @@ export function MapView({
     );
   }
 
+  // 실지도: 컨테이너를 relative 래퍼로 감싸 ETA 칩을 오버레이한다(프리뷰와 동일 위치·톤).
   return (
     <div
-      ref={containerRef}
       className={className}
-      data-testid="map-view"
       style={{
+        position: "relative",
         minHeight: 200,
         borderRadius: radius.card,
         overflow: "hidden",
         backgroundColor: gray[100],
         ...style,
       }}
-    />
+    >
+      <div ref={containerRef} data-testid="map-view" style={{ position: "absolute", inset: 0 }} />
+      {/* [11 M9-b] 실 라우팅 ETA만 표시 — 호출부가 durationSeconds 있을 때만 넘긴다. */}
+      {etaLabel && (
+        <span
+          data-testid="map-view-eta"
+          style={{
+            position: "absolute",
+            top: 12,
+            left: 12,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "6px 12px",
+            borderRadius: radius.pill,
+            backgroundColor: "#fff",
+            boxShadow: elevation.raised,
+            fontSize: 14,
+            fontWeight: 700,
+            color: gray[900],
+          }}
+        >
+          <ClockIcon />
+          {etaLabel}
+        </span>
+      )}
+    </div>
   );
 }

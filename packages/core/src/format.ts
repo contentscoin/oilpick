@@ -66,3 +66,19 @@ export function formatRelativeTime(date: Date | string | number, now: Date | num
   }
   return isFuture ? "먼 미래" : "오래 전";
 }
+
+/**
+ * [11 M9-b] 도착 예상시간(ETA) 라벨. directions Edge의 durationSeconds를 사람이 읽는 문구로.
+ * 00-domain "장식 프리뷰에 임의 시간 표기 금지" 원칙상 **실 라우팅 값이 있을 때만** 호출한다 —
+ * null/음수/비유한값이면 null을 반환해 호출부가 라벨 자체를 렌더하지 않게 한다.
+ * 1분 미만은 "곧 도착", 60분 이상은 "N시간 M분 후 도착".
+ */
+export function formatEta(durationSeconds: number | null | undefined): string | null {
+  if (durationSeconds == null || !Number.isFinite(durationSeconds) || durationSeconds < 0) return null;
+  const totalMin = Math.round(durationSeconds / 60);
+  if (totalMin < 1) return "곧 도착";
+  if (totalMin < 60) return `${totalMin}분 후 도착`;
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return m === 0 ? `${h}시간 후 도착` : `${h}시간 ${m}분 후 도착`;
+}

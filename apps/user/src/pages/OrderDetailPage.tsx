@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { BigButton, ConfirmSheet, DriverCard, ErrorScreen, InfoStatCard, MapView, OrderTimeline, PageHeader, PayoutMethodChip, StatusHeadline, colors, elevation, gradient, gray, radius, surface, touchTarget, useToast } from "@oilpick/ui";
-import { estimateCash, formatKg, formatKrw, formatPoint, formatTimeOfDay, type OrderStatus } from "@oilpick/core";
+import { estimateCash, formatEta, formatKg, formatKrw, formatPoint, formatTimeOfDay, type OrderStatus } from "@oilpick/core";
 import { MAP_STYLE_URL } from "../lib/env";
 import { invokeEdgeFunction } from "../lib/edgeFunction";
 import { useOrder } from "../hooks/useOrder";
 import { useAssignedRiderCard } from "../hooks/useAssignedRiderCard";
 import { useRiderLocation } from "../hooks/useRiderLocation";
+import { useDirections } from "../hooks/useDirections";
 import { useSession } from "../hooks/useSession";
 import { useUnreadCount } from "../hooks/useUnreadCount";
 
@@ -30,6 +31,17 @@ export function OrderDetailPage() {
   const { data: rider } = useAssignedRiderCard(order?.riderId);
   // [14 J1] 라이더가 이동 중(ACCEPTED/ARRIVED)일 때만 실시간 위치를 구독한다(그 외엔 null).
   const riderLoc = useRiderLocation(id, order?.status === "ACCEPTED" || order?.status === "ARRIVED");
+  // [11 M9-b] 라이더 실좌표가 잡히고 수거지 좌표가 있을 때만 도로 경로·ETA를 조회한다.
+  // 라이더가 이미 도착(ARRIVED)했으면 경로 안내는 의미가 없어 ACCEPTED에서만 활성.
+  const pickupPoint =
+    order?.pickupLat != null && order?.pickupLng != null
+      ? { lat: order.pickupLat, lng: order.pickupLng }
+      : null;
+  const { data: directions } = useDirections(
+    riderLoc ? { lat: riderLoc.lat, lng: riderLoc.lng } : null,
+    pickupPoint,
+    order?.status === "ACCEPTED" && !riderLoc?.stale,
+  );
   const { session } = useSession();
   // 06 E7: 헤더 벨 미읽음 배지 — 홈과 동일한 useUnreadCount로 공통화.
   const unread = useUnreadCount(session?.user.id);
@@ -262,8 +274,9 @@ export function OrderDetailPage() {
 
       {/* 지도 → 라이더 카드 → 정보 스탯 카드 → 타임라인.
           12 S3: 지도 센터는 주문의 실제 수거지 좌표(pickup_location 파싱)를 쓴다. 좌표가 없으면
-          서울 기본 센터로 프리뷰. 데모 ETA("12분 후 도착")는 제거했다 — 실 rider-location 기반
-          ETA(11 M9-b)가 붙기 전까지 가짜 시간을 표기하지 않는다(00-domain 원칙). */}
+          서울 기본 센터로 프리뷰. [11 M9-b] 데모 ETA는 제거됐고, 지금 표시되는 ETA는 라이더 실좌표
+          (broadcast) → directions Edge(카카오모빌리티)의 실 라우팅 값이다. 키 미설정이면 Edge가
+          configured:false를 주므로 선·ETA가 자연히 미표시된다(00-domain "가짜 시간 표기 금지" 준수). */}
       {showMapAndTimeline && (
         <MapView
           styleUrl={MAP_STYLE_URL}
@@ -278,6 +291,8 @@ export function OrderDetailPage() {
               : []
           }
           riderMarker={riderLoc ? { lat: riderLoc.lat, lng: riderLoc.lng, stale: riderLoc.stale } : null}
+          routePath={directions?.path ?? []}
+          etaLabel={formatEta(directions?.durationSeconds) ?? undefined}
           pickupLabel={order.pickupAddress}
           style={{ minHeight: 220 }}
         />

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatPoint, formatKrw, formatKg, formatRelativeTime, formatTimeOfDay } from "./format";
+import { formatPoint, formatKrw, formatKg, formatEta, formatRelativeTime, formatTimeOfDay } from "./format";
 
 describe("formatPoint", () => {
   it("formats with thousands separators and P suffix", () => {
@@ -77,5 +77,31 @@ describe("formatTimeOfDay", () => {
 
   it("accepts a numeric now for the same-day comparison", () => {
     expect(formatTimeOfDay(new Date(2026, 6, 4, 14, 5), now.getTime())).toBe("오늘 14:05");
+  });
+});
+
+describe("formatEta (11 M9-b)", () => {
+  it("실 라우팅 값이 없으면 null — 라벨 자체를 렌더하지 않게 한다", () => {
+    expect(formatEta(null)).toBeNull();
+    expect(formatEta(undefined)).toBeNull();
+    expect(formatEta(Number.NaN)).toBeNull();
+    expect(formatEta(-10)).toBeNull();
+  });
+
+  it("1분 미만은 '곧 도착'", () => {
+    expect(formatEta(0)).toBe("곧 도착");
+    expect(formatEta(29)).toBe("곧 도착");
+  });
+
+  it("분 단위 반올림", () => {
+    expect(formatEta(30)).toBe("1분 후 도착");
+    expect(formatEta(720)).toBe("12분 후 도착");
+    expect(formatEta(3540)).toBe("59분 후 도착");
+  });
+
+  it("60분 이상은 시간+분", () => {
+    expect(formatEta(3600)).toBe("1시간 후 도착");
+    expect(formatEta(4500)).toBe("1시간 15분 후 도착");
+    expect(formatEta(7200)).toBe("2시간 후 도착");
   });
 });
