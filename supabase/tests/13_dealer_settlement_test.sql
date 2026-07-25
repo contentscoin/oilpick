@@ -3,7 +3,7 @@
 create extension if not exists pgtap with schema extensions;
 
 begin;
-select plan(20);
+select plan(19);
 
 -- ── 픽스처: 좌상 3 + 라이더 3(D1소속2·미배정1) + 점주 + admin ──
 insert into auth.users (id, instance_id, aud, role, email, created_at, updated_at)

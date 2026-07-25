@@ -8,7 +8,7 @@
 create extension if not exists pgtap with schema extensions;
 
 begin;
-select plan(14);
+select plan(13);
 
 -- ── 픽스처: 점주(주문 소유) + 무관 점주 + 승인 라이더 + admin + 주문 1건(신모델) ──
 insert into auth.users (id, instance_id, aud, role, email, created_at, updated_at) values
@@ -44,8 +44,10 @@ select fn_transition_order('a1a10000-0000-0000-0000-0000000000e1','SUBMIT_MEASUR
   '{"measuredKg":10.0,"photoUrls":["https://x/p.jpg"],"payoutMethod":"CASH","barcodes":["AAA","BBB"],"geo":{"lat":37.5,"lng":127.0,"capturedAt":"2026-07-24T01:00:00Z"}}'::jsonb);
 select is((select count(*)::int from pickup_items where order_id='a1a10000-0000-0000-0000-0000000000e1'), 2,
   '바코드 2개 적재');
-select is((select geo_lat from pickup_items where order_id='a1a10000-0000-0000-0000-0000000000e1' and barcode='AAA'), 37.5,
-  'geo_lat 기록');
+-- geo_lat은 double precision, 리터럴 37.5는 numeric — is(anyelement, anyelement)가 해석되도록
+-- 양쪽을 명시 캐스팅한다(10_dealer_test.sql collected_kg 선례와 동일 관례).
+select is((select geo_lat from pickup_items where order_id='a1a10000-0000-0000-0000-0000000000e1' and barcode='AAA')::numeric,
+  37.5::numeric, 'geo_lat 기록');
 select ok((select captured_at is not null from pickup_items where order_id='a1a10000-0000-0000-0000-0000000000e1' and barcode='AAA'),
   'captured_at 기록');
 select is((select rider_id from pickup_items where order_id='a1a10000-0000-0000-0000-0000000000e1' and barcode='AAA'),

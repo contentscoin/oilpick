@@ -43,16 +43,24 @@ update·delete 정책 없음(정정 불가·신규 tick만). Realtime publicatio
 
 ### 2-3. `pickup_items` (바코드 1급)
 `{ id, order_id, rider_id, barcode, geo_lat, geo_lng, captured_at, created_at, unique(order_id,barcode) }` +
-barcode 인덱스. RLS select = 관련자(supplier/rider/**스냅샷 dealer**/admin, p_events_read 미러). 쓰기 정책
-없음(service_role RPC만). SUBMIT 시 **replace-set**(delete→insert; 원본 payload는 order_events에 영구 보존).
+barcode 인덱스. RLS select = **`p_events_read` 정확 미러 = admin | 주문 supplier | 주문 rider**(dealer 제외 —
+미러 대상 정책에 dealer가 없고, 바코드까지 좌상에 열 이유가 없다. 좌상 창고 입고 대사는 `dealer_intakes`
+부활 시 별도 설계). 쓰기 정책 없음(service_role RPC만).
+SUBMIT 시 **replace-set**(delete→insert; 원본 payload는 order_events에 영구 보존).
 
 ### 2-4. 좌상 정산 레이어
+> 아래는 **구현 확정형**(20260724000006/8과 1:1). 스키마 단일 진실은 `01-db-schema.sql`.
+
 - `dealer_accounts { dealer_id PK, deposit_amount int, credit_limit int, claim_threshold int default 5000000,
-  fee_rate_bp int 0..10000 default 0, memo, updated_at, updated_by }`. RLS select=본인+admin, 쓰기=service_role.
-  레버리지 비율은 **하드코딩 안 함** — 계약별 수기(UI ×1.4 프리필).
-- `dealer_settlements { id, dealer_id(null=본사), status(CLAIMED|SETTLED|VOID), order_count, point_minted,
-  point_spent, fee_amount, net_due, period_start/end, claimed_at/by, settled_at/by, memo }`. 주문 귀속은
+  fee_rate_bp int 0..10000 default 0, updated_at, updated_by }`. RLS select=본인+admin, 쓰기=service_role
+  (`fn_set_dealer_account`). 레버리지 비율은 **하드코딩 안 함** — 계약별 수기(UI ×1.4 프리필).
+  ⚠️ 계정 행이 **없으면 크레딧 게이트 미적용**(§10 #2 결정) — admin이 계정을 만들어야 상한이 활성화된다.
+- `dealer_settlements { id, dealer_id **not null**, status(CLAIMED|SETTLED|VOID), point_minted, point_spent,
+  fee_amount, net_due, period_start/end, claimed_at/by, settled_at/by, voided_at/by }`. 주문 귀속은
   `pickup_orders.dealer_settlement_id` **스탬핑**(날짜범위 아님) → "정산=윈도우 리셋" 원자적.
+  건수는 컬럼으로 들지 않고 `v_dealer_settlement_orders`(청구 상세/CSV)에서 센다.
+- **본사 직속**(`pickup_orders.dealer_id is null`)은 청구 대상이 아니다 — 회사가 자기에게 청구하지 않으므로
+  `dealer_settlements` 행도, `v_dealer_statement` 행도 만들지 않는다(뷰는 `role='dealer'`만).
 
 ### 2-5. RLS 재정의 (⚠️ 보안 — 검증 반영)
 기존 `p_orders_read_by_dealer`(rider_profiles.dealer_id **현재값** 라이브조인)는 라이더 재배정 시 **새 좌상에게
@@ -97,12 +105,14 @@ barcode 인덱스. RLS select = 관련자(supplier/rider/**스냅샷 dealer**/ad
 
 - 주문별: `minted = net (POINT∧net>0)`, `spent = −net (POINT∧net<0)`, CASH=정산 무관(수수료 베이스엔 포함).
 - **미정산 사용액** `usage(D) = Σminted − Σspent` (COMPLETED ∧ dealer_id=D ∧ dealer_settlement_id null).
-  게이트: CONFIRM에서 `usage+net > credit_limit → DEALER_LIMIT_EXCEEDED`(advisory lock으로 동시 CONFIRM 직렬화).
+  게이트: CONFIRM에서 `usage > credit_limit → DEALER_LIMIT_EXCEEDED`(advisory lock으로 동시 CONFIRM 직렬화).
+  구현상 이 주문은 이미 COMPLETED로 기록된 뒤 집계하므로 **usage에 net이 포함**된다 — 즉 `usage+net>limit`와 동치.
+  경계는 `>`(한도 정확히 소진은 허용). 계정 행이 없으면 게이트 미적용(§10 #2).
 - **청구**(RPC 3종, service_role): `fn_create_dealer_claim`(락→대상주문 집계·`fee=round(Σcash_paid_amount×bp/10000)`
   →insert+스탬핑), `fn_settle_dealer_claim`(CLAIMED↔SETTLED 멱등 마킹, referral 선례), `fn_void_dealer_claim`
   (CLAIMED만·스탬프 해제→풀 복귀). 자동청구 없음 — `over_threshold` 배지로 admin 유도, 하드스톱은 CONFIRM 게이트.
   `net_due = minted − spent + fee` (음수=회사→좌상 지급 허용).
-- **뷰**: 신규 `v_dealer_statement`(좌상별 usage/limit/headroom/over_threshold, 본사 행 포함),
+- **뷰**: 신규 `v_dealer_statement`(좌상별 usage/limit/headroom/over_threshold. `role='dealer'`만 — 본사 행 없음, §2-4),
   `v_dealer_settlement_orders`(청구 상세/CSV). 기존 `v_dealer_rider_stats`/`v_rider_payout_daily`는
   **끝에 컬럼 append**로 재정의(소비자는 명명 컬럼 select — 안전, 순서 보존).
 
@@ -162,3 +172,16 @@ barcode 인덱스. RLS select = 관련자(supplier/rider/**스냅샷 dealer**/ad
 - **#4 (수정)** `v_dealer_rider_stats.point_paid`가 cash_paid_amount(동결=폐유 총액)를 써 MIXED POINT에서 과다 계상 → net 기준으로 교정(레거시 net null은 폴백). `20260724000008`.
 - **#2 (결정·문서화)** 좌상 계정 미설정 시 크레딧 게이트 무적용(=무제한). 이유: (a) 미정산 사용액은 청구(claim)로 **전액 추적·청구 가능** — 게이트는 예방적 상한일 뿐 회계 안전장치가 아니라 돈이 새지 않는다; (b) deny 기본값은 배포 즉시 모든 좌상의 POINT 완료를 막아 운영이 더 위험. admin이 계정을 생성하면 게이트가 활성화된다(요율 0% 출시와 동일한 "구조 완성·집행 설정" 원칙).
 - **#3 (결정·문서화)** 좌상 주문 읽기 RLS를 스냅샷으로 재정의하면서 기존(dealer_id null) 주문은 좌상 통계에서 제외된다(누출은 없음 — 리뷰 확인). 현재 배정 기준 백필은 재배정된 라이더의 과거 주문을 새 좌상에 귀속시켜 **바로 그 PII 누출을 재도입**하므로 백필하지 않는다. 손실 수용(신 기능이라 과거 귀속 데이터 미미).
+
+### pgTAP 정적 감사 (실행 불가 환경 대응)
+
+로컬에 Docker/Postgres가 없어 신규 3종을 실행하지 못해, **실행하면 반드시 실패했을 결함**을 정적으로 잡아 수정했다:
+
+- `plan(N)` 불일치 3건 — `11`(14→13) · `12`(24→22) · `13`(20→19). pgTAP은 계획치≠실행수를 **로직과 무관하게
+  실패**로 처리하므로 세 파일 모두 CI에서 즉시 실패했을 상태였다(단언 커버리지 자체는 의도대로 온전, 헤더 숫자만 오기).
+- `is()` 타입 불일치 1건 — `11`의 `geo_lat`(double precision) vs 리터럴 `37.5`(numeric). 다형 `is(anyelement,
+  anyelement)`가 해석되지 않아 "function is(double precision, numeric) does not exist"로 실패한다 →
+  양쪽 `::numeric` 명시 캐스팅(`10_dealer_test.sql`의 `collected_kg` 선례와 동일 관례).
+
+> 남은 한계: **수식·RLS의 실제 동작은 여전히 미검증**이다. 정적 감사는 구문·계약 오류만 걸러낸다.
+> 머지 전 실제 스택에서 `supabase test db` 1회 실행 필수.

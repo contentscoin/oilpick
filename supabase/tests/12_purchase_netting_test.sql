@@ -6,7 +6,7 @@
 create extension if not exists pgtap with schema extensions;
 
 begin;
-select plan(24);
+select plan(22);
 
 -- ── 픽스처: 시나리오별 supplier/rider(단일 활성주문 제약 회피 위해 라이더 분리) ──
 insert into auth.users (id, instance_id, aud, role, email, created_at, updated_at)
