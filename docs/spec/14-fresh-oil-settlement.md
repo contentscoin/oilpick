@@ -221,15 +221,45 @@ CI가 pgTAP를 완주하자 `03_privilege_guards_test.sql`이 4건 실패했다.
   - 회귀 가드는 개별 함수 단언 대신 **fn_% 전수 스캔**으로 작성(신규 RPC 추가 시 갱신을 잊어도 자동 검출,
     위반 함수명을 진단에 그대로 노출).
 
-### 10-5. 최종 결과
+### 10-5. 적대적 코드 리뷰 (전체 diff, 12 에이전트) — **확정 결함 9건**
+
+6개 관점(DB스키마·재무·보안·Edge·프론트·테스트갭) 병렬 탐색 → 관점별 적대적 반박 검증. 주장 19건 중
+**12건 생존**(중복 통합 시 고유 9건). 보안 관점 주장은 전부 기각 — 스냅샷 RLS 재정의와 권한 잠금은 방어를 통과했다.
+
+**지배적 원인 하나: `net_amount` 소비처 드리프트.** J2가 `cash_paid_amount`를 "폐유 총액"으로 동결하고
+실지급액을 `net_amount`로 분리했는데, **소비처를 전부 따라가지 않았다.** 서버는 net으로 원장을 발행하는데
+화면·알림·정산 뷰는 gross를 읽었다. 구매 동반 주문에서 금액이 과다하고, net&lt;0이면 **부호까지 반대**다.
+
+| # | 심각도 | 결함 | 수정 |
+|---|---|---|---|
+| 1 | **BLOCKER** | 점주 OrderDetailPage가 확인 CTA·완료 히어로에 gross를 표시 — MIXED에서 "포인트 10,500P 적립받기"를 누르면 실제로는 15,500P가 차감되고, 구매-only는 "현금 0원 받았어요" | `useOrder`에 상계 컬럼 6종 추가, 확정 전=계산 net·완료 후=`netAmount`, 폐유/신유/차액 3줄 상계 카드, net&lt;0이면 라벨·CTA를 "결제하기"로 분기 |
+| 2 | MAJOR | 완료 푸시가 gross를 "적립 포인트"로 통지 — 차감된 경우에도 "적립됐어요" | `TransitionOrder`에 net 필드 추가, `settlementNotifications` 헬퍼로 net 부호별 3분기(지급/지불/무기록). SUBMIT_MEASURE 사전통지도 예상 순액으로 |
+| 3 | MAJOR | `order-transition`이 INSUFFICIENT_BALANCE/DEALER_LIMIT_EXCEEDED를 매핑하지 않아 409 INVALID_TRANSITION("지금은 처리할 수 없는 상태예요")으로 뭉갬 → 점주가 원인도 복구 경로도 모른 채 주문이 ARRIVED에 묶임 | `mapTransitionError`에 두 분기 추가, `DEALER_LIMIT_EXCEEDED`를 core에 등록, 확인 실패 시 "현금으로 재제출" 맥락 카피 |
+| 4 | MAJOR | `fn_create_dealer_claim` 수수료 int4 곱셈 오버플로 — gross 5,006,000 × 500bp에서 청구 생성이 **영구 실패** → 스탬핑 불가 → 윈도우 리셋 불가 → 해당 좌상 POINT 완료 전면 차단(교착) | `v_gross::numeric` 승격. 회귀 테스트 추가(수정 되돌리면 2건 실패 확인) |
+| 5 | MAJOR | `v_rider_payout_daily`·`v_pickup_stats_daily`가 gross 집계 — 08 P5가 "라이더-플랫폼 정산의 유일한 대사 근거"로 지목한 표 | net 기준 교체 + gross 지표는 컬럼 append로 보존 |
+| 6 | MAJOR | 좌상 계정 폼이 마운트 시점 statement로만 초기화 — 로드 전 저장하면 보증금·한도를 **0으로 덮어씀**(전체 upsert) → credit_limit=0이 되어 해당 좌상 POINT 완료 전면 차단 | 도착 시 동기화(useEffect) + 로딩 중 저장 잠금. 단 로드 완료 후 statement 부재는 "계정 미설정"(뷰가 INNER JOIN)이라 최초 등록은 허용 |
+| 7 | MINOR | `v_dealer_rider_stats.cash_paid`가 gross — ..008이 point_paid만 고쳤던 나머지 | net 기준·부호 보존 |
+| 8 | MINOR | admin 대시보드 "오늘 지급" KPI도 gross | net 기준 |
+| 9 | MINOR | `RESOLVE_DISPUTE`가 `delivered_cans`를 정정 못 함 — §3·§8이 명시한 `finalCans`가 미구현. 중재 후엔 SUBMIT_MEASURE가 막혀 정정 경로가 **아예 없었다** | `20260724000012`가 payload에 `finalCans?`(0..50) 추가 + core 스키마 + admin 중재 폼 |
+
+### 10-6. 자체 검증 중 발견 — `20260724000010`의 잠복 결함
+
+`create or replace function`이 ACL을 재설정하는지 실측하다가 별건을 발견했다: **PostgreSQL의 내장 기본값이
+함수 EXECUTE를 PUBLIC에 부여한다**(`proacl`의 `=X/postgres`). ..010의 루프는 `anon, authenticated`만
+회수했으므로, PUBLIC 경유 권한이 남아 있으면 그대로 통과한다. 지금 막혀 있는 건 기존 RPC들이 각자
+마이그레이션에서 `revoke all ... from public`을 해 뒀기 때문일 뿐 — **그 줄을 빠뜨린 신규 RPC가 하나만
+들어와도 잠금이 무력해진다.** → 루프를 `from public, anon, authenticated`로 수정.
+(부수 확인: `create or replace function`은 기존 ACL을 **보존**한다.)
+
+### 10-7. 최종 결과
 
 ```
-✅ 마이그레이션 44건 전부 적용
+✅ 마이그레이션 46건 전부 적용
 ✅ 01~10 기존 스위트 174 단언 — 회귀 없음
    (특히 02_state_machine·08_payout_method 통과 = 넷팅 재작성의 하위호환 실증,
     10_dealer 통과 = 좌상 RLS 스냅샷 재정의 정상)
-✅ 11_tracking 13 · 12_purchase_netting 22 · 13_dealer_settlement 19 — 신규 전부 통과
-🎉 13 파일 228 단언 GREEN
+✅ 11_tracking 13 · 12_purchase_netting 24 · 13_dealer_settlement 22 — 신규 전부 통과
+🎉 13 파일 233 단언 GREEN
 ```
 
 재현: `bash scripts/pgtap-local/run.sh` (Docker 불필요 폴백 하네스). 정식 경로는 여전히 `supabase test db`다.

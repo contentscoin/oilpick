@@ -3,7 +3,7 @@
 create extension if not exists pgtap with schema extensions;
 
 begin;
-select plan(19);
+select plan(22);
 
 -- ── 픽스처: 좌상 3 + 라이더 3(D1소속2·미배정1) + 점주 + admin ──
 insert into auth.users (id, instance_id, aud, role, email, created_at, updated_at)
@@ -108,6 +108,31 @@ select throws_ok(
 insert into pickup_orders (id, supplier_id, dealer_id, status, requested_kg, pickup_address, pickup_location, snapshot_price_per_kg, payout_method, cash_paid_amount, purchase_amount, net_amount, final_kg)
 values ('dc000000-0000-0000-0000-000000000601','dc000000-0000-0000-0000-000000000201','dc000000-0000-0000-0000-000000000003','COMPLETED',6,'a',ST_SetSRID(ST_MakePoint(127,37.5),4326)::geography,1000,'POINT',6000,0,6000,6);
 select is((select over_threshold from v_dealer_statement where dealer_id='dc000000-0000-0000-0000-000000000003'), true, 'usage 6000 ≥ 임계 5000 → over_threshold true');
+
+-- ============ (9) [14 J4] 수수료 계산 int4 오버플로 회귀 ============
+-- `v_gross * v_fee_bp / 10000.0`은 int4 곱셈이 먼저 평가돼 gross가 커지면 "integer out of range"로
+-- 청구 생성 자체가 실패했다. 실패하면 스탬핑이 안 돼 미정산 윈도우가 영원히 리셋되지 않고,
+-- usage > credit_limit 게이트에 걸려 해당 좌상 라이더의 POINT 완료가 전부 막히는 교착이 된다.
+-- gross 5,006,000 × 500 = 2,503,000,000 > int4 max(2,147,483,647) → 수정 전이면 확실히 터진다.
+update dealer_accounts set fee_rate_bp = 500 where dealer_id = 'dc000000-0000-0000-0000-000000000003';
+insert into pickup_orders (id, supplier_id, dealer_id, status, requested_kg, pickup_address, pickup_location, snapshot_price_per_kg, payout_method, cash_paid_amount, purchase_amount, net_amount, final_kg)
+values ('dc000000-0000-0000-0000-000000000602','dc000000-0000-0000-0000-000000000201','dc000000-0000-0000-0000-000000000003','COMPLETED',5000,'a',ST_SetSRID(ST_MakePoint(127,37.5),4326)::geography,1000,'CASH',5000000,0,5000000,5000);
+select lives_ok(
+  $$ select fn_create_dealer_claim('dc000000-0000-0000-0000-000000000003','dc000000-0000-0000-0000-000000000301') $$,
+  '수수료 계산이 int4 오버플로 없이 완료됨(gross 5,006,000 × 500bp)');
+select is((select fee_amount from dealer_settlements where dealer_id='dc000000-0000-0000-0000-000000000003' and status='CLAIMED'),
+          250300, 'fee = round(gross 5,006,000 × 500 / 10000) = 250,300');
+
+-- ============ (10) [14 J4] v_dealer_rider_stats.cash_paid가 net 기준 ============
+-- cash_paid_amount(폐유 총액 동결)를 쓰면 MIXED CASH에서 과다 계상되고 net<0이면 부호가 반대가 된다.
+-- R3(미배정 라이더)에 폐유 1,000 / 신유 4,000 → net −3,000(라이더가 점주에게 3,000원 지불) 주문을 넣는다.
+-- chk_purchase_snapshot_paired: purchase_requested_cans ↔ snapshot_fresh_can_price는 동반 필수.
+insert into pickup_orders (id, supplier_id, rider_id, status, requested_kg, pickup_address, pickup_location, snapshot_price_per_kg, payout_method, order_kind, purchase_requested_cans, delivered_cans, snapshot_fresh_can_price, cash_paid_amount, purchase_amount, net_amount, final_kg)
+values ('dc000000-0000-0000-0000-000000000603','dc000000-0000-0000-0000-000000000201','dc000000-0000-0000-0000-000000000103','COMPLETED',1,'a',ST_SetSRID(ST_MakePoint(127,37.5),4326)::geography,1000,'CASH','MIXED',1,1,4000,1000,4000,-3000,1);
+-- sum()은 bigint를 반환하므로 is(anyelement, anyelement)가 해석되도록 양쪽을 명시 캐스팅한다
+-- (10_dealer_test.sql collected_kg 선례와 동일).
+select is((select cash_paid from v_dealer_rider_stats where rider_id='dc000000-0000-0000-0000-000000000103')::numeric,
+          (-3000)::numeric, 'MIXED CASH net<0: cash_paid는 폐유 총액 1000이 아니라 순액 −3000(부호 보존)');
 
 select * from finish();
 rollback;

@@ -40,6 +40,8 @@ function makeRun(overrides: Partial<ActiveRun> = {}): ActiveRun {
     snapshotRiderFee: 0,
     payoutMethod: null,
     cashPaidAmount: null,
+    purchaseAmount: null,
+    netAmount: null,
     completedAt: null,
     createdAt: "2026-07-09T00:00:00Z",
     supplierPhone: null,

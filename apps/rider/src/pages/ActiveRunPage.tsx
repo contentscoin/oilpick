@@ -124,6 +124,7 @@ export function ActiveRunPage() {
       {run.status === "COMPLETED" && (
         <CompletedPanel
           cashPaidAmount={run.cashPaidAmount}
+          netAmount={run.netAmount}
           finalKg={run.finalKg}
           payoutMethod={run.payoutMethod}
         />
@@ -988,16 +989,25 @@ function DisputedPanel({
  */
 function CompletedPanel({
   cashPaidAmount,
+  netAmount,
   finalKg,
   payoutMethod,
 }: {
   cashPaidAmount: number | null;
+  netAmount: number | null;
   finalKg: number | null;
   payoutMethod: PayoutMethod | null;
 }) {
   const navigate = useNavigate();
   // payout_method null = 레거시/전환기 → CASH 간주(08 P3 coalesce).
   const isPoint = payoutMethod === "POINT";
+  // [14 J4] 실제 주고받은 금액은 상계 순액. cash_paid_amount는 폐유 총액으로 동결돼 있어
+  // 상계 주문에서 금액이 다르고 net<0이면 방향까지 반대다(ArrivedPanel 미리보기와 어긋났었다).
+  const net = netAmount ?? cashPaidAmount ?? 0;
+  const unit = isPoint ? formatPoint(Math.abs(net)) : formatKrw(Math.abs(net));
+  const label = isPoint ? "포인트" : "현금";
+  const settlementText =
+    net === 0 ? "주고받은 금액 없음" : net > 0 ? `${label} ${unit} 지급` : `${label} ${unit} 수령`;
   return (
     <Card
       testId="run-completed-panel"
@@ -1018,11 +1028,13 @@ function CompletedPanel({
       >
         <CheckMarkIcon />
       </span>
-      <p style={{ margin: 0, fontSize: 18, fontWeight: 800, color: colors.primary.dark }}>수거 완료</p>
+      <p style={{ margin: 0, fontSize: 18, fontWeight: 800, color: colors.primary.dark }}>
+        {net < 0 ? "거래 완료" : "수거 완료"}
+      </p>
       <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
         <PayoutMethodChip method={payoutMethod ?? "CASH"} />
         <p className="oilpick-tabular-nums" style={{ margin: 0, fontSize: 15, color: gray[900] }}>
-          {isPoint ? `포인트 ${formatPoint(cashPaidAmount ?? 0)} 지급` : `현금 ${formatKrw(cashPaidAmount ?? 0)} 지급`}
+          {settlementText}
           {finalKg != null ? ` · ${formatKg(finalKg)}` : ""}
         </p>
       </span>

@@ -146,6 +146,11 @@ function mapTransitionError(rpcErr: { message?: string }): Response {
   const message = rpcErr.message ?? "";
   if (message.includes("NOT_FOUND")) return errorResponse("NOT_FOUND", 404);
   if (message.includes("INVALID_QR")) return errorResponse("INVALID_QR", 400);
+  // [14 J4] 상계 결제 실패 2종. INSUFFICIENT_COUPON 검사보다 앞에 둔다(부분일치 혼동 방지).
+  // 둘 다 CONFIRM_MEASURE(점주)·FORCE_COMPLETE(admin)에서 fn_settle_trade가 raise한다.
+  // 매핑이 없으면 폴백 INVALID_TRANSITION으로 뭉개져 점주가 원인을 알 수 없고, 주문이 ARRIVED에 묶인다.
+  if (message.includes("INSUFFICIENT_BALANCE")) return errorResponse("INSUFFICIENT_BALANCE", 409);
+  if (message.includes("DEALER_LIMIT_EXCEEDED")) return errorResponse("DEALER_LIMIT_EXCEEDED", 409);
   if (message.includes("INSUFFICIENT_COUPON")) return errorResponse("INSUFFICIENT_COUPON", 409);
   if (message.includes("VALIDATION_ERROR")) return errorResponse("VALIDATION_ERROR", 400);
   if (message.includes("ALREADY_ACCEPTED")) return errorResponse("ALREADY_ACCEPTED", 409);
@@ -165,10 +170,26 @@ export interface TransitionOrder {
   rider_id: string | null;
   coupon_cost: number | null;
   payout_method: "CASH" | "POINT" | null;
+  /** [14 J2] 폐유 총액(gross)으로 **동결**된 값 — 실지급액이 아니다. 상계 결과는 net_amount. */
   cash_paid_amount: number | null;
   final_kg: number | string | null;
   measured_kg: number | string | null;
   snapshot_price_per_kg: number;
+  // [14 J2] 상계(netting). net_amount = cash_paid_amount − purchase_amount, 음수 가능(점주가 지불).
+  // 레거시 주문은 net_amount가 null이므로 소비 시 cash_paid_amount로 폴백한다.
+  net_amount: number | null;
+  delivered_cans: number | null;
+  snapshot_fresh_can_price: number | null;
+}
+
+/**
+ * [14 J4] 알림 금액의 단일 진실. cash_paid_amount는 폐유 총액으로 동결돼 있어 상계 주문에서
+ * 실지급액과 다르다(구매-only는 0, MIXED는 과다, net<0이면 부호까지 반대). 원장은 net 기준으로
+ * 발행되므로(EARN(+net) / TRADE_PURCHASE(−|net|)) 통지도 net을 따라야 한다.
+ * 레거시(net_amount null)는 cash_paid_amount로 폴백 — 20260724000008 v_dealer_rider_stats와 동일 패턴.
+ */
+function settledNet(order: TransitionOrder): number {
+  return order.net_amount ?? order.cash_paid_amount ?? 0;
 }
 
 interface BeforeOrder {
@@ -198,8 +219,75 @@ interface AdminSpec {
 export type NotificationSpec = PushSpec | AdminSpec;
 
 /**
+ * [14 J4] 완료 시점 정산 통지(CONFIRM_MEASURE·FORCE_COMPLETE 공통). net 부호로 방향이 갈린다:
+ *   net > 0 : 라이더 → 점주 지급(기존 수거 흐름과 동일)
+ *   net < 0 : 점주 → 라이더 지불(신유 대금이 폐유 수령액보다 큰 경우)
+ *   net = 0 : 원장 무기록 — 금액 문구를 붙이면 오히려 오해를 부르므로 생략
+ */
+function settlementNotifications(order: TransitionOrder): NotificationSpec[] {
+  const net = settledNet(order);
+  const isPoint = order.payout_method === "POINT";
+
+  if (net === 0) {
+    return [
+      {
+        kind: "push",
+        userIds: [order.rider_id, order.supplier_id],
+        title: "거래 완료",
+        body: "거래가 완료됐어요 — 폐유 금액과 새 기름 대금이 같아 주고받은 금액은 없어요.",
+      },
+    ];
+  }
+
+  if (net > 0) {
+    const amount = isPoint ? formatPoint(net) : formatKrw(net);
+    const specs: NotificationSpec[] = [
+      {
+        kind: "push",
+        userIds: [order.rider_id],
+        title: "수거 완료",
+        body: `수거 완료 — ${isPoint ? "포인트" : "현금"} ${amount} 지급이 확인됐어요.`,
+      },
+    ];
+    if (isPoint) {
+      specs.push({
+        kind: "push",
+        userIds: [order.supplier_id],
+        title: "포인트 적립",
+        body: `포인트 ${amount}가 적립됐어요 — 지갑에서 출금 신청할 수 있어요.`,
+        link: "/wallet",
+      });
+    }
+    return specs;
+  }
+
+  // net < 0 — 점주가 새 기름 대금을 지불하는 방향.
+  const owed = -net;
+  const amount = isPoint ? formatPoint(owed) : formatKrw(owed);
+  const specs: NotificationSpec[] = [
+    {
+      kind: "push",
+      userIds: [order.rider_id],
+      title: "거래 완료",
+      body: `거래 완료 — 새 기름 대금 ${isPoint ? "포인트" : "현금"} ${amount} 수령이 확인됐어요.`,
+    },
+  ];
+  if (isPoint) {
+    specs.push({
+      kind: "push",
+      userIds: [order.supplier_id],
+      title: "포인트 차감",
+      body: `새 기름 대금으로 포인트 ${amount}가 차감됐어요.`,
+      link: "/wallet",
+    });
+  }
+  return specs;
+}
+
+/**
  * action×수신자×카피 매트릭스를 산출하는 순수 함수(부수효과 없음).
- * 금액·쿠폰 수는 주문 행에서 계산(cash_paid_amount, coupon_cost, kg×스냅샷시세).
+ * 금액은 주문 행에서 계산 — [14 J4] 정산 금액은 net_amount(상계 순액) 기준이며
+ * cash_paid_amount(폐유 총액 동결)를 쓰지 않는다.
  */
 export function buildActionNotifications(
   action: string,
@@ -215,73 +303,53 @@ export function buildActionNotifications(
       ];
 
     case "SUBMIT_MEASURE": {
-      // supplier 카피는 지급수단별 분기(08 §1-5). N = round(계량kg × 스냅샷시세).
+      // supplier 카피는 지급수단별 분기(08 §1-5). [14 J4] N = 예상 **순액**
+      // (= round(계량kg × 스냅샷시세) − 배달캔수 × 신유고시가). 상계 주문에서 폐유 총액을 그대로
+      // 통지하면 점주가 실제와 다른 금액을 보고 확인하게 된다.
       const kg = Number(order.measured_kg ?? 0);
-      const amount = estimateCash(kg, order.snapshot_price_per_kg);
+      const waste = estimateCash(kg, order.snapshot_price_per_kg);
+      const purchase = (order.delivered_cans ?? 0) * (order.snapshot_fresh_can_price ?? 0);
+      const net = waste - purchase;
       const isPoint = order.payout_method === "POINT";
+      let tail: string;
+      if (net > 0) {
+        tail = isPoint
+          ? `확인하시면 포인트 ${formatPoint(net)}가 적립돼요.`
+          : `현금 ${formatKrw(net)}을 확인해 주세요.`;
+      } else if (net < 0) {
+        // 신유 대금이 폐유 수령액보다 큰 경우 — 점주가 지불하는 방향.
+        tail = isPoint
+          ? `확인하시면 새 기름 대금으로 포인트 ${formatPoint(-net)}가 차감돼요.`
+          : `새 기름 대금 현금 ${formatKrw(-net)} 지불을 확인해 주세요.`;
+      } else {
+        tail = "폐유 금액과 새 기름 대금이 같아 주고받을 금액은 없어요.";
+      }
       return [
         {
           kind: "push",
           userIds: [order.supplier_id],
           title: "계량 결과 도착",
-          body: isPoint
-            ? `계량 결과가 도착했어요 — 무게 ${formatKg(kg)}, 확인하시면 포인트 ${formatPoint(amount)}가 적립돼요.`
-            : `계량 결과가 도착했어요 — 무게 ${formatKg(kg)}·현금 ${formatKrw(amount)}을 확인해 주세요.`,
+          body: `계량 결과가 도착했어요 — 무게 ${formatKg(kg)}, ${tail}`,
         },
       ];
     }
 
-    case "CONFIRM_MEASURE": {
-      // 완료. 지급수단별 분기(08 §1-5). N = cash_paid_amount(확정 지급액 — POINT면 적립 P).
-      const amount = order.cash_paid_amount ?? 0;
-      if (order.payout_method === "POINT") {
-        return [
-          {
-            kind: "push",
-            userIds: [order.rider_id],
-            title: "수거 완료",
-            body: `수거 완료 — 포인트 ${formatPoint(amount)} 지급이 확인됐어요.`,
-          },
-          {
-            kind: "push",
-            userIds: [order.supplier_id],
-            title: "포인트 적립",
-            body: `포인트 ${formatPoint(amount)}가 적립됐어요 — 지갑에서 출금 신청할 수 있어요.`,
-            link: "/wallet",
-          },
-        ];
-      }
-      return [
-        {
-          kind: "push",
-          userIds: [order.rider_id],
-          title: "수거 완료",
-          body: `수거 완료 — 현금 ${formatKrw(amount)} 지급이 확인됐어요.`,
-        },
-      ];
-    }
+    case "CONFIRM_MEASURE":
+      // 완료. 지급수단별 분기(08 §1-5). [14 J4] N = net_amount(상계 순액) — 원장 발행액과 동일.
+      return settlementNotifications(order);
 
     case "FORCE_COMPLETE": {
-      // supplier + rider: "관리자 확인으로 주문이 완료 처리됐어요". POINT면 supplier 적립 카피 병기(08 §1-5).
-      const specs: NotificationSpec[] = [
+      // supplier + rider: "관리자 확인으로 주문이 완료 처리됐어요". [14 J4] 정산 카피는 CONFIRM_MEASURE와
+      // 동일 헬퍼를 쓴다 — 두 경로 모두 fn_settle_trade를 거쳐 같은 원장을 발행하므로 통지도 같아야 한다.
+      return [
         {
           kind: "push",
           userIds: [order.supplier_id, order.rider_id],
           title: "주문 완료",
           body: "관리자 확인으로 주문이 완료 처리됐어요.",
         },
+        ...settlementNotifications(order).filter((s) => s.kind === "push" && s.userIds.includes(order.supplier_id)),
       ];
-      if (order.payout_method === "POINT") {
-        const amount = order.cash_paid_amount ?? 0;
-        specs.push({
-          kind: "push",
-          userIds: [order.supplier_id],
-          title: "포인트 적립",
-          body: `포인트 ${formatPoint(amount)}가 적립됐어요 — 지갑에서 출금 신청할 수 있어요.`,
-          link: "/wallet",
-        });
-      }
-      return specs;
     }
 
     case "RESOLVE_DISPUTE": {

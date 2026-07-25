@@ -6,7 +6,11 @@ import { supabase } from "./supabaseClient";
  * Edge Function 호출 결과. 02-api.md 공통 규칙 응답 envelope
  * `{ ok: true, data }` / `{ ok: false, code, message }`을 판별된 유니언으로 노출한다.
  */
-export type EdgeFunctionResult<T> = { ok: true; data: T } | { ok: false; message: string };
+// [14 J4] code를 노출한다 — 호출부가 코드별 맥락 카피로 덮어써야 하는 경우가 있다
+// (예: INSUFFICIENT_BALANCE의 공용 문구는 출금 맥락이라 상계 결제 실패 화면에 맞지 않는다).
+export type EdgeFunctionResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; code?: ErrorCode; message: string };
 
 /**
  * supabase-js `functions.invoke`를 감싸 02-api.md 에러 envelope을 일관되게 파싱하는 헬퍼.
@@ -30,7 +34,7 @@ export async function invokeEdgeFunction<T>(
         const parsed = await error.context.json();
         const code = parsed?.code as ErrorCode | undefined;
         const message = (code && ERROR_MESSAGE_KO[code]) || parsed?.message;
-        if (message) return { ok: false, message };
+        if (message) return { ok: false, code, message };
       } catch {
         // 바디 파싱 실패 시 아래 공통 폴백 메시지로 진행.
       }
@@ -41,7 +45,7 @@ export async function invokeEdgeFunction<T>(
   if (!data?.ok) {
     const code = data?.code as ErrorCode | undefined;
     const message = (code && ERROR_MESSAGE_KO[code]) || data?.message || "요청 처리 중 오류가 발생했어요.";
-    return { ok: false, message };
+    return { ok: false, code, message };
   }
 
   return { ok: true, data: data.data as T };

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { formatKrw, formatPoint, formatRelativeTime } from "@oilpick/core";
 import type { DealerStatement } from "@oilpick/core";
 import { supabase } from "../lib/supabaseClient";
@@ -38,7 +38,7 @@ async function downloadSettlementCsv(settlementId: string) {
  */
 export function DealerSettlementPage() {
   const { data: dealers } = useDealers();
-  const { data: statements } = useDealerStatements();
+  const { data: statements, isPending: statementsPending } = useDealerStatements();
   const { data: settlements, isLoading } = useDealerSettlements();
   const { dealerClaim } = useDealerSettlementMutations();
   const [busy, setBusy] = useState<string | null>(null);
@@ -83,6 +83,7 @@ export function DealerSettlementPage() {
             dealerId={d.id}
             dealerName={d.displayName}
             statement={stmtByDealer.get(d.id)}
+            statementsPending={statementsPending}
             onClaim={() => handleClaim(`create-${d.id}`, { action: "create", dealerId: d.id })}
             claiming={busy === `create-${d.id}`}
           />
@@ -191,12 +192,15 @@ function DealerAccountCard({
   dealerId,
   dealerName,
   statement,
+  statementsPending,
   onClaim,
   claiming,
 }: {
   dealerId: string;
   dealerName: string;
   statement: DealerStatement | undefined;
+  /** v_dealer_statement 조회가 아직 진행 중인지. 로드 전 저장을 막기 위한 게이트. */
+  statementsPending: boolean;
   onClaim: () => void;
   claiming: boolean;
 }) {
@@ -208,12 +212,31 @@ function DealerAccountCard({
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
 
+  // [14 J4] statement는 dealers보다 늦게 도착할 수 있다(별도 쿼리 — /dealers를 먼저 열어 dealers 캐시가
+  // 채워져 있으면 결정적으로 재현된다). useState 초기값만으로는 그때 0/0이 박히고, 저장은 부분 업데이트가
+  // 아니라 4개 값 전체 upsert(fn_set_dealer_account)라 보증금·한도를 0으로 덮어쓴다.
+  // credit_limit=0이 되면 해당 좌상 소속 라이더의 POINT 완료가 전부 DEALER_LIMIT_EXCEEDED로 막힌다.
+  // 도착 시점에 폼을 동기화한다(사용자가 편집 중이 아닐 때만 — 편집 중 덮어쓰기 방지).
+  const [dirty, setDirty] = useState(false);
+  useEffect(() => {
+    if (!statement || dirty) return;
+    setDeposit(String(statement.deposit_amount ?? 0));
+    setLimit(String(statement.credit_limit ?? 0));
+    setThreshold(String(statement.claim_threshold ?? 5000000));
+    setFeeBp(String(statement.fee_rate_bp ?? 0));
+  }, [statement, dirty]);
+
+  // 로드 중에는 저장 불가. 단 로드가 끝났는데 statement가 없는 경우는 "계정 미설정"(v_dealer_statement가
+  // dealer_accounts와 INNER JOIN이라 행이 없음)이므로 최초 등록을 위해 저장을 허용해야 한다.
+  const formLocked = statementsPending;
+
   const usage = statement?.usage ?? 0;
   const headroom = statement?.headroom ?? 0;
   const overThreshold = statement?.over_threshold ?? false;
   const unsettled = statement?.unsettled_order_count ?? 0;
 
   async function handleSave() {
+    if (formLocked) return;
     setSaving(true);
     setSaveMsg(null);
     const result = await setDealerAccount({
@@ -225,6 +248,7 @@ function DealerAccountCard({
     });
     setSaving(false);
     setSaveMsg(result.ok ? "저장했어요." : result.message);
+    if (result.ok) setDirty(false);
   }
 
   return (
@@ -258,16 +282,16 @@ function DealerAccountCard({
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <NumField label="보증금(원)" value={deposit} onChange={(v) => { setDeposit(v); setLimit(String(Math.round((Number(v) || 0) * 1.4))); }} testId={`deposit-${dealerId}`} />
-        <NumField label="사용한도(P)" value={limit} onChange={setLimit} testId={`limit-${dealerId}`} />
-        <NumField label="청구 임계(P)" value={threshold} onChange={setThreshold} testId={`threshold-${dealerId}`} />
-        <NumField label="수수료율(bp)" value={feeBp} onChange={setFeeBp} testId={`fee-${dealerId}`} />
+        <NumField label="보증금(원)" value={deposit} onChange={(v) => { setDirty(true); setDeposit(v); setLimit(String(Math.round((Number(v) || 0) * 1.4))); }} testId={`deposit-${dealerId}`} />
+        <NumField label="사용한도(P)" value={limit} onChange={(v) => { setDirty(true); setLimit(v); }} testId={`limit-${dealerId}`} />
+        <NumField label="청구 임계(P)" value={threshold} onChange={(v) => { setDirty(true); setThreshold(v); }} testId={`threshold-${dealerId}`} />
+        <NumField label="수수료율(bp)" value={feeBp} onChange={(v) => { setDirty(true); setFeeBp(v); }} testId={`fee-${dealerId}`} />
       </div>
       <div className="mt-3 flex items-center gap-3">
         <button
           type="button"
           data-testid={`save-account-${dealerId}`}
-          disabled={saving}
+          disabled={saving || formLocked}
           onClick={handleSave}
           className="rounded-button bg-gray-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
         >

@@ -49,7 +49,11 @@ begin
        and p.proname <> all (allow)
      order by p.proname
   loop
-    execute format('revoke execute on function %s from anon, authenticated', r.sig);
+    -- PUBLIC까지 함께 회수해야 한다: PostgreSQL의 **내장** 기본값이 함수 EXECUTE를 PUBLIC에 부여하므로
+    -- (proacl의 `=X/postgres`), anon/authenticated 직접 부여분만 없애면 PUBLIC 경유로 그대로 통과한다.
+    -- 현재 RPC들은 각자 마이그레이션에서 `revoke all ... from public`을 해 둬 우연히 막혀 있지만,
+    -- 그 줄을 빠뜨린 신규 RPC가 하나만 들어와도 이 잠금이 무력해진다 — 여기서 두 층을 다 닫는다.
+    execute format('revoke execute on function %s from public, anon, authenticated', r.sig);
   end loop;
 end $$;
 

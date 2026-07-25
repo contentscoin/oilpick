@@ -6,7 +6,7 @@
 create extension if not exists pgtap with schema extensions;
 
 begin;
-select plan(22);
+select plan(24);
 
 -- ── 픽스처: 시나리오별 supplier/rider(단일 활성주문 제약 회피 위해 라이더 분리) ──
 insert into auth.users (id, instance_id, aud, role, email, created_at, updated_at)
@@ -134,6 +134,23 @@ select is((select delivered_cans from pickup_orders where id='fb000000-0000-0000
 select fn_transition_order('fb000000-0000-0000-0000-000000000209','CONFIRM_MEASURE','fb000000-0000-0000-0000-000000000009','supplier');
 select is((select net_amount from pickup_orders where id='fb000000-0000-0000-0000-000000000209'), -2000, 'PURCHASE-only: net_amount=-2000');
 select is((select amount from point_ledger where order_id='fb000000-0000-0000-0000-000000000209' and entry_type='TRADE_PURCHASE'), -2000, 'PURCHASE-only: TRADE_PURCHASE=-2000');
+
+-- ============ (10) [14 J4] RESOLVE_DISPUTE finalCans — 중재로 배달 통수 정정 ============
+-- 중재 후에는 SUBMIT_MEASURE가 final_kg 가드에 막혀 라이더 재제출로 통수를 고칠 수 없다.
+-- finalCans가 없으면 잘못된 통수가 그대로 purchase_amount로 확정된다(14 §3·§8).
+-- 라이더 109는 209가 COMPLETED라 활성 주문 유니크 제약에 걸리지 않는다.
+insert into pickup_orders (id, supplier_id, rider_id, status, requested_kg, pickup_address, pickup_location,
+                           snapshot_price_per_kg, order_kind, purchase_requested_cans, snapshot_fresh_can_price)
+values ('fb000000-0000-0000-0000-000000000210','fb000000-0000-0000-0000-000000000009','fb000000-0000-0000-0000-000000000109',
+        'ARRIVED',10,'a',ST_SetSRID(ST_MakePoint(127,37.5),4326)::geography,700,'MIXED',2,2000);
+select fn_transition_order('fb000000-0000-0000-0000-000000000210','SUBMIT_MEASURE','fb000000-0000-0000-0000-000000000109','rider','{"measuredKg":10.0,"photoUrls":["https://x/p.jpg"],"payoutMethod":"CASH","deliveredCans":2}'::jsonb);
+select fn_transition_order('fb000000-0000-0000-0000-000000000210','DISPUTE','fb000000-0000-0000-0000-000000000009','supplier','{"reason":"통수 불일치"}'::jsonb);
+select fn_transition_order('fb000000-0000-0000-0000-000000000210','RESOLVE_DISPUTE',null,'admin','{"finalKg":10.0,"finalCans":1}'::jsonb);
+select is((select delivered_cans from pickup_orders where id='fb000000-0000-0000-0000-000000000210'), 1,
+          'RESOLVE_DISPUTE finalCans=1 → delivered_cans 2에서 1로 정정');
+select fn_transition_order('fb000000-0000-0000-0000-000000000210','CONFIRM_MEASURE','fb000000-0000-0000-0000-000000000009','supplier');
+select is((select net_amount from pickup_orders where id='fb000000-0000-0000-0000-000000000210'), 5000,
+          '정정된 통수로 상계: net = 7000 − (1 × 2000) = 5000');
 
 select * from finish();
 rollback;

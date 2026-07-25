@@ -114,6 +114,11 @@ export const disputePayloadSchema = z.object({
 
 export const resolveDisputePayloadSchema = z.object({
   finalKg: kgSchema,
+  /**
+   * [14 J4] 구매 동반 주문의 배달 통수 중재 정정(14 §3·§8). 선택 — 없으면 delivered_cans 유지.
+   * 중재 후에는 SUBMIT_MEASURE가 막히므로(final_kg 가드) 여기서만 정정할 수 있다.
+   */
+  finalCans: z.number().int().min(0).max(50).optional(),
 });
 
 export const deliverPayloadSchema = z.object({

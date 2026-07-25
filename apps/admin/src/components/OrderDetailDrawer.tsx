@@ -46,6 +46,8 @@ const ADMIN_CANCELLABLE = new Set(["ACCEPTED", "ARRIVED", "DISPUTED"]);
  */
 export function OrderDetailDrawer({ order, events, isLoading, onClose, onMutated }: OrderDetailDrawerProps) {
   const [finalKg, setFinalKg] = useState("");
+  // [14 J4] 구매 동반 주문만 노출. 빈 문자열 = 정정 안 함(기존 delivered_cans 유지).
+  const [finalCans, setFinalCans] = useState("");
   const [cancelReason, setCancelReason] = useState("");
   const [fault, setFault] = useState<OrderFault | null>(null);
   const [forceMemo, setForceMemo] = useState("");
@@ -63,13 +65,23 @@ export function OrderDetailDrawer({ order, events, isLoading, onClose, onMutated
       setError("확정 kg을 올바르게 입력해주세요.");
       return;
     }
+    // finalCans는 입력했을 때만 실어 보낸다 — 빈 값으로 0을 보내면 배달 통수가 지워진다.
+    let cans: number | undefined;
+    if (finalCans.trim() !== "") {
+      const parsed = Number(finalCans);
+      if (!Number.isInteger(parsed) || parsed < 0 || parsed > 50) {
+        setError("확정 통수는 0~50 사이 정수로 입력해주세요.");
+        return;
+      }
+      cans = parsed;
+    }
     setBusy(true);
     setError(null);
     setMessage(null);
     const result = await invokeEdgeFunction("order-transition", {
       orderId: order.id,
       action: "RESOLVE_DISPUTE",
-      payload: { finalKg: kg },
+      payload: cans === undefined ? { finalKg: kg } : { finalKg: kg, finalCans: cans },
     });
     setBusy(false);
     if (!result.ok) {
@@ -312,6 +324,25 @@ export function OrderDetailDrawer({ order, events, isLoading, onClose, onMutated
                     data-testid="resolve-dispute-final-kg"
                   />
                 </label>
+                {/* [14 J4] 구매 동반 주문만 — 중재 후에는 라이더 재제출이 막히므로 배달 통수를
+                    고칠 수 있는 유일한 지점이다. 비워 두면 기존 배달 통수를 유지한다. */}
+                {(order.orderKind === "PURCHASE" || order.orderKind === "MIXED") && (
+                  <label className="mb-3 block">
+                    <span className="mb-1 block text-xs text-gray-500">
+                      확정 통수 (선택 — 비우면 현재 {order.deliveredCans ?? 0}통 유지)
+                    </span>
+                    <input
+                      type="number"
+                      step="1"
+                      min={0}
+                      max={50}
+                      value={finalCans}
+                      onChange={(e) => setFinalCans(e.target.value)}
+                      className="w-full rounded-button border border-gray-200 px-3 py-2 text-sm outline-none focus:border-primary"
+                      data-testid="resolve-dispute-final-cans"
+                    />
+                  </label>
+                )}
                 <button
                   type="submit"
                   disabled={busy}

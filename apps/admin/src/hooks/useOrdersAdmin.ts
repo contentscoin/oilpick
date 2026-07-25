@@ -39,6 +39,9 @@ export interface AdminOrderRow {
   requestedKg: number;
   measuredKg: number | null;
   finalKg: number | null;
+  /** [14 J2] null=레거시=PICKUP. 중재 시 배달 통수 정정 필드 노출 여부 판단에 쓴다. */
+  orderKind: "PICKUP" | "PURCHASE" | "MIXED" | null;
+  deliveredCans: number | null;
   pickupAddress: string;
   createdAt: string;
   /**
@@ -101,7 +104,7 @@ export async function fetchAdminOrders(
   const from = page * ADMIN_ORDERS_PAGE_SIZE;
   let q = supabase
     .from("pickup_orders")
-    .select("id, status, supplier_id, rider_id, requested_kg, measured_kg, final_kg, pickup_address, created_at")
+    .select("id, status, supplier_id, rider_id, requested_kg, measured_kg, final_kg, pickup_address, created_at, order_kind, delivered_cans")
     .order(sort.column, { ascending: sort.ascending })
     // 동률(같은 kg·같은 시각)에서 페이지 간 행 중복/누락이 없도록 id로 순서를 고정한다.
     .order("id", { ascending: true })
@@ -149,6 +152,8 @@ export async function fetchAdminOrders(
       requestedKg: Number(row.requested_kg),
       measuredKg: row.measured_kg !== null ? Number(row.measured_kg) : null,
       finalKg: row.final_kg !== null ? Number(row.final_kg) : null,
+      orderKind: (row.order_kind as "PICKUP" | "PURCHASE" | "MIXED" | null) ?? null,
+      deliveredCans: row.delivered_cans !== null && row.delivered_cans !== undefined ? Number(row.delivered_cans) : null,
       pickupAddress: row.pickup_address,
       createdAt: row.created_at,
       arrivedAt: arrivedAtMap.get(row.id) ?? null,
@@ -254,7 +259,7 @@ export function useAdminOrderDetail(orderId: string | undefined) {
         supabase
           .from("pickup_orders")
           .select(
-            "id, status, supplier_id, rider_id, requested_kg, final_kg, measured_kg, photo_urls, dispute_reason, cancel_reason, pickup_address, created_at, snapshot_price_per_kg, coupon_cost, payout_method, cash_paid_amount, completed_at",
+            "id, status, supplier_id, rider_id, requested_kg, final_kg, measured_kg, photo_urls, dispute_reason, cancel_reason, pickup_address, created_at, snapshot_price_per_kg, coupon_cost, payout_method, cash_paid_amount, completed_at, order_kind, delivered_cans",
           )
           .eq("id", orderId)
           .maybeSingle(),
@@ -279,6 +284,8 @@ export function useAdminOrderDetail(orderId: string | undefined) {
         riderName: data.rider_id ? (riderNames.get(data.rider_id) ?? data.rider_id.slice(0, 8)) : null,
         requestedKg: Number(data.requested_kg),
         finalKg: data.final_kg !== null ? Number(data.final_kg) : null,
+        orderKind: (data.order_kind as "PICKUP" | "PURCHASE" | "MIXED" | null) ?? null,
+        deliveredCans: data.delivered_cans !== null && data.delivered_cans !== undefined ? Number(data.delivered_cans) : null,
         measuredKg: data.measured_kg !== null ? Number(data.measured_kg) : null,
         photoUrls: data.photo_urls ?? [],
         disputeReason: data.dispute_reason,

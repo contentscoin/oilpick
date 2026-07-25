@@ -753,3 +753,18 @@ alter default privileges in schema public revoke execute on functions from anon,
 -- 라이더당 활성 주문 1건 불변식: 동시 이중수락(TOCTOU)을 DB 유니크 제약으로 차단.
 create unique index idx_rider_single_active_order on pickup_orders (rider_id)
   where status in ('ACCEPTED','ARRIVED','PICKED_UP','DISPUTED');
+
+-- ===== [14 J4] 상계 소비처 정리 + 수수료 오버플로 (20260724000011) =====
+-- cash_paid_amount는 폐유 총액(gross)으로 **동결**돼 있고 실제 정산액은 net_amount다. 20260724000008이
+-- v_dealer_rider_stats.point_paid만 net으로 고쳐, 같은 계열의 나머지 뷰가 gross를 계속 쓰고 있었다.
+-- 구매 동반 주문에서 지급액이 과다 계상되고 net<0이면 부호까지 반대가 된다.
+-- → v_pickup_stats_daily / v_rider_payout_daily / v_dealer_rider_stats.cash_paid 모두 net 기준으로 교체
+--   (레거시 net_amount null은 coalesce로 cash_paid_amount 폴백). gross 지표는 컬럼 append로 보존:
+--   v_pickup_stats_daily += total_gross·total_purchase, v_rider_payout_daily += point_spent_amount·gross_amount.
+-- → fn_create_dealer_claim 수수료: round(v_gross::numeric * fee_bp / 10000.0) — int4 곱셈이 먼저
+--   평가돼 gross 5,006,000 × 500bp에서 "integer out of range"로 청구 생성이 영구 실패했다(교착).
+--
+-- ===== [14 J4] RESOLVE_DISPUTE finalCans (20260724000012) =====
+-- 중재는 final_kg만 정정할 수 있었고 delivered_cans는 손댈 수 없었다. 중재 후 SUBMIT_MEASURE는
+-- final_kg 가드에 막히고 pickup_orders에 update 정책이 없어, 잘못된 통수가 그대로 purchase_amount로
+-- 확정됐다. payload에 finalCans(0..50, 선택)를 더해 중재에서 정정 가능하게 한다(14 §3·§8).

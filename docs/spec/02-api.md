@@ -180,7 +180,14 @@ ACCEPTED 이후 모든 전이 단일 엔드포인트.
   구매 동반 시 최신 `fresh_oil_price_ticks` 스냅샷(부재 404) + `order_kind`(PICKUP/PURCHASE/MIXED) 판정.
 - **order-transition / SUBMIT_MEASURE** payload += `deliveredCans?`(구매 동반 필수 0..50), `barcodes?`, `geo?`.
   넷팅·게이트는 `fn_settle_trade`(CONFIRM_MEASURE/FORCE_COMPLETE). 부족/한도초과 시 INSUFFICIENT_BALANCE/
-  DEALER_LIMIT_EXCEEDED(롤백).
+  DEALER_LIMIT_EXCEEDED(롤백) — **둘 다 409로 매핑**(`mapTransitionError`, 14 J4). 매핑이 없으면 폴백
+  INVALID_TRANSITION으로 뭉개져 점주가 원인도 복구 경로("현금으로 재제출")도 알 수 없다.
+  `DEALER_LIMIT_EXCEEDED`는 packages/core `ERROR_CODES`/`ERROR_MESSAGE_KO`에 등록돼 있다.
+- **order-transition / RESOLVE_DISPUTE** payload += `finalCans?`(0..50, 선택 — 14 J4).
+  구매 동반 주문의 배달 통수를 중재에서 정정한다. 없으면 `delivered_cans` 유지. 중재 후에는
+  SUBMIT_MEASURE가 `final_kg` 가드에 막히므로 통수를 고칠 수 있는 **유일한 지점**이다.
+- **알림 금액은 `net_amount`(상계 순액) 기준**(14 J4). `cash_paid_amount`는 폐유 총액으로 동결돼 있어
+  구매 동반 주문에서 금액이 다르고 net&lt;0이면 부호까지 반대다. 원장이 net으로 발행되므로 통지도 net을 따른다.
 - **price-set** 분기: `kind='FRESH'`면 `{ pricePerCan }` → fresh_oil_price_ticks. 미지정=폐유 시세(기존).
 - **dealer-account-set**(admin): `{ dealerId, depositAmount, creditLimit, claimThreshold, feeRateBp }` →
   fn_set_dealer_account upsert.

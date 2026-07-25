@@ -167,7 +167,7 @@ export function useDashboardKpi() {
           .eq("verify_status", "APPROVED"),
         supabase
           .from("pickup_orders")
-          .select("final_kg, payout_method, cash_paid_amount")
+          .select("final_kg, payout_method, cash_paid_amount, net_amount")
           .eq("status", "COMPLETED")
           .gte("completed_at", startIso),
         supabase
@@ -185,7 +185,10 @@ export function useDashboardKpi() {
       let cashPaidAmount = 0;
       let pointPaidAmount = 0;
       for (const r of completedRows) {
-        const amount = Number(r.cash_paid_amount) || 0;
+        // [14 J4] 실제 지급액은 상계 순액. cash_paid_amount는 폐유 총액으로 동결돼 있어
+        // 신유 구매 동반 주문에서 과다 계상되고, net<0(점주가 지불)이면 부호까지 반대다.
+        // 레거시(net_amount null)는 cash_paid_amount로 폴백.
+        const amount = r.net_amount != null ? Number(r.net_amount) || 0 : Number(r.cash_paid_amount) || 0;
         if (r.payout_method === "POINT") pointPaidAmount += amount;
         else cashPaidAmount += amount;
       }
