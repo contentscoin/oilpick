@@ -30,7 +30,10 @@ port = 54322
 # Port used by db diff command to initialize the shadow database.
 shadow_port = 54320
 # Maximum amount of time to wait for health check when starting the local database.
-health_timeout = "2m"
+# [CI 호환] 이 키는 CLI 2.54.0이 인식하지 못해 `failed to parse config`로 전체 실행이 죽는다
+# (CI가 2.54.0에 고정 — .github/workflows/ci.yml). 기본 타임아웃으로 충분해 비활성화한다.
+# CI 핀을 상향할 때 함께 되살릴 것.
+# health_timeout = "2m"
 # The database major version to use. This has to be the same as your remote database's. Run `SHOW
 # server_version;` on the remote database to check.
 major_version = 17
@@ -119,8 +122,11 @@ file_size_limit = "50MiB"
 # objects_path = "./images"
 
 # Allow connections via S3 compatible clients
-[storage.s3_protocol]
-enabled = true
+# [CI 호환] CLI 2.54.0 미인식 키 — 아래 analytics/vector와 함께 config 파싱을 깨뜨린다.
+# 이 프로젝트는 S3 프로토콜을 쓰지 않고(supabase-js Storage API 사용) CI는 storage 서비스를
+# 아예 제외(`supabase start -x ... storage,vector ...`)하므로 비활성화해도 영향이 없다.
+# [storage.s3_protocol]
+# enabled = true
 
 # Image transformation API is available to Supabase Pro plan.
 # [storage.image_transformation]
@@ -128,21 +134,23 @@ enabled = true
 
 # Store analytical data in S3 for running ETL jobs over Iceberg Catalog
 # This feature is only available on the hosted platform.
-[storage.analytics]
-enabled = false
-max_namespaces = 5
-max_tables = 10
-max_catalogs = 2
+# [CI 호환] CLI 2.54.0 미인식 키. 원래 enabled=false(호스팅 전용 미사용)라 비활성화해도 동작 변화 없음.
+# [storage.analytics]
+# enabled = false
+# max_namespaces = 5
+# max_tables = 10
+# max_catalogs = 2
 
 # Analytics Buckets is available to Supabase Pro plan.
 # [storage.analytics.buckets.my-warehouse]
 
 # Store vector embeddings in S3 for large and durable datasets
 # This feature is only available on the hosted platform.
-[storage.vector]
-enabled = false
-max_buckets = 10
-max_indexes = 5
+# [CI 호환] CLI 2.54.0 미인식 키. 원래 enabled=false(호스팅 전용 미사용)라 비활성화해도 동작 변화 없음.
+# [storage.vector]
+# enabled = false
+# max_buckets = 10
+# max_indexes = 5
 
 # Vector Buckets is available to Supabase Pro plan.
 # [storage.vector.buckets.documents-openai]
