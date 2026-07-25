@@ -86,6 +86,12 @@ CallCard 거리 nullable("—"), CallHomePage 거리정렬·CallDetailPage 지�
 
 **수정 계획**:
 1. **Daum 우편번호 위젯**(postcode.v2.js — **API 키 불필요**)으로 주소검색 구현.
+   ⚠️ 스크립트 경로는 `https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js`(공식 임베드 경로).
+   최초 구현(b901e4e)이 쓴 `mapjsdk/mapcomponent/postcode/postcode.v2.js`는 **존재하지 않는 경로**라
+   CDN이 403을 돌려줬고, 프로덕션에서 주소검색이 통째로 동작하지 않았다. 키·도메인 등록 문제가 아니다.
+   또한 로더는 "사용자 취소"와 "위젯 로드 실패"를 구분해 반환해야 한다(`PostcodeResult`) —
+   둘 다 null로 뭉개면 AddressField가 조용히 return해 **버튼이 먹통으로 보인다**(실제 증상).
+   로드 실패 시에는 안내를 띄우고 좌표 수동 입력을 열어 진행 경로를 남긴다.
 2. 주소→좌표 변환은 **VWorld Geocoder API**(이미 발급한 인증키 재사용, `api.vworld.kr/req/address`)
    — 카카오 REST 키 신규 발급 없이 해결. 실패 시 수동 좌표 폴백 유지.
 3. (선택 고도화) MapView로 지도핀 미세조정(03-frontend U2 원 스펙 "지도핀 미세조정" 복원).

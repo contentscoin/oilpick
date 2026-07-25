@@ -39,7 +39,7 @@ describe("AddressField (12 S2)", () => {
   });
 
   it("주소 검색→지오코딩 성공 시 주소+좌표로 onChange한다", async () => {
-    mockOpenPostcodeSearch.mockResolvedValue("서울특별시 강서구 화곡로 1");
+    mockOpenPostcodeSearch.mockResolvedValue({ status: "picked", address: "서울특별시 강서구 화곡로 1" });
     mockGeocodeAddress.mockResolvedValue({ lat: 37.5509, lng: 126.8225 });
     const onChange = vi.fn();
     render(<AddressField value={{ address: "", lat: null, lng: null }} onChange={onChange} />);
@@ -54,7 +54,7 @@ describe("AddressField (12 S2)", () => {
   });
 
   it("지오코딩 실패 시 좌표 null + 수동 입력 유도(기본 좌표 저장 금지)", async () => {
-    mockOpenPostcodeSearch.mockResolvedValue("서울특별시 강서구 화곡로 1");
+    mockOpenPostcodeSearch.mockResolvedValue({ status: "picked", address: "서울특별시 강서구 화곡로 1" });
     mockGeocodeAddress.mockResolvedValue(null);
     const onChange = vi.fn();
     render(<AddressField value={{ address: "", lat: null, lng: null }} onChange={onChange} />);
@@ -63,6 +63,27 @@ describe("AddressField (12 S2)", () => {
       expect(onChange).toHaveBeenCalledWith({ address: "서울특별시 강서구 화곡로 1", lat: null, lng: null }),
     );
     expect(await screen.findByTestId("address-lat-input")).toBeInTheDocument();
+  });
+
+  it("위젯 로드 실패 시 안내를 띄우고 수동 좌표 입력을 연다(침묵 금지)", async () => {
+    // 12 S2 회귀: 스크립트가 403 등으로 죽으면 예전엔 조용히 return해 버튼이 먹통으로 보였다.
+    mockOpenPostcodeSearch.mockResolvedValue({ status: "unavailable" });
+    const onChange = vi.fn();
+    render(<AddressField value={{ address: "", lat: null, lng: null }} onChange={onChange} />);
+    fireEvent.click(screen.getByTestId("address-search-button"));
+    expect(await screen.findByTestId("address-search-unavailable")).toBeInTheDocument();
+    expect(screen.getByTestId("address-lat-input")).toBeInTheDocument();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("사용자가 취소하면 아무 것도 바뀌지 않는다(실패 안내도 없음)", async () => {
+    mockOpenPostcodeSearch.mockResolvedValue({ status: "cancelled" });
+    const onChange = vi.fn();
+    render(<AddressField value={{ address: "", lat: null, lng: null }} onChange={onChange} />);
+    fireEvent.click(screen.getByTestId("address-search-button"));
+    await waitFor(() => expect(mockOpenPostcodeSearch).toHaveBeenCalled());
+    expect(screen.queryByTestId("address-search-unavailable")).not.toBeInTheDocument();
+    expect(onChange).not.toHaveBeenCalled();
   });
 
   it("위/경도 수동 입력 토글", () => {

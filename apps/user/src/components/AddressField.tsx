@@ -27,15 +27,26 @@ export function AddressField({ value, onChange }: AddressFieldProps) {
   const [searching, setSearching] = useState(false);
   const [manualCoords, setManualCoords] = useState(false);
   const [geocodeFailed, setGeocodeFailed] = useState(false);
+  // 위젯 자체를 못 띄운 경우(스크립트 차단·네트워크 실패). 취소와 구분해서 안내해야 한다.
+  const [searchUnavailable, setSearchUnavailable] = useState(false);
 
   const coordsConfirmed = value.lat != null && value.lng != null;
 
   async function handleSearch() {
     setSearching(true);
     setGeocodeFailed(false);
+    setSearchUnavailable(false);
     try {
-      const picked = await openPostcodeSearch();
-      if (!picked) return; // 취소 또는 위젯 로드 실패
+      const result = await openPostcodeSearch();
+      if (result.status === "cancelled") return;
+      if (result.status === "unavailable") {
+        // 침묵 금지 — 버튼을 눌러도 아무 일이 없으면 사용자는 앱이 멈춘 걸로 받아들인다.
+        // 주소는 직접 입력할 수 있으므로 좌표 수동 입력을 함께 열어 진행 경로를 남긴다.
+        setSearchUnavailable(true);
+        setManualCoords(true);
+        return;
+      }
+      const picked = result.address;
       const point = await geocodeAddress(picked);
       if (point) {
         onChange({ address: picked, lat: point.lat, lng: point.lng });
@@ -92,6 +103,13 @@ export function AddressField({ value, onChange }: AddressFieldProps) {
           {searching ? "검색 중…" : "주소 검색"}
         </button>
       </div>
+
+      {/* 위젯을 못 띄운 경우 — 주소가 비어 있어도 반드시 보여야 하므로 좌표 상태 표기와 분리한다. */}
+      {searchUnavailable && (
+        <p data-testid="address-search-unavailable" style={{ margin: 0, fontSize: 12, color: colors.status.danger }}>
+          주소 검색을 불러오지 못했어요. 주소를 직접 입력하고 아래에서 위치를 지정해주세요.
+        </p>
+      )}
 
       {/* 좌표 확정 상태 표기 — 확정 전에는 경고, 확정되면 초록 확인. */}
       {coordsConfirmed ? (
