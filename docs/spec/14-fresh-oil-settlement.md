@@ -164,24 +164,49 @@ SUBMIT 시 **replace-set**(delete→insert; 원본 payload는 order_events에 �
 ①단일 SKU·수시 tick 개정 ②수수료 베이스=폐유 총액·rate 0 출시 ③레버리지 표준화 안 함(수기+×1.4) ④임계 기본
 500만P 좌상별 조정 ⑤집하장 폐기 ⑥본사직속=본사 재고·무게이트 ⑦부분 분할결제 불허 ⑧재고 수량관리 1차 제외 ⑨법률자문 advisory.
 
-## 10. 적대적 리뷰 반영 (J4)
+## 10. 검증 (J4) — 적대적 리뷰 → 정적 감사 → **pgTAP 실행 GREEN**
 
-재무 로직(넷팅·크레딧 게이트·청구 RPC)을 로컬 Docker 부재로 pgTAP 실행 없이 적대적 코드 리뷰로 검증. 4건 판정:
+3단계로 검증했고 **최종적으로 pgTAP 전체 스위트가 실제로 통과**했다(13개 파일 225 단언).
+
+### 10-1. 적대적 코드 리뷰 (재무 로직) — 4건 판정
 
 - **#1 (수정)** `fn_create_dealer_claim` 원자화: 집계 SELECT와 스탬프 UPDATE가 별개 문장이라, 그 사이에 동시 완료(net<0/net=0/CASH — 게이트 advisory lock 미경유)가 커밋되면 스탬프는 되나 집계에서 누락돼 총계가 어긋나고 주문이 유실됐다. `UPDATE … RETURNING` 데이터변경 CTE로 "집계 대상=스탬프 대상"을 보장. `20260724000008`.
 - **#4 (수정)** `v_dealer_rider_stats.point_paid`가 cash_paid_amount(동결=폐유 총액)를 써 MIXED POINT에서 과다 계상 → net 기준으로 교정(레거시 net null은 폴백). `20260724000008`.
 - **#2 (결정·문서화)** 좌상 계정 미설정 시 크레딧 게이트 무적용(=무제한). 이유: (a) 미정산 사용액은 청구(claim)로 **전액 추적·청구 가능** — 게이트는 예방적 상한일 뿐 회계 안전장치가 아니라 돈이 새지 않는다; (b) deny 기본값은 배포 즉시 모든 좌상의 POINT 완료를 막아 운영이 더 위험. admin이 계정을 생성하면 게이트가 활성화된다(요율 0% 출시와 동일한 "구조 완성·집행 설정" 원칙).
 - **#3 (결정·문서화)** 좌상 주문 읽기 RLS를 스냅샷으로 재정의하면서 기존(dealer_id null) 주문은 좌상 통계에서 제외된다(누출은 없음 — 리뷰 확인). 현재 배정 기준 백필은 재배정된 라이더의 과거 주문을 새 좌상에 귀속시켜 **바로 그 PII 누출을 재도입**하므로 백필하지 않는다. 손실 수용(신 기능이라 과거 귀속 데이터 미미).
 
-### pgTAP 정적 감사 (실행 불가 환경 대응)
-
-로컬에 Docker/Postgres가 없어 신규 3종을 실행하지 못해, **실행하면 반드시 실패했을 결함**을 정적으로 잡아 수정했다:
+### 10-2. pgTAP 정적 감사 — 4건 (실행 전, 계약 오류)
 
 - `plan(N)` 불일치 3건 — `11`(14→13) · `12`(24→22) · `13`(20→19). pgTAP은 계획치≠실행수를 **로직과 무관하게
-  실패**로 처리하므로 세 파일 모두 CI에서 즉시 실패했을 상태였다(단언 커버리지 자체는 의도대로 온전, 헤더 숫자만 오기).
+  실패**로 처리하므로 세 파일 모두 첫 실행에서 즉시 실패했을 상태였다(단언 커버리지는 의도대로 온전, 헤더 숫자만 오기).
 - `is()` 타입 불일치 1건 — `11`의 `geo_lat`(double precision) vs 리터럴 `37.5`(numeric). 다형 `is(anyelement,
-  anyelement)`가 해석되지 않아 "function is(double precision, numeric) does not exist"로 실패한다 →
-  양쪽 `::numeric` 명시 캐스팅(`10_dealer_test.sql`의 `collected_kg` 선례와 동일 관례).
+  anyelement)`가 해석되지 않는다 → 양쪽 `::numeric` 명시 캐스팅(`10_dealer_test.sql` `collected_kg` 선례와 동일).
 
-> 남은 한계: **수식·RLS의 실제 동작은 여전히 미검증**이다. 정적 감사는 구문·계약 오류만 걸러낸다.
-> 머지 전 실제 스택에서 `supabase test db` 1회 실행 필수.
+### 10-3. pgTAP 실제 실행 — **실행해야만 드러나는 결함 2건** (`20260724000009`)
+
+"Docker가 없어 실행 불가"는 사실이 아니었다(PostgreSQL 16이 이미 설치돼 있었고 postgis·pgtap은 apt로 설치 가능).
+Docker 없이 임시 클러스터 + Supabase shim으로 전 마이그레이션을 적용해 실행한 결과, 정적 감사로는 원리상 잡을 수
+없는 결함 2건이 드러났다:
+
+- **① `pickup_items` GRANT 누락(치명)** — `20260724000001`이 RLS 정책만 만들고 테이블 권한을 부여하지 않았다.
+  RLS는 행을 거르는 층이고 그 **이전에** 테이블 권한이 필요하므로, 점주·라이더가 바코드 수거이력을 조회하면
+  `permission denied for table pickup_items`로 **전면 차단**된다. 같은 시기 신설한 다른 테이블
+  (`fresh_oil_price_ticks`·`dealer_accounts`·`dealer_settlements`)은 grant가 있었고 이 테이블만 빠졌다.
+  → `11_tracking`의 RLS 매트릭스가 검출.
+- **② `order_kind` NULL 3치 논리(레거시 게이트 무력화)** — `v_purchase_involved := order_kind in ('PURCHASE','MIXED')`는
+  레거시(`order_kind` null)에서 **NULL**을 반환하고, 이어지는 `not v_purchase_involved`도 NULL이라 분기가 발화하지
+  않는다 → "순수 수거는 measuredKg>0 필수" 게이트가 레거시 주문에서 조용히 사라져 0kg 제출이 통과했다(이후 CONFIRM에서
+  전무거래로 거부돼 주문이 ARRIVED에 갇힌다). `coalesce(..., false)`로 고정. → `12_purchase_netting` 19번이 검출.
+
+### 10-4. 최종 결과
+
+```
+✅ 마이그레이션 43건 전부 적용
+✅ 01~10 기존 스위트 171 단언 — 회귀 없음
+   (특히 02_state_machine·08_payout_method 통과 = 넷팅 재작성의 하위호환 실증,
+    10_dealer 통과 = 좌상 RLS 스냅샷 재정의 정상)
+✅ 11_tracking 13 · 12_purchase_netting 22 · 13_dealer_settlement 19 — 신규 전부 통과
+🎉 13 파일 225 단언 GREEN
+```
+
+재현: `bash scripts/pgtap-local/run.sh` (Docker 불필요 폴백 하네스). 정식 경로는 여전히 `supabase test db`다.

@@ -48,3 +48,5 @@ OilPick을 유지한다(`docs/spec/10-brand.md` B4가 단일 진실). 모든 설
 - `pnpm dev:user` / `dev:rider` / `dev:admin` — 개발 서버
 - `pnpm test` / `pnpm lint` / `pnpm build` — 커밋 전 3개 모두 통과 필수
 - `supabase start` — 로컬 스택, `supabase db reset` — 마이그레이션 재적용
+- `supabase test db` — pgTAP(정식). Docker를 못 쓰면 `bash scripts/pgtap-local/run.sh`
+  (임시 PG 클러스터 + Supabase shim으로 마이그레이션 전량 적용 후 전 스위트 실행 — 14 §10-4)
