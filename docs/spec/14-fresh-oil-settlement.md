@@ -198,15 +198,40 @@ Docker 없이 임시 클러스터 + Supabase shim으로 전 마이그레이션�
   않는다 → "순수 수거는 measuredKg>0 필수" 게이트가 레거시 주문에서 조용히 사라져 0kg 제출이 통과했다(이후 CONFIRM에서
   전무거래로 거부돼 주문이 ARRIVED에 갇힌다). `coalesce(..., false)`로 고정. → `12_purchase_netting` 19번이 검출.
 
-### 10-4. 최종 결과
+### 10-4. CI 실행 — **잠복해 있던 권한 구멍 1건** (`20260724000010`)
+
+CI가 pgTAP를 완주하자 `03_privilege_guards_test.sql`이 4건 실패했다. 신규 코드가 깬 게 아니라, **F3a부터
+줄곧 실패하고 있었으나 CI가 스위트를 완주하지 못해 드러나지 않던 회귀**다(러너 분(minute) 소진 →
+`supabase/setup-cli` 핀 설정 비호환의 2중 장애로 장기간 스위트 미실행).
+
+- **service_role 전용 RPC를 anon/authenticated가 EXECUTE 가능(치명)** — RPC 마이그레이션들의 관례인
+  `revoke all on function ... from public`은 PUBLIC 경유 권한만 없앤다. 그런데 Supabase는
+  `alter default privileges in schema public grant execute on functions to anon, authenticated, service_role`을
+  걸어 두므로, postgres가 만든 함수에는 **anon/authenticated에 직접 부여된** ACL(`authenticated=X/postgres`)이
+  붙고 이건 PUBLIC revoke로 사라지지 않는다. 테이블 쪽에서 `20260704000005`가 겪은 함정과 정확히 대칭인데,
+  그쪽은 로컬 스택이 테이블 기본권한을 revoke해 둔 덕에 즉시 터졌고 함수 쪽은 조용히 남았다.
+  실측 결과 `public.fn_%` **23종 전부**가 anon·authenticated EXECUTE 가능 —
+  `fn_post_ledger`(임의 포인트 발행)·`fn_process_withdraw`(출금 승인)·`fn_transition_order`(상태 전이 임의 실행)와
+  이번에 추가한 `fn_settle_trade`·`fn_set_dealer_account`(자기 좌상 한도 임의 설정)·`fn_settle_dealer_claim`·
+  `fn_void_dealer_claim`·`fn_create_dealer_claim`이 모두 포함됐다. 절대 규칙 1·2를 DB 권한 계층에서
+  무너뜨린다. → `20260724000010`이 fn_% 전수 회수 + 기본 권한 차단.
+  - 예외 ① RLS 정책 표현식 헬퍼 4종 — 정책은 **질의 주체 권한으로** 평가되므로 회수 시 조회가 42501로 전면 실패.
+  - 예외 ② `returns trigger` 함수 — 직접 호출 경로 없음, 발화 시 EXECUTE 재검사 없음.
+  - 클라이언트 `.rpc(` 호출은 전 앱 **0건**(전수 확인) — 회수로 깨지는 경로 없음.
+  - 회귀 가드는 개별 함수 단언 대신 **fn_% 전수 스캔**으로 작성(신규 RPC 추가 시 갱신을 잊어도 자동 검출,
+    위반 함수명을 진단에 그대로 노출).
+
+### 10-5. 최종 결과
 
 ```
-✅ 마이그레이션 43건 전부 적용
-✅ 01~10 기존 스위트 171 단언 — 회귀 없음
+✅ 마이그레이션 44건 전부 적용
+✅ 01~10 기존 스위트 174 단언 — 회귀 없음
    (특히 02_state_machine·08_payout_method 통과 = 넷팅 재작성의 하위호환 실증,
     10_dealer 통과 = 좌상 RLS 스냅샷 재정의 정상)
 ✅ 11_tracking 13 · 12_purchase_netting 22 · 13_dealer_settlement 19 — 신규 전부 통과
-🎉 13 파일 225 단언 GREEN
+🎉 13 파일 228 단언 GREEN
 ```
 
 재현: `bash scripts/pgtap-local/run.sh` (Docker 불필요 폴백 하네스). 정식 경로는 여전히 `supabase test db`다.
+하네스의 `supabase-shim.sql`은 Supabase의 함수 기본권한(`alter default privileges ... grant execute`)까지
+재현하므로 위 권한 구멍이 로컬에서도 동일하게 재현된다.

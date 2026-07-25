@@ -727,10 +727,28 @@ $$ select exists(select 1 from rider_profiles rp where rp.id = p_rider and rp.de
 language sql security definer stable set search_path = public;
 create policy p_rider_profiles_read_by_dealer on rider_profiles for select using (dealer_id = auth.uid());
 create policy p_profiles_read_own_riders on profiles for select using (fn_dealer_owns_rider(id));
-create policy p_orders_read_by_dealer on pickup_orders for select using (rider_id is not null and fn_dealer_owns_rider(rider_id));
+-- [14 J3에서 교체] 구 정의는 라이브 조인(rider_profiles.dealer_id 현재값) 기준이라 라이더 재배정 시
+-- 새 좌상에게 과거 주문의 재무정보+점주 PII가 소급 노출됐다. 20260724000006이 스냅샷 기준으로 재정의:
+--   create policy p_orders_read_by_dealer on pickup_orders for select using (dealer_id = (select auth.uid()));
 create policy p_referrals_read_by_dealer on referrals for select using (fn_dealer_owns_rider(referrer_rider_id));
 create policy p_profiles_read_my_dealer on profiles for select using (id = (select dealer_id from rider_profiles where id = auth.uid())); -- I5 라이더→소속 좌상 상호
 -- v_dealer_rider_stats(security_invoker): 라이더별 완료수·수거kg·현금/포인트 지급합·레퍼럴 실적(표시용 통계, 정산 아님).
+
+-- ===== 함수 EXECUTE 권한 [14 J4] (20260724000010_rpc_execute_lockdown.sql) =====
+-- Supabase는 `alter default privileges in schema public grant execute on functions to anon,
+-- authenticated, service_role`을 걸어 두므로, RPC 마이그레이션의 관례인
+-- `revoke all on function ... from public`만으로는 anon/authenticated에 **직접 부여된** EXECUTE가
+-- 남는다(테이블 쪽에서 20260704000005가 겪은 함정과 대칭). 그 결과 로그인한 아무 사용자나
+-- PostgREST /rest/v1/rpc/로 SECURITY DEFINER 재무 RPC를 직접 호출할 수 있었다.
+-- 조치: public.fn_% 전수에서 anon/authenticated EXECUTE 회수 + 기본 권한 자체를 닫는다.
+--   예외 ① RLS 정책 표현식 헬퍼 4종(fn_current_role·fn_dealer_owns_rider·
+--        fn_is_assigned_rider_of_caller·fn_is_assigned_supplier_of_caller) — 정책은 질의 주체
+--        권한으로 평가되므로 회수 시 해당 테이블 조회가 통째로 42501.
+--   예외 ② returns trigger 함수 — 직접 호출 경로 없음, 발화 시 EXECUTE 재검사 없음.
+-- 클라이언트에 .rpc( 호출은 0건(전 앱 전수 확인). 모든 RPC는 Edge Function service_role 전용.
+-- 신규 클라이언트 호출 함수를 만들면 해당 마이그레이션에서 명시적 grant execute 할 것.
+-- 회귀 가드: 03_privilege_guards_test.sql이 fn_% 전수를 훑어 위반 함수명을 진단에 노출한다.
+alter default privileges in schema public revoke execute on functions from anon, authenticated;
 
 -- 라이더당 활성 주문 1건 불변식: 동시 이중수락(TOCTOU)을 DB 유니크 제약으로 차단.
 create unique index idx_rider_single_active_order on pickup_orders (rider_id)

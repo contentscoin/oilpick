@@ -4,7 +4,7 @@
 create extension if not exists pgtap with schema extensions;
 
 begin;
-select plan(14);
+select plan(17);
 
 -- ── 픽스처(postgres = 트리거 예외) ────────────────────────────────────────
 insert into auth.users (id, instance_id, aud, role, email, created_at, updated_at) values
@@ -97,6 +97,42 @@ select ok(not has_function_privilege('authenticated','public.fn_refund_purchase(
           'authenticated는 fn_refund_purchase EXECUTE 불가');
 select ok(has_function_privilege('service_role','public.fn_refund_purchase(uuid, int, uuid, text)','EXECUTE'),
           'service_role(Edge Function)은 fn_refund_purchase EXECUTE 가능');
+
+-- ── [14 J4] service_role 전용 RPC 전수 가드 (20260724000010_rpc_execute_lockdown.sql) ──────
+-- 개별 함수 단언은 새 RPC가 추가될 때 갱신을 잊으면 조용히 비게 된다. Supabase의
+-- `alter default privileges ... grant execute on functions to anon, authenticated`가
+-- 신규 함수마다 직접 GRANT를 붙이므로, "revoke from public만 했다" = 무방비다.
+-- 아래는 public.fn_% 전수를 훑어 위반 함수 이름을 그대로 진단에 노출한다.
+select is(
+  (select coalesce(string_agg(p.oid::regprocedure::text, ', ' order by p.proname), '')
+     from pg_proc p
+     join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and p.proname like 'fn\_%'
+      and p.prorettype <> 'pg_catalog.trigger'::regtype
+      -- RLS 정책 표현식 헬퍼(정책은 질의 주체 권한으로 평가되므로 EXECUTE 필수).
+      -- 마이그레이션 20260724000010의 allowlist와 동일하게 유지할 것.
+      and p.proname <> all (array['fn_current_role','fn_dealer_owns_rider',
+                                  'fn_is_assigned_rider_of_caller','fn_is_assigned_supplier_of_caller'])
+      and (has_function_privilege('authenticated', p.oid, 'EXECUTE')
+        or has_function_privilege('anon', p.oid, 'EXECUTE'))),
+  '',
+  'service_role 전용 RPC 중 anon/authenticated가 EXECUTE 가능한 함수는 없어야 함');
+
+-- 신규 재무 RPC(J2/J3)는 service_role로는 여전히 호출 가능해야 한다(과잉 revoke 회귀 방지).
+select ok(has_function_privilege('service_role','public.fn_settle_trade(uuid, uuid, text)','EXECUTE')
+      and has_function_privilege('service_role','public.fn_set_dealer_account(uuid, int, int, int, int, uuid)','EXECUTE')
+      and has_function_privilege('service_role','public.fn_create_dealer_claim(uuid, uuid)','EXECUTE')
+      and has_function_privilege('service_role','public.fn_settle_dealer_claim(uuid, uuid)','EXECUTE')
+      and has_function_privilege('service_role','public.fn_void_dealer_claim(uuid, uuid)','EXECUTE'),
+          'service_role은 신유·좌상정산 RPC 5종 EXECUTE 가능');
+
+-- RLS 헬퍼는 회수 대상이 아니다(회수하면 정책 평가가 42501로 실패 → 조회 전면 붕괴).
+select ok(has_function_privilege('authenticated','public.fn_current_role()','EXECUTE')
+      and has_function_privilege('authenticated','public.fn_is_assigned_rider_of_caller(uuid)','EXECUTE')
+      and has_function_privilege('authenticated','public.fn_is_assigned_supplier_of_caller(uuid)','EXECUTE')
+      and has_function_privilege('authenticated','public.fn_dealer_owns_rider(uuid)','EXECUTE'),
+          'RLS 정책 헬퍼 4종은 authenticated EXECUTE 유지');
 
 -- ── [07 F3a] coupon_ledger append-only: UPDATE 차단 ──────────────────────────────────
 insert into coupon_ledger (rider_id, entry_type, qty) values ('22222222-2222-2222-2222-222222222222','ADJUST',5);

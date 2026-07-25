@@ -87,3 +87,11 @@ do $$ begin
     create publication supabase_realtime;
   end if;
 end $$;
+
+-- ── Supabase 기본 권한(실 스택 재현) ────────────────────────────────────────
+-- Supabase 로컬/호스팅 DB는 public 스키마에 대해 default privileges로 anon·authenticated·
+-- service_role에 함수 EXECUTE를 자동 부여한다. 이것 때문에 마이그레이션의
+-- `revoke all on function ... from public`만으로는 authenticated의 EXECUTE가 사라지지 않는다
+-- (PUBLIC 권한과 직접 부여분은 별개). 이 shim이 그걸 재현하지 않아 03_privilege_guards가
+-- 로컬에서만 통과하고 CI에서 실패했다 — 실 환경과 어긋나지 않도록 여기서 동일하게 부여한다.
+alter default privileges in schema public grant execute on functions to anon, authenticated, service_role;
