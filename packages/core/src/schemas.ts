@@ -453,6 +453,24 @@ export type ReferralSettleOutput = z.infer<typeof referralSettleOutputSchema>;
  * Edge Function이 프록시한다(REST 키는 서버 시크릿 KAKAO_MOBILITY_KEY — CLAUDE.md 규칙 3).
  * 키 미설정 시 출력의 configured=false로 기능이 조용히 비활성(라이더 위치만 표시).
  */
+/**
+ * [12 S2 재설계] 주소 → 좌표 지오코딩. **서버측 프록시 전용**.
+ * 브라우저에서 VWorld API를 직접 부르면 (1) CORS로 차단되고 (2) 인증키가 번들에 노출된다
+ * (절대 규칙 3). geocode Edge Function이 키를 들고 대신 호출한다.
+ */
+export const geocodeInputSchema = z.object({
+  address: z.string().trim().min(1).max(200),
+});
+export type GeocodeInput = z.infer<typeof geocodeInputSchema>;
+
+export const geocodeOutputSchema = z.object({
+  /** 서버에 VWORLD_KEY가 설정돼 지오코딩이 가능한지. false면 point는 null. */
+  configured: z.boolean(),
+  /** 변환된 좌표. 주소를 못 찾았거나 미구성이면 null → 호출부는 수동 좌표 입력으로 강등. */
+  point: z.object({ lat: latSchema, lng: lngSchema }).nullable(),
+});
+export type GeocodeOutput = z.infer<typeof geocodeOutputSchema>;
+
 export const directionsInputSchema = z.object({
   origin: z.object({ lat: latSchema, lng: lngSchema }),
   destination: z.object({ lat: latSchema, lng: lngSchema }),

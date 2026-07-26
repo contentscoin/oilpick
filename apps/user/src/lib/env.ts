@@ -10,12 +10,7 @@ export const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 export const KAKAO_KEY: string | undefined = import.meta.env.VITE_KAKAO_KEY || undefined;
 export const MAP_STYLE_URL: string | undefined = import.meta.env.VITE_MAP_STYLE_URL || undefined;
 
-/**
- * VWorld 인증키 — 주소→좌표 지오코딩(12 S2 AddressField)에 사용. 별도 env가 없으면
- * MAP_STYLE_URL(VWorld WMTS 타일 URL)에 박힌 키를 추출해 재사용한다(사용자가 env를 한 번만
- * 넣게). 둘 다 없으면 undefined — 지오코딩은 수동 좌표 입력으로 강등된다.
- */
-export const VWORLD_KEY: string | undefined =
-  import.meta.env.VITE_VWORLD_KEY ||
-  MAP_STYLE_URL?.match(/\/wmts\/1\.0\.0\/([^/]+)\//)?.[1] ||
-  undefined;
+// [12 S2 재설계] VWORLD_KEY는 여기서 제거됐다. 지오코딩은 geocode Edge Function이 서버
+// 시크릿(VWORLD_KEY)으로 수행한다 — 브라우저 직접 호출은 CORS로 차단되고, 클라이언트 번들에
+// 키를 담는 것은 절대 규칙 3 위반이다. 지도 타일용 키는 MAP_STYLE_URL에 포함된 채로 남는데,
+// 타일은 브라우저가 직접 받아야 해서 구조상 불가피하다(도메인 제한으로 방어).

@@ -188,6 +188,11 @@ ACCEPTED 이후 모든 전이 단일 엔드포인트.
   SUBMIT_MEASURE가 `final_kg` 가드에 막히므로 통수를 고칠 수 있는 **유일한 지점**이다.
 - **알림 금액은 `net_amount`(상계 순액) 기준**(14 J4). `cash_paid_amount`는 폐유 총액으로 동결돼 있어
   구매 동반 주문에서 금액이 다르고 net&lt;0이면 부호까지 반대다. 원장이 net으로 발행되므로 통지도 net을 따른다.
+- **geocode**(신규, 12 S2 재설계): `{ address }` → `{ configured, point: {lat,lng} | null }`.
+  VWorld Geocoder를 **서버측에서 프록시**한다. 브라우저 직접 호출은 VWorld가 CORS 헤더를 주지 않아
+  `No 'Access-Control-Allow-Origin'`으로 전부 차단되고, 인증키가 클라이언트 번들에 노출된다(규칙 3).
+  키는 서버 시크릿 `VWORLD_KEY`. 미설정 시 200 + `configured:false`로 조용히 비활성(호출부는 수동
+  좌표 입력으로 강등). 인증만 요구(역할 무관 — 점주가 매장 주소를 등록한다). directions와 동일 패턴.
 - **price-set** 분기: `kind='FRESH'`면 `{ pricePerCan }` → fresh_oil_price_ticks. 미지정=폐유 시세(기존).
 - **dealer-account-set**(admin): `{ dealerId, depositAmount, creditLimit, claimThreshold, feeRateBp }` →
   fn_set_dealer_account upsert.

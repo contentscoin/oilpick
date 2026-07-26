@@ -1,4 +1,4 @@
-import { VWORLD_KEY } from "./env";
+import { invokeEdgeFunction } from "./edgeFunction";
 
 export interface GeoPoint {
   lat: number;
@@ -6,35 +6,23 @@ export interface GeoPoint {
 }
 
 /**
- * 주소 문자열 → 좌표(VWorld Geocoder API, 12 S2). 인증키(VWORLD_KEY)가 없거나
- * 네트워크/CORS 실패, status!=OK면 null을 반환한다 — 호출부는 "좌표 미확정"으로 강등해
- * 수동 입력을 받거나 제출을 막는다(기본 좌표 저장 금지).
+ * 주소 문자열 → 좌표. **geocode Edge Function을 경유한다**(12 S2 재설계).
  *
- * 도로명(road) 우선, 실패 시 지번(parcel)으로 1회 재시도(사용자가 지번을 고른 경우 대비).
+ * 이전 구현은 브라우저에서 api.vworld.kr을 직접 호출했는데, VWorld가 CORS 헤더를 주지 않아
+ * 프로덕션에서 매번 차단됐다(`No 'Access-Control-Allow-Origin' header`). 즉 주소검색이
+ * 좌표를 얻지 못하고 항상 수동 입력으로 떨어졌다. 인증키도 클라이언트 번들에 노출돼
+ * 있었다(절대 규칙 3 위반) — 서버측 프록시로 옮겨 둘 다 해소한다.
+ *
+ * 실패(미구성·주소 미발견·네트워크)는 모두 null. 호출부는 "좌표 미확정"으로 강등해
+ * 수동 입력을 받는다(기본 좌표 저장 금지).
  */
 export async function geocodeAddress(address: string): Promise<GeoPoint | null> {
-  const key = VWORLD_KEY;
-  if (!key || !address.trim()) return null;
+  if (!address.trim()) return null;
 
-  for (const type of ["road", "parcel"] as const) {
-    try {
-      const url =
-        `https://api.vworld.kr/req/address?service=address&request=getcoord&version=2.0` +
-        `&crs=epsg:4326&format=json&type=${type}&key=${encodeURIComponent(key)}` +
-        `&address=${encodeURIComponent(address)}`;
-      const res = await fetch(url);
-      if (!res.ok) continue;
-      const json = (await res.json()) as {
-        response?: { status?: string; result?: { point?: { x?: string; y?: string } } };
-      };
-      if (json?.response?.status !== "OK") continue;
-      const point = json.response.result?.point;
-      const lng = Number(point?.x);
-      const lat = Number(point?.y);
-      if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
-    } catch {
-      // 다음 type 시도, 최종적으로 null
-    }
-  }
-  return null;
+  const result = await invokeEdgeFunction<{ configured: boolean; point: GeoPoint | null }>(
+    "geocode",
+    { address: address.trim() },
+  );
+  if (!result.ok) return null;
+  return result.data.point ?? null;
 }
