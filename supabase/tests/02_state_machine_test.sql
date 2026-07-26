@@ -74,11 +74,15 @@ select throws_ok(
   $$ select fn_transition_order('00000000-bbbb-0000-0000-000000000001','ARRIVE','44444444-4444-4444-4444-444444444444','rider') $$,
   'INVALID_TRANSITION', '배정 안 된 라이더 ARRIVE 불가');
 
--- 4) 라이더당 활성 1건: rA가 O2 수락 → 유니크 위반(23505)
-select throws_ok(
+-- 4) [20260726000001로 변경] 라이더당 활성 주문은 1건 → **최대 3건**.
+--    구 불변식은 유니크 인덱스 idx_rider_single_active_order가 2건째를 23505로 막는 것이었다.
+--    거리·동선을 묶어 여러 콜을 받게 하려는 요구로 상한을 3건으로 올렸고, 방어는 RPC의
+--    advisory lock + 카운트 체크로 이관했다. 상한 경계·동시성은 14_rider_multi_active_test가 담당하고,
+--    여기서는 "2건째가 이제 통과한다"는 계약 변경만 고정한다.
+select lives_ok(
   $$ select fn_transition_order('00000000-bbbb-0000-0000-000000000002','ACCEPT','22222222-2222-2222-2222-222222222222','rider') $$,
-  '23505', NULL, 'rA 두 번째 활성 주문 수락은 유니크 위반');
-select is((select status from pickup_orders where id='00000000-bbbb-0000-0000-000000000002'), 'REQUESTED', 'O2는 REQUESTED 유지');
+  'rA 두 번째 활성 주문 수락 가능(상한 3건)');
+select is((select status from pickup_orders where id='00000000-bbbb-0000-0000-000000000002'), 'ACCEPTED', 'O2도 rA에게 배정된다');
 
 -- 5) 수락 후 공급자 취소 불가
 select throws_ok(
@@ -94,7 +98,10 @@ select throws_ok(
 -- 7) admin CANCEL fault=RIDER → CANCELLED, 환급 없음
 select fn_transition_order('00000000-bbbb-0000-0000-000000000001','CANCEL',null,'admin','{"reason":"rider fault"}'::jsonb,'RIDER');
 select is((select status from pickup_orders where id='00000000-bbbb-0000-0000-000000000001'), 'CANCELLED', 'admin CANCEL(RIDER) → CANCELLED');
-select is((select balance from v_coupon_balance where rider_id='22222222-2222-2222-2222-222222222222'), 9, 'fault=RIDER: 소진 유지(환급 없음), 잔액 9');
+-- rA는 O1·O2를 모두 수락했고 둘 다 coupon_cost=1이라 소진이 2회(10→8).
+-- fault=RIDER 취소는 환급이 없으므로 O1 취소 후에도 8로 유지된다
+-- (다중 수락 허용 전에는 O2가 막혀 소진 1회뿐이라 9였다 — 숫자가 아니라 '환급 없음'이 이 단언의 의도).
+select is((select balance from v_coupon_balance where rider_id='22222222-2222-2222-2222-222222222222'), 8, 'fault=RIDER: 소진 유지(환급 없음)');
 select is((select count(*)::int from coupon_ledger where order_id='00000000-bbbb-0000-0000-000000000001' and entry_type='REFUND'), 0, 'fault=RIDER: REFUND 없음');
 
 -- 8) admin CANCEL fault=SUPPLIER → REFUND(+coupon_cost) (rB가 O3)

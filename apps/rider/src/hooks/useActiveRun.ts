@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { parseEwkbPoint, type OrderKind, type OrderStatus, type PayoutMethod } from "@oilpick/core";
+import { MAX_RIDER_ACTIVE_ORDERS, parseEwkbPoint, type OrderKind, type OrderStatus, type PayoutMethod } from "@oilpick/core";
 import { supabase } from "../lib/supabaseClient";
 import { queryKeys } from "../lib/queryClient";
 
@@ -112,27 +112,79 @@ function mapRow(row: {
 }
 
 /**
- * R4~R6 "/active" 운행 단일 화면이 쓰는, 배정된 라이더 본인의 진행중(ACCEPTED~PICKED_UP)
- * 주문 1건 조회 + Realtime 구독(03-frontend.md apps/rider 표: "status 분기").
+ * 활성 주문 목록에서 화면에 띄울 한 건을 고른다. selectedOrderId가 목록에 있으면 그것,
+ * 없으면(미선택·이미 종결) 가장 최근 건. 목록이 비면 null.
  */
-export function useActiveRun(riderId: string | undefined) {
+function pickRun<T extends { id: string }>(rows: T[], selectedOrderId?: string): T | null {
+  if (rows.length === 0) return null;
+  if (selectedOrderId) {
+    const hit = rows.find((r) => r.id === selectedOrderId);
+    if (hit) return hit;
+  }
+  return rows[0] ?? null;
+}
+
+/** 런 전환기용 경량 요약. 전체 런(+supplier 조회)을 N번 돌리지 않으려고 분리했다. */
+export interface ActiveRunSummary {
+  id: string;
+  status: OrderStatus;
+  pickupAddress: string;
+  createdAt: string;
+}
+
+/**
+ * 진행 중인 운행 **목록**(최대 MAX_RIDER_ACTIVE_ORDERS건). ActiveRunPage 상단 전환기가 쓴다.
+ * 완료 직후 요약 창(COMPLETED)은 useActiveRun과 달리 목록에서 제외한다 — 전환 대상이 아니다.
+ */
+export function useActiveRunSummaries(riderId: string | undefined) {
+  return useQuery({
+    queryKey: [...queryKeys.activeRun(riderId ?? ""), "summaries"],
+    enabled: Boolean(riderId),
+    queryFn: async (): Promise<ActiveRunSummary[]> => {
+      if (!riderId) return [];
+      const { data, error } = await supabase
+        .from("pickup_orders")
+        .select("id, status, pickup_address, created_at")
+        .eq("rider_id", riderId)
+        .in("status", ["ACCEPTED", "ARRIVED", "PICKED_UP", "DISPUTED"])
+        .order("created_at", { ascending: false })
+        .limit(MAX_RIDER_ACTIVE_ORDERS + 1);
+      if (error) throw error;
+      return (data ?? []).map((r) => ({
+        id: r.id as string,
+        status: r.status as OrderStatus,
+        pickupAddress: (r.pickup_address as string) ?? "",
+        createdAt: r.created_at as string,
+      }));
+    },
+  });
+}
+
+/**
+ * R4~R6 "/active" 운행 화면이 쓰는, 배정된 라이더 본인의 진행중(ACCEPTED~PICKED_UP) 주문 조회
+ * + Realtime 구독(03-frontend.md apps/rider 표: "status 분기").
+ * [다중 콜] 활성 주문이 여러 건일 수 있으므로 `selectedOrderId`로 표시 대상을 고른다.
+ */
+export function useActiveRun(riderId: string | undefined, selectedOrderId?: string) {
   const queryClient = useQueryClient();
-  const queryKey = queryKeys.activeRun(riderId ?? "");
+  const queryKey = [...queryKeys.activeRun(riderId ?? ""), selectedOrderId ?? "latest"];
 
   const query = useQuery({
     queryKey,
     enabled: Boolean(riderId),
     queryFn: async (): Promise<ActiveRun | null> => {
       if (!riderId) return null;
-      const { data, error } = await supabase
+      // [다중 콜] 활성 주문이 최대 3건이 될 수 있다. 가장 최근 것 하나만 집어오면 나머지가
+      // 화면에서 사라져 라이더가 완료 처리를 못 하고 갇힌다 — 목록으로 받아 호출부가 고른다.
+      const { data: rows, error } = await supabase
         .from("pickup_orders")
         .select(RUN_COLUMNS)
         .eq("rider_id", riderId)
         .in("status", RUN_STATUSES)
         .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .limit(MAX_RIDER_ACTIVE_ORDERS + 1);
       if (error) throw error;
+      const data = pickRun(rows ?? [], selectedOrderId);
       if (!data) return null;
       const run = mapRow(data);
       // 07 F6-④: 오래된 완료분은 활성 운행으로 취급하지 않는다(완료 직후 요약만 노출).

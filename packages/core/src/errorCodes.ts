@@ -59,6 +59,12 @@ export const INSUFFICIENT_COUPON = "INSUFFICIENT_COUPON";
 export const DEALER_LIMIT_EXCEEDED = "DEALER_LIMIT_EXCEEDED";
 
 /**
+ * 라이더가 활성 주문 상한(MAX_RIDER_ACTIVE_ORDERS)에 도달한 상태로 콜을 수락할 때. HTTP 409.
+ * 점주 측 TOO_MANY_ACTIVE와 코드를 분리한다 — 한글 문구("요청" vs "수락")와 복구 행동이 다르다.
+ */
+export const RIDER_TOO_MANY_ACTIVE = "RIDER_TOO_MANY_ACTIVE";
+
+/**
  * 30분 무수락으로 order-expire cron이 자동 취소할 때의 cancel_reason 값
  * (에러 코드가 아니라 취소 사유 코드이지만 클라이언트/관리자 UI가 공유해야 하므로 함께 정의).
  * 00-domain.md "매칭 규칙" 2.
@@ -99,6 +105,7 @@ export const ERROR_CODES = {
   INSUFFICIENT_BALANCE,
   INSUFFICIENT_COUPON,
   DEALER_LIMIT_EXCEEDED,
+  RIDER_TOO_MANY_ACTIVE,
   NO_RIDER,
   VALIDATION_ERROR,
   UNAUTHORIZED,
@@ -121,6 +128,7 @@ export const ERROR_MESSAGE_KO: Record<ErrorCode, string> = {
   INSUFFICIENT_BALANCE: "출금 가능 잔액이 부족해요.",
   INSUFFICIENT_COUPON: "이 주문은 이전 방식(수거쿠폰) 주문이라 지금은 수락할 수 없어요.",
   DEALER_LIMIT_EXCEEDED: "라이더 소속 좌상의 사용한도를 초과했어요. 현금 지급으로 다시 요청해 주세요.",
+  RIDER_TOO_MANY_ACTIVE: "진행 중인 콜이 이미 3건이에요. 하나를 완료한 뒤 받을 수 있어요.",
   NO_RIDER: "수락한 라이더가 없어 자동 취소되었어요.",
   VALIDATION_ERROR: "입력값을 확인해주세요.",
   UNAUTHORIZED: "로그인이 필요해요.",

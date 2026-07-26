@@ -14,6 +14,7 @@
 
 import { orderAcceptInputSchema } from "@oilpick/core/index.ts";
 import { AuthError, requireAuth, requireRole } from "../_shared/auth.ts";
+import { MAX_RIDER_ACTIVE_ORDERS } from "@oilpick/core/index.ts";
 import { errorResponse, okResponse, withErrorHandling } from "../_shared/response.ts";
 import { sendPush } from "../_shared/push.ts";
 
@@ -51,16 +52,18 @@ Deno.serve((req) =>
       return errorResponse("RIDER_NOT_ELIGIBLE", 403);
     }
 
-    // 진행중 주문 가드. DISPUTED 포함(07 F3b-②, idx_rider_single_active_order와 정합 —
-    // 분쟁 중 라이더가 새 콜을 수락하면 단일활성 유니크가 뒤늦게 409를 내는 간극을 여기서 선차단).
+    // 활성 주문 상한 가드(MAX_RIDER_ACTIVE_ORDERS=3). DISPUTED 포함 — 분쟁 중 건도 라이더가
+    // 붙들고 있는 작업이므로 상한에 센다(RPC 게이트와 동일 집합).
+    // 이건 **fail-fast 선차단**일 뿐이고 진짜 방어는 RPC의 advisory lock + 카운트 체크다
+    // (동시 수락은 여기서 둘 다 통과할 수 있다). 상한 초과는 RPC가 RIDER_TOO_MANY_ACTIVE를 raise.
     const { count: activeCount, error: activeErr } = await admin
       .from("pickup_orders")
       .select("id", { count: "exact", head: true })
       .eq("rider_id", uid)
       .in("status", ["ACCEPTED", "ARRIVED", "PICKED_UP", "DISPUTED"]);
     if (activeErr) throw activeErr;
-    if ((activeCount ?? 0) > 0) {
-      return errorResponse("RIDER_NOT_ELIGIBLE", 403);
+    if ((activeCount ?? 0) >= MAX_RIDER_ACTIVE_ORDERS) {
+      return errorResponse("RIDER_TOO_MANY_ACTIVE", 409);
     }
 
     // 동시성 보장(선착순 조건부 UPDATE)은 fn_transition_order 내부(ACCEPT 액션)에 이미 구현됨.
@@ -104,6 +107,8 @@ function mapTransitionError(rpcErr: { message?: string }): Response {
   if (message.includes("INSUFFICIENT_COUPON")) return errorResponse("INSUFFICIENT_COUPON", 409);
   // [07 F11] fn_transition_order ACCEPT 게이트(SUSPENDED/미승인) — Edge 사전 가드가 통상 먼저 잡지만
   // RPC까지 온 경우(방어선)도 403으로 매핑.
+  // RPC의 상한 게이트(advisory lock + 카운트). 동시 수락에서 Edge 선차단을 통과한 건이 여기 걸린다.
+  if (message.includes("RIDER_TOO_MANY_ACTIVE")) return errorResponse("RIDER_TOO_MANY_ACTIVE", 409);
   if (message.includes("RIDER_NOT_ELIGIBLE")) return errorResponse("RIDER_NOT_ELIGIBLE", 403);
   if (message.includes("NOT_FOUND")) return errorResponse("NOT_FOUND", 404);
   if (message.includes("INVALID_TRANSITION")) return errorResponse("INVALID_TRANSITION", 409);

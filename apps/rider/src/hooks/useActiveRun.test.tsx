@@ -14,8 +14,10 @@ vi.mock("../lib/supabaseClient", () => ({
 }));
 
 /**
- * 테이블별 체인 목: pickup_orders(select→eq→in→order→limit→maybeSingle) +
- * profiles(select→eq→maybeSingle — E8-④ supplier 전화 2쿼리).
+ * 테이블별 체인 목: pickup_orders(select→eq→in→order→limit) + profiles(select→eq→maybeSingle
+ * — E8-④ supplier 전화 2쿼리).
+ * [다중 콜] 활성 주문이 최대 3건이라 pickup_orders 체인은 maybeSingle이 아니라 limit에서
+ * **행 배열**을 돌려준다. 훅이 그중 표시 대상 한 건을 고른다(pickRun).
  */
 function mockRow(
   row: unknown,
@@ -37,7 +39,7 @@ function mockRow(
         eq: () => ({
           in: () => ({
             order: () => ({
-              limit: () => ({ maybeSingle: () => Promise.resolve({ data: row, error: null }) }),
+              limit: () => Promise.resolve({ data: row === null ? [] : [row], error: null }),
             }),
           }),
         }),

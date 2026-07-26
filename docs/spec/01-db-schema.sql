@@ -750,8 +750,12 @@ create policy p_profiles_read_my_dealer on profiles for select using (id = (sele
 -- 회귀 가드: 03_privilege_guards_test.sql이 fn_% 전수를 훑어 위반 함수명을 진단에 노출한다.
 alter default privileges in schema public revoke execute on functions from anon, authenticated;
 
--- 라이더당 활성 주문 1건 불변식: 동시 이중수락(TOCTOU)을 DB 유니크 제약으로 차단.
-create unique index idx_rider_single_active_order on pickup_orders (rider_id)
+-- [다중 콜, 20260726000001] 라이더당 활성 주문 1건 → **최대 3건**(MAX_RIDER_ACTIVE_ORDERS).
+-- 거리·동선을 묶어 여러 콜을 받을 수 있어야 한다는 요구(CEO 2026-07-26). "N건 이하"는 유니크
+-- 인덱스로 표현할 수 없으므로 유니크를 걷어내고, TOCTOU 방어를 fn_transition_order ACCEPT의
+-- advisory lock(`rider_active:{riderId}`) + 카운트 체크로 이관했다. 인덱스는 카운트 조회용으로만 남는다.
+-- (구: create unique index idx_rider_single_active_order ...)
+create index idx_rider_active_orders on pickup_orders (rider_id)
   where status in ('ACCEPTED','ARRIVED','PICKED_UP','DISPUTED');
 
 -- ===== [14 J4] 상계 소비처 정리 + 수수료 오버플로 (20260724000011) =====

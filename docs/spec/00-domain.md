@@ -31,7 +31,7 @@
 | 전이 | 트리거(actor) | 가드 조건 | 부수효과 |
 |---|---|---|---|
 | (생성)→REQUESTED | supplier | 진행중 주문 3건 미만 | 시세 스냅샷 저장(절대 규칙 5), 매칭 브로드캐스트 시작. **coupon_cost 스냅샷 중지(항상 null — 08 P1)** |
-| REQUESTED→ACCEPTED | rider | 라이더 verified(`APPROVED`) & online & 진행중 주문 없음. **선착순 1명**(조건부 `UPDATE ... WHERE status='REQUESTED'` 락). **쿠폰 가드 소멸(08 P1)** — 잔존 쿠폰 주문(coupon_cost not null)만 레거시 CONSUME 분기 통과 | supplier 푸시 "라이더 배정" |
+| REQUESTED→ACCEPTED | rider | 라이더 verified(`APPROVED`) & online & 활성 주문 3건 미만(MAX_RIDER_ACTIVE_ORDERS). **선착순 1명**(조건부 `UPDATE ... WHERE status='REQUESTED'` 락). **쿠폰 가드 소멸(08 P1)** — 잔존 쿠폰 주문(coupon_cost not null)만 레거시 CONSUME 분기 통과 | supplier 푸시 "라이더 배정" |
 | ACCEPTED→ARRIVED | rider(배정 본인) | — | supplier 푸시 "도착" |
 | ARRIVED (SUBMIT_MEASURE) | rider(배정 본인) | 계량값(kg) + 현장 사진 ≥1장 + **지급수단(`payoutMethod: 'CASH'\|'POINT'`) 필수(08 P2)**. 중재 완료(final_kg not null) 주문 재제출 불가 | measured_kg/photo_urls/**payout_method** 저장(상태 유지 ARRIVED). 앱 표시: CASH "지급할 현금 = kg×스냅샷시세" / POINT "적립될 포인트". supplier 푸시(수단별 카피, §알림). 재제출로 수단 변경 가능(final_kg 고정 전) |
 | ARRIVED→COMPLETED | supplier 본인 (CONFIRM_MEASURE) | 계량 제출됨 | **"무게 확인 + 지급 확인"(2자 확인)**. `final_kg` 확정, `cash_paid_amount = round(final_kg × snapshot_price_per_kg)`, `completed_at = now()`. **`payout_method='POINT'`면 같은 트랜잭션에서 `fn_post_ledger(supplier,'EARN',금액,order_id)` 발행(08 P3)** — null은 CASH 간주(coalesce). rider 푸시(수단별), POINT면 supplier 적립 푸시 |
@@ -61,7 +61,7 @@
 | DELIVERED→COMPLETED | 시스템 | DELIVERED 즉시 자동 | — |
 
 ## 매칭 규칙
-1. REQUESTED 시 매장 위치 반경 **3km** 내 `online & verified & 진행중 주문 없음` 라이더 전원에게 푸시.
+1. REQUESTED 시 매장 위치 반경 **3km** 내 `online & verified & 활성 주문 3건 미만(MAX_RIDER_ACTIVE_ORDERS)` 라이더 전원에게 푸시.
 2. 5분 무수락 → 반경 **7km** 재브로드캐스트. 다시 5분 → **15km**. 30분 무수락 → 자동 CANCELLED
    (사유: `NO_RIDER`) + supplier에게 안내 푸시 + admin 알림.
 3. 수락은 선착순. 두 번째 이후 수락 시도는 409 `ALREADY_ACCEPTED`.
