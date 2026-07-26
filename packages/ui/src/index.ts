@@ -33,4 +33,8 @@ export * from "./components/DriverCard";
 export * from "./components/InfoStatCard";
 export * from "./components/LedgerList";
 export * from "./components/Mascot";
-export * from "./components/BrandMark";
+// [14 §브랜드] 폐유 심볼/붓글씨 워드마크/락업 + 모바일 고정 프레임. 구 BrandMark는 PayouSymbol/Lockup으로 대체.
+export * from "./components/PayouSymbol";
+export * from "./components/PayouWordmark";
+export * from "./components/PayouLockup";
+export * from "./components/MobileFrame";

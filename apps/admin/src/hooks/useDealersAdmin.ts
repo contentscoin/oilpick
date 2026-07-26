@@ -1,5 +1,13 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { DealerAssignOutput, DealerCreateInput, DealerCreateOutput } from "@oilpick/core";
+import type {
+  DealerAccountSetInput,
+  DealerAssignOutput,
+  DealerClaimInput,
+  DealerCreateInput,
+  DealerCreateOutput,
+  DealerSettlement,
+  DealerStatement,
+} from "@oilpick/core";
 import { supabase } from "../lib/supabaseClient";
 import { invokeEdgeFunction } from "../lib/edgeFunction";
 import { fetchDisplayNameMap } from "../lib/adminQueries";
@@ -91,4 +99,59 @@ export function useDealerMutations() {
   }
 
   return { createDealer, assignRider };
+}
+
+// ===== 14 J3 좌상 정산 =====
+
+/** v_dealer_statement — admin은 전체, dealer는 본인 1행(RLS). usage 큰 순. */
+export function useDealerStatements() {
+  return useQuery({
+    queryKey: ["admin", "dealerStatements"],
+    queryFn: async (): Promise<DealerStatement[]> => {
+      const { data, error } = await supabase
+        .from("v_dealer_statement")
+        .select("*")
+        .order("usage", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as DealerStatement[];
+    },
+  });
+}
+
+/** dealer_settlements — 청구 이력(최신순). admin 전체, dealer 본인(RLS). */
+export function useDealerSettlements() {
+  return useQuery({
+    queryKey: ["admin", "dealerSettlements"],
+    queryFn: async (): Promise<DealerSettlement[]> => {
+      const { data, error } = await supabase
+        .from("dealer_settlements")
+        .select("*")
+        .order("claimed_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as DealerSettlement[];
+    },
+  });
+}
+
+export function useDealerSettlementMutations() {
+  const queryClient = useQueryClient();
+
+  function invalidate() {
+    queryClient.invalidateQueries({ queryKey: ["admin", "dealerStatements"] });
+    queryClient.invalidateQueries({ queryKey: ["admin", "dealerSettlements"] });
+  }
+
+  async function setDealerAccount(input: DealerAccountSetInput) {
+    const result = await invokeEdgeFunction("dealer-account-set", { ...input });
+    if (result.ok) invalidate();
+    return result;
+  }
+
+  async function dealerClaim(input: DealerClaimInput) {
+    const result = await invokeEdgeFunction("dealer-claim", { ...input });
+    if (result.ok) invalidate();
+    return result;
+  }
+
+  return { setDealerAccount, dealerClaim };
 }

@@ -1,12 +1,29 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { BigButton, ConfirmSheet, DriverCard, ErrorScreen, InfoStatCard, MapView, OrderTimeline, PageHeader, PayoutMethodChip, StatusHeadline, colors, elevation, gradient, gray, radius, surface, touchTarget, useToast } from "@oilpick/ui";
-import { estimateCash, formatKg, formatKrw, formatPoint, formatTimeOfDay, type OrderStatus } from "@oilpick/core";
+import { estimateCash, formatEta, formatKg, formatKrw, formatPoint, formatTimeOfDay, type OrderStatus } from "@oilpick/core";
 import { MAP_STYLE_URL } from "../lib/env";
 import { invokeEdgeFunction } from "../lib/edgeFunction";
 import { useOrder } from "../hooks/useOrder";
 import { useAssignedRiderCard } from "../hooks/useAssignedRiderCard";
+import { useRiderLocation } from "../hooks/useRiderLocation";
+import { useDirections } from "../hooks/useDirections";
 import { useSession } from "../hooks/useSession";
+
+/**
+ * [14 J4] 상계 결제 실패(CONFIRM_MEASURE)의 맥락 카피. 공용 ERROR_MESSAGE_KO는
+ * INSUFFICIENT_BALANCE를 출금 맥락("출금 가능 잔액이 부족해요")으로 정의하고 있어 이 화면에선
+ * 원인도 다음 행동도 알 수 없다. 두 실패 모두 복구 경로는 "라이더가 현금 지급으로 재제출"이다(14 §3).
+ */
+function settlementFailureMessage(code: string | undefined): string | null {
+  if (code === "INSUFFICIENT_BALANCE") {
+    return "포인트 잔액이 부족해요 — 라이더에게 현금 지급으로 다시 제출해 달라고 요청해 주세요.";
+  }
+  if (code === "DEALER_LIMIT_EXCEEDED") {
+    return "지금은 포인트로 지급할 수 없어요 — 라이더에게 현금 지급으로 다시 제출해 달라고 요청해 주세요.";
+  }
+  return null;
+}
 import { useUnreadCount } from "../hooks/useUnreadCount";
 
 /**
@@ -27,6 +44,19 @@ export function OrderDetailPage() {
   const navigate = useNavigate();
   const { data: order, isLoading } = useOrder(id);
   const { data: rider } = useAssignedRiderCard(order?.riderId);
+  // [14 J1] 라이더가 이동 중(ACCEPTED/ARRIVED)일 때만 실시간 위치를 구독한다(그 외엔 null).
+  const riderLoc = useRiderLocation(id, order?.status === "ACCEPTED" || order?.status === "ARRIVED");
+  // [11 M9-b] 라이더 실좌표가 잡히고 수거지 좌표가 있을 때만 도로 경로·ETA를 조회한다.
+  // 라이더가 이미 도착(ARRIVED)했으면 경로 안내는 의미가 없어 ACCEPTED에서만 활성.
+  const pickupPoint =
+    order?.pickupLat != null && order?.pickupLng != null
+      ? { lat: order.pickupLat, lng: order.pickupLng }
+      : null;
+  const { data: directions } = useDirections(
+    riderLoc ? { lat: riderLoc.lat, lng: riderLoc.lng } : null,
+    pickupPoint,
+    order?.status === "ACCEPTED" && !riderLoc?.stale,
+  );
   const { session } = useSession();
   // 06 E7: 헤더 벨 미읽음 배지 — 홈과 동일한 useUnreadCount로 공통화.
   const unread = useUnreadCount(session?.user.id);
@@ -104,7 +134,9 @@ export function OrderDetailPage() {
         { variant: "success" },
       );
     } else {
-      showToast(result.message, { variant: "error" });
+      // [14 J4] 상계 결제 실패 2종은 "현금으로 재제출"이 복구 경로다. 공용 코드 메시지는
+      // 출금 맥락 문구라 여기서 맥락 카피로 덮어쓴다(그대로 두면 원인도 다음 행동도 알 수 없다).
+      showToast(settlementFailureMessage(result.code) ?? result.message, { variant: "error" });
     }
   }
 
@@ -134,7 +166,15 @@ export function OrderDetailPage() {
     order.status === "ARRIVED" && (order.measuredKg != null || order.finalKg != null);
   // 확인·완료 계산 기준 kg = 중재 확정(finalKg) 우선, 없으면 계량 제출(measuredKg).
   const confirmKg = order.finalKg ?? order.measuredKg ?? 0;
-  const confirmCash = Math.round(confirmKg * order.snapshotPricePerKg);
+  // [14 J2] 폐유 총액. 상계 주문에서는 이 값이 곧 받을 돈이 아니다 — 신유 대금을 뺀 confirmNet이 실제.
+  const confirmWaste = Math.round(confirmKg * order.snapshotPricePerKg);
+  // 확인 화면에 띄울 신유 대금. 라이더가 SUBMIT_MEASURE에서 실제 배달한 통수 기준(신청 통수 아님).
+  const confirmPurchase = (order.deliveredCans ?? 0) * (order.snapshotFreshCanPrice ?? 0);
+  // [14 J4] 확정 전 = 계산값, 완료 후 = 서버가 확정한 netAmount(레거시 null은 cashPaidAmount 폴백).
+  // cash_paid_amount는 폐유 총액으로 **동결**돼 있어 그대로 쓰면 금액도 부호도 틀린다.
+  const confirmNet = confirmWaste - confirmPurchase;
+  const settledNet = order.netAmount ?? order.cashPaidAmount ?? 0;
+  const hasPurchase = order.orderKind === "PURCHASE" || order.orderKind === "MIXED";
   // 08 P2/P3: 지급수단 — 계량 제출이 기록한 payout_method. null(레거시·전환기)은 CASH 간주(coalesce).
   const payoutMethod = order.payoutMethod ?? "CASH";
   const isPointPayout = payoutMethod === "POINT";
@@ -165,13 +205,16 @@ export function OrderDetailPage() {
       ? `${rider.displayName} 라이더가 매장으로 이동 중이에요`
       : undefined;
 
-  // 타임라인 각 스텝의 실제 시각. 스키마에 arrived_at/completed_at 컬럼이 없어(01-db-schema.sql)
-  // ARRIVED/COMPLETED 노드는 값이 없으면 OrderTimeline이 "-"로 렌더한다(데이터 조작 금지).
+  // 타임라인 각 스텝의 실제 시각. [14 J1] arrived_at 컬럼이 생겨 ARRIVED 노드가 '-'를 벗어난다.
+  // COMPLETED는 신규 주문 completed_at 우선, 레거시(구경로)는 delivered_at 폴백. 값이 없으면
+  // OrderTimeline이 "-"로 렌더한다(데이터 조작 금지).
   const timelineTimestamps: Partial<Record<OrderStatus, string>> = {};
   if (order.createdAt) timelineTimestamps.REQUESTED = formatTimeOfDay(order.createdAt);
   if (order.acceptedAt) timelineTimestamps.ACCEPTED = formatTimeOfDay(order.acceptedAt);
+  if (order.arrivedAt) timelineTimestamps.ARRIVED = formatTimeOfDay(order.arrivedAt);
   if (order.pickedUpAt) timelineTimestamps.PICKED_UP = formatTimeOfDay(order.pickedUpAt);
-  if (order.deliveredAt) timelineTimestamps.COMPLETED = formatTimeOfDay(order.deliveredAt);
+  const completedTs = order.completedAt ?? order.deliveredAt;
+  if (completedTs) timelineTimestamps.COMPLETED = formatTimeOfDay(completedTs);
 
   return (
     <main style={{ display: "flex", flexDirection: "column", gap: 20, padding: 20, maxWidth: 480, margin: "0 auto" }}>
@@ -256,8 +299,9 @@ export function OrderDetailPage() {
 
       {/* 지도 → 라이더 카드 → 정보 스탯 카드 → 타임라인.
           12 S3: 지도 센터는 주문의 실제 수거지 좌표(pickup_location 파싱)를 쓴다. 좌표가 없으면
-          서울 기본 센터로 프리뷰. 데모 ETA("12분 후 도착")는 제거했다 — 실 rider-location 기반
-          ETA(11 M9-b)가 붙기 전까지 가짜 시간을 표기하지 않는다(00-domain 원칙). */}
+          서울 기본 센터로 프리뷰. [11 M9-b] 데모 ETA는 제거됐고, 지금 표시되는 ETA는 라이더 실좌표
+          (broadcast) → directions Edge(카카오모빌리티)의 실 라우팅 값이다. 키 미설정이면 Edge가
+          configured:false를 주므로 선·ETA가 자연히 미표시된다(00-domain "가짜 시간 표기 금지" 준수). */}
       {showMapAndTimeline && (
         <MapView
           styleUrl={MAP_STYLE_URL}
@@ -271,6 +315,9 @@ export function OrderDetailPage() {
               ? [{ lat: order.pickupLat, lng: order.pickupLng }]
               : []
           }
+          riderMarker={riderLoc ? { lat: riderLoc.lat, lng: riderLoc.lng, stale: riderLoc.stale } : null}
+          routePath={directions?.path ?? []}
+          etaLabel={formatEta(directions?.durationSeconds) ?? undefined}
           pickupLabel={order.pickupAddress}
           style={{ minHeight: 220 }}
         />
@@ -309,9 +356,13 @@ export function OrderDetailPage() {
           </h2>
           {isArbitrated && (
             <p data-testid="arbitration-notice" style={{ margin: 0, fontSize: 14, color: colors.status.wait }}>
-              {isPointPayout
-                ? `중재 확정 무게 ${formatKg(confirmKg)} — 확인하시면 포인트 ${formatPoint(confirmCash)}가 적립돼요.`
-                : `중재 확정 무게 ${formatKg(confirmKg)} — 라이더에게 현금 ${formatKrw(confirmCash)}을 받고 확인해 주세요.`}
+              {confirmNet < 0
+                ? `중재 확정 무게 ${formatKg(confirmKg)} — 새 기름 대금 ${isPointPayout ? `포인트 ${formatPoint(-confirmNet)}` : `현금 ${formatKrw(-confirmNet)}`}을 지불하고 확인해 주세요.`
+                : confirmNet === 0
+                  ? `중재 확정 무게 ${formatKg(confirmKg)} — 폐유 금액과 새 기름 대금이 같아 주고받을 금액이 없어요.`
+                  : isPointPayout
+                    ? `중재 확정 무게 ${formatKg(confirmKg)} — 확인하시면 포인트 ${formatPoint(confirmNet)}가 적립돼요.`
+                    : `중재 확정 무게 ${formatKg(confirmKg)} — 라이더에게 현금 ${formatKrw(confirmNet)}을 받고 확인해 주세요.`}
             </p>
           )}
           {order.photoUrls.length > 0 && (
@@ -333,30 +384,60 @@ export function OrderDetailPage() {
                 {formatKg(confirmKg)}
               </span>
             </div>
+            {/* [14 J2] 상계 내역 — 구매 동반 주문만. 폐유 총액과 신유 대금을 나눠 보여야
+                아래 "차액"이 왜 그 금액인지 점주가 확인할 수 있다. */}
+            {hasPurchase && (
+              <>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ fontSize: 14, color: colors.status.wait }}>폐유 금액</span>
+                  <span data-testid="netting-waste-amount" className="oilpick-tabular-nums" style={{ fontSize: 14, fontWeight: 600 }}>
+                    {formatKrw(confirmWaste)}
+                  </span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ fontSize: 14, color: colors.status.wait }}>
+                    새 기름 {order.deliveredCans ?? 0}통
+                  </span>
+                  <span data-testid="netting-purchase-amount" className="oilpick-tabular-nums" style={{ fontSize: 14, fontWeight: 600 }}>
+                    −{formatKrw(confirmPurchase)}
+                  </span>
+                </div>
+                <div style={{ height: 1, backgroundColor: surface.border }} />
+              </>
+            )}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 14, color: colors.status.wait }}>
-                {isPointPayout ? "적립될 포인트" : "받을 현금"}
+                {confirmNet < 0 ? "지불할 금액" : confirmNet === 0 ? "주고받을 금액" : isPointPayout ? "적립될 포인트" : "받을 현금"}
                 <PayoutMethodChip method={payoutMethod} />
               </span>
               <span
                 data-testid="measure-cash-amount"
                 className="oilpick-tabular-nums"
-                style={{ fontSize: 18, fontWeight: 700, color: isPointPayout ? colors.accent.deep : colors.primary.dark }}
+                style={{ fontSize: 18, fontWeight: 700, color: confirmNet < 0 ? colors.status.wait : isPointPayout ? colors.accent.deep : colors.primary.dark }}
               >
-                {isPointPayout ? formatPoint(confirmCash) : formatKrw(confirmCash)}
+                {isPointPayout ? formatPoint(Math.abs(confirmNet)) : formatKrw(Math.abs(confirmNet))}
               </span>
             </div>
           </div>
           {/* 08 G5-③: CONFIRM = "무게 확인 + 지급 확인" 2자 확인 — 수단별 카피 분기.
               POINT는 CONFIRM과 원자적으로 EARN이 발행된다(서버, 08 P3). */}
           <BigButton data-testid="confirm-measure-button" loading={confirming} onClick={handleConfirmMeasure}>
-            {isPointPayout
-              ? `무게 ${formatKg(confirmKg)} 확인 · 포인트 ${formatPoint(confirmCash)} 적립받기`
-              : `무게 ${formatKg(confirmKg)} 확인 · 현금 ${formatKrw(confirmCash)} 받았어요`}
+            {confirmNet < 0
+              ? `무게 ${formatKg(confirmKg)} 확인 · ${isPointPayout ? `포인트 ${formatPoint(-confirmNet)}` : `현금 ${formatKrw(-confirmNet)}`} 결제하기`
+              : confirmNet === 0
+                ? `무게 ${formatKg(confirmKg)} 확인 · 거래 완료하기`
+                : isPointPayout
+                  ? `무게 ${formatKg(confirmKg)} 확인 · 포인트 ${formatPoint(confirmNet)} 적립받기`
+                  : `무게 ${formatKg(confirmKg)} 확인 · 현금 ${formatKrw(confirmNet)} 받았어요`}
           </BigButton>
-          {isPointPayout && (
+          {isPointPayout && confirmNet > 0 && (
             <p data-testid="point-confirm-caption" style={{ margin: 0, fontSize: 13, color: colors.status.wait, textAlign: "center" }}>
               확인하시면 포인트가 즉시 적립되고 지갑에서 출금 신청할 수 있어요.
+            </p>
+          )}
+          {isPointPayout && confirmNet < 0 && (
+            <p data-testid="point-charge-caption" style={{ margin: 0, fontSize: 13, color: colors.status.wait, textAlign: "center" }}>
+              확인하시면 새 기름 대금이 보유 포인트에서 즉시 차감돼요.
             </p>
           )}
           {!isArbitrated && (
@@ -426,15 +507,32 @@ export function OrderDetailPage() {
           }}
         >
           <p style={{ margin: 0, fontSize: 15, fontWeight: 600, color: "rgba(255,255,255,0.75)" }}>
-            {isPointPayout ? "적립된 포인트" : "받은 현금"}
+            {settledNet < 0
+              ? isPointPayout
+                ? "차감된 포인트"
+                : "지불한 현금"
+              : settledNet === 0
+                ? "거래 완료"
+                : isPointPayout
+                  ? "적립된 포인트"
+                  : "받은 현금"}
           </p>
           <p
             data-testid="completed-cash-amount"
             className="oilpick-tabular-nums"
             style={{ margin: 0, fontSize: 40, fontWeight: 800, letterSpacing: "-0.02em", color: "#FFFFFF" }}
           >
-            {isPointPayout ? formatPoint(order.cashPaidAmount ?? 0) : formatKrw(order.cashPaidAmount ?? 0)}
+            {isPointPayout ? formatPoint(Math.abs(settledNet)) : formatKrw(Math.abs(settledNet))}
           </p>
+          {/* [14 J2] 상계 주문은 폐유 총액도 함께 보여 준다 — 히어로 숫자만으로는 왜 그 금액인지 알 수 없다. */}
+          {hasPurchase && (
+            <p
+              data-testid="completed-netting-breakdown"
+              style={{ margin: 0, fontSize: 13, color: "rgba(255,255,255,0.8)" }}
+            >
+              폐유 {formatKrw(order.cashPaidAmount ?? 0)} − 새 기름 {formatKrw(order.purchaseAmount ?? 0)}
+            </p>
+          )}
           {isPointPayout && (
             <Link
               to="/wallet"

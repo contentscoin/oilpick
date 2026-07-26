@@ -27,6 +27,7 @@ const POINT_ENTRY_LABEL: Record<string, string> = {
   WITHDRAW_CANCEL: "출금 반려 복구",
   ADJUST: "관리자 조정",
   PURCHASE: "쇼핑몰 결제",
+  TRADE_PURCHASE: "새 기름 결제(차감)",
 };
 
 /**

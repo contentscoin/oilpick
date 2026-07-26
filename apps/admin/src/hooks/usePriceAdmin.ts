@@ -52,3 +52,51 @@ export function usePriceHistory(limit = 30) {
 
   return query;
 }
+
+/** [14 J2] 신유(새 식용유) 고시가 tick 행. price_per_can = 18L 1통 판매가(원). */
+export interface FreshOilPriceTickRow {
+  id: number;
+  pricePerCan: number;
+  effectiveAt: string;
+}
+
+/** [14 J2] 신유 고시가 이력(최신순) + Realtime. price_ticks 이력 훅과 동일 패턴. */
+export function useFreshOilPriceHistory(limit = 30) {
+  const queryClient = useQueryClient();
+
+  const query = useQuery({
+    queryKey: ["admin", "freshOilPrice", limit],
+    queryFn: async (): Promise<FreshOilPriceTickRow[]> => {
+      const { data, error } = await supabase
+        .from("fresh_oil_price_ticks")
+        .select("id, price_per_can, effective_at")
+        .order("effective_at", { ascending: false })
+        .limit(limit);
+      if (error) throw error;
+      return (data ?? []).map((row) => ({
+        id: row.id,
+        pricePerCan: row.price_per_can,
+        effectiveAt: row.effective_at,
+      }));
+    },
+  });
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("admin_fresh_oil_price_ticks")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "fresh_oil_price_ticks" },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["admin", "freshOilPrice"] });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
+
+  return query;
+}

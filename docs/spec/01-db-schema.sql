@@ -9,7 +9,9 @@ create type order_status as enum ('REQUESTED','ACCEPTED','ARRIVED','PICKED_UP','
 -- [08 P3·P4] 포인트 복권 — 현역: EARN(POINT 지급수단 적립)/WITHDRAW_REQUEST/WITHDRAW_CANCEL/ADJUST.
 -- [09 H5] REFERRAL(추천 활성화 시 점주 보너스, +부호·출금 가능) 추가(실 DDL: 20260715000003 alter type add value).
 -- 레거시 전용(신규 발행 없음): HOLD/RELEASE(구모델 수거비), PURCHASE(미래 예약).
-create type ledger_type as enum ('EARN','HOLD','RELEASE','WITHDRAW_REQUEST','WITHDRAW_CANCEL','ADJUST','PURCHASE','REFERRAL');
+create type ledger_type as enum ('EARN','HOLD','RELEASE','WITHDRAW_REQUEST','WITHDRAW_CANCEL','ADJUST','PURCHASE','REFERRAL','TRADE_PURCHASE'); -- [14 J2] TRADE_PURCHASE=신유 대금 포인트 차감(음수). PURCHASE(쇼핑몰 결제)와 별개
+create type order_kind as enum ('PICKUP','PURCHASE','MIXED'); -- [14 J2] 주문 종류. null=레거시=PICKUP
+create type dealer_settlement_status as enum ('CLAIMED','SETTLED','VOID'); -- [14 J3] 좌상 정산 청구 상태
 -- [09 H2] 라이더 추천 상태(SIGNED_UP=가입, ACTIVATED=첫 수거 완료·보너스 발행, CANCELLED)
 create type referral_status as enum ('SIGNED_UP','ACTIVATED','CANCELLED');
 -- [07 F2] SUSPENDED 추가(실 마이그레이션은 별도 파일의 alter type add value — 사용 트랜잭션과 분리. 액션·정책은 07 F11)
@@ -104,19 +106,76 @@ create table pickup_orders (
   measured_kg numeric(8,1),                 -- 라이더 계량
   final_kg numeric(8,1),                    -- 확정(중재 반영) — 지급액/EARN 계산 기준
   supplier_point int,                       -- 레거시(구모델) — 지급된 EARN
-  payout_method payout_method,              -- [08 P2] 현장 지급수단('CASH'|'POINT'). SUBMIT_MEASURE에서 라이더 선택. null=레거시(완료 시 CASH 간주)
-  cash_paid_amount int,                     -- [08 P3] 확정 지급액 = round(final_kg × snapshot_price_per_kg). POINT 지급도 이 컬럼(1P=1원). COMPLETED 시 기록
+  payout_method payout_method,              -- [08 P2] 현장 지급수단('CASH'|'POINT'). SUBMIT_MEASURE에서 라이더 선택. null=레거시(완료 시 CASH 간주). [14 J2] 상계 후 NET 잔액의 정산 수단(양방향)으로 의미 확장
+  cash_paid_amount int,                     -- [08 P3] 확정 지급액. [14 J2] 의미 동결 = 폐유 총액 round(final_kg × snapshot_price_per_kg). 상계 결과는 net_amount에. COMPLETED 시 기록
+  -- [14 J2] 신유 구매·현장 상계(fresh_oil). order_kind null=레거시=PICKUP.
+  order_kind order_kind,                     -- 주문 종류(PICKUP/PURCHASE/MIXED). null=레거시=PICKUP
+  purchase_requested_cans int,               -- 신청 신유 통수(1..50). snapshot_fresh_can_price와 동반(CHECK)
+  snapshot_fresh_can_price int,              -- 신청 시점 신유 통당가 스냅샷(원). 이후 시세 변동 무영향
+  delivered_cans int,                        -- 현장 실배달 통수(0..50). SUBMIT_MEASURE에서 기록
+  purchase_amount int,                       -- 신유 대금 = delivered_cans × snapshot_fresh_can_price(정수곱). COMPLETED 시 기록
+  net_amount int,                            -- 상계 순액 = cash_paid_amount − purchase_amount(음수=점주 지불). COMPLETED 시 기록
+  dealer_id uuid references profiles(id),    -- [14 J3] ACCEPT 시 rider 소속 좌상 스냅샷(시점 고정). null=본사 직속. 트리거 trg_snapshot_dealer_on_accept
+  dealer_settlement_id uuid,                 -- [14 J3] 정산 청구 귀속(dealer_settlements.id). null=미정산. FK는 20260724000006에서
   photo_urls text[] not null default '{}',
   cancel_reason text,
   dispute_reason text,
   broadcast_radius_km int not null default 3,
   created_at timestamptz not null default now(),
-  accepted_at timestamptz, picked_up_at timestamptz, delivered_at timestamptz,
-  completed_at timestamptz                  -- [07 F2] 완료 시각. 레거시 완료 시각 조회는 coalesce(completed_at, delivered_at, picked_up_at)
+  accepted_at timestamptz, arrived_at timestamptz,  -- [14 J1] arrived_at: ARRIVE 전이 시각(타임라인 표기)
+  picked_up_at timestamptz, delivered_at timestamptz,
+  completed_at timestamptz,                 -- [07 F2] 완료 시각. 레거시 완료 시각 조회는 coalesce(completed_at, delivered_at, picked_up_at)
+  -- [14 J2] 신유 구매·상계 제약: 신청 통수↔신유가 스냅샷 동반, 범위 가드.
+  constraint chk_purchase_snapshot_paired check ((purchase_requested_cans is null) = (snapshot_fresh_can_price is null)),
+  constraint chk_purchase_requested_cans_range check (purchase_requested_cans is null or (purchase_requested_cans between 1 and 50)),
+  constraint chk_snapshot_fresh_can_price_pos check (snapshot_fresh_can_price is null or snapshot_fresh_can_price > 0),
+  constraint chk_delivered_cans_range check (delivered_cans is null or (delivered_cans between 0 and 50))
 );
 create index idx_orders_status on pickup_orders (status, created_at desc);
 create index idx_orders_supplier on pickup_orders (supplier_id, created_at desc);
 create index idx_orders_rider on pickup_orders (rider_id, created_at desc);
+
+-- ===== 신유(새 식용유) 고시가 tick [14 J2] =====
+-- price_ticks 패턴 미러: 전체 read / admin insert / 정정불가(신규 tick만). 단일 SKU(18L 1종).
+-- price_per_can = 18L 1통 판매가(원). 신청 시 pickup_orders.snapshot_fresh_can_price로 스냅샷.
+create table fresh_oil_price_ticks (
+  id bigint generated always as identity primary key,
+  price_per_can int not null check (price_per_can > 0),
+  effective_at timestamptz not null default now(),
+  created_by uuid not null references profiles(id)
+);
+create index idx_fresh_oil_price_ticks_effective on fresh_oil_price_ticks (effective_at desc);
+-- RLS: read all(using true) / insert admin(is_admin()). Realtime publication 추가. 20260724000003_fresh_oil.sql.
+
+-- ===== 좌상 정산 체인 [14 J3] (20260724000006/7) =====
+-- 좌상 크레딧 = 보증금 담보 B2B 외상채권(선불수단 아님). credit_limit 계약별 수기, fee_rate_bp 초기 0.
+create table dealer_accounts (
+  dealer_id uuid primary key references profiles(id),
+  deposit_amount int not null default 0 check (deposit_amount >= 0),  -- 보증금(원)
+  credit_limit int not null default 0 check (credit_limit >= 0),      -- 사용한도(P)
+  claim_threshold int not null default 5000000 check (claim_threshold > 0), -- 자동청구 배지 임계(P)
+  fee_rate_bp int not null default 0 check (fee_rate_bp between 0 and 10000), -- 요율(bp)
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles(id)
+);
+-- RLS: read=본인+admin. 쓰기=service_role RPC(fn_set_dealer_account)만.
+
+-- 정산 청구(원장). 주문 귀속=pickup_orders.dealer_settlement_id 스탬핑(날짜범위 아님).
+create table dealer_settlements (
+  id uuid primary key default gen_random_uuid(),
+  dealer_id uuid not null references profiles(id),
+  status dealer_settlement_status not null default 'CLAIMED',
+  point_minted int not null default 0,   -- Σ(net>0, POINT) 점주 수령=회사→좌상 청구
+  point_spent int not null default 0,    -- Σ(-net for net<0, POINT) 점주 지불=청구 상쇄
+  fee_amount int not null default 0,     -- round(Σcash_paid_amount × fee_rate_bp / 10000)
+  net_due int not null default 0,        -- point_minted − point_spent + fee_amount(음수=회사→좌상 지급)
+  period_start timestamptz, period_end timestamptz,
+  claimed_at timestamptz not null default now(), claimed_by uuid references profiles(id),
+  settled_at timestamptz, settled_by uuid references profiles(id),
+  voided_at timestamptz, voided_by uuid references profiles(id)
+);
+-- RLS: read=본인+admin. 쓰기=service_role RPC(fn_create/settle/void_dealer_claim)만.
+-- 뷰: v_dealer_statement(usage/limit/headroom/over_threshold), v_dealer_settlement_orders(청구 상세/CSV).
 
 create table order_events (
   id bigint generated always as identity primary key,
@@ -128,6 +187,26 @@ create table order_events (
   created_at timestamptz not null default now()
 );
 create index idx_order_events_order on order_events (order_id, created_at);
+
+-- ===== 수거 바코드 1급(추적) [14 J1] =====
+-- 현장 스캔 바코드(+촬영 GPS)를 바코드별 역추적 질의가 가능하도록 정규화 적재. 원본 payload는
+-- order_events에 영구 보존(이중 기록 — 감사·복원용). 쓰기는 fn_transition_order(SUBMIT_MEASURE)의
+-- replace-set(delete→insert)로만 — 쓰기 RLS 정책 없음(service_role 전용, 절대 규칙 1 미러).
+-- 20260724000001_tracking.sql.
+create table pickup_items (
+  id bigint generated always as identity primary key,
+  order_id uuid not null references pickup_orders(id) on delete cascade,
+  rider_id uuid not null references rider_profiles(id),
+  barcode text not null,
+  geo_lat double precision,
+  geo_lng double precision,
+  captured_at timestamptz,                  -- 디바이스 촬영 시각(있으면). 서버 적재 시각은 created_at
+  created_at timestamptz not null default now(),
+  unique (order_id, barcode)                -- 주문 내 바코드 중복 방지 + replace-set 멱등축
+);
+create index idx_pickup_items_order on pickup_items (order_id);
+create index idx_pickup_items_barcode on pickup_items (barcode);
+-- RLS: read = admin + 주문 당사자(supplier/rider). write 정책 없음(service_role RPC만).
 
 -- ===== 포인트 원장 (append-only) =====
 -- [08 P3·P4] 현역 복권 — POINT 지급수단의 EARN(fn_transition_order CONFIRM_MEASURE/FORCE_COMPLETE),
@@ -648,11 +727,44 @@ $$ select exists(select 1 from rider_profiles rp where rp.id = p_rider and rp.de
 language sql security definer stable set search_path = public;
 create policy p_rider_profiles_read_by_dealer on rider_profiles for select using (dealer_id = auth.uid());
 create policy p_profiles_read_own_riders on profiles for select using (fn_dealer_owns_rider(id));
-create policy p_orders_read_by_dealer on pickup_orders for select using (rider_id is not null and fn_dealer_owns_rider(rider_id));
+-- [14 J3에서 교체] 구 정의는 라이브 조인(rider_profiles.dealer_id 현재값) 기준이라 라이더 재배정 시
+-- 새 좌상에게 과거 주문의 재무정보+점주 PII가 소급 노출됐다. 20260724000006이 스냅샷 기준으로 재정의:
+--   create policy p_orders_read_by_dealer on pickup_orders for select using (dealer_id = (select auth.uid()));
 create policy p_referrals_read_by_dealer on referrals for select using (fn_dealer_owns_rider(referrer_rider_id));
 create policy p_profiles_read_my_dealer on profiles for select using (id = (select dealer_id from rider_profiles where id = auth.uid())); -- I5 라이더→소속 좌상 상호
 -- v_dealer_rider_stats(security_invoker): 라이더별 완료수·수거kg·현금/포인트 지급합·레퍼럴 실적(표시용 통계, 정산 아님).
 
+-- ===== 함수 EXECUTE 권한 [14 J4] (20260724000010_rpc_execute_lockdown.sql) =====
+-- Supabase는 `alter default privileges in schema public grant execute on functions to anon,
+-- authenticated, service_role`을 걸어 두므로, RPC 마이그레이션의 관례인
+-- `revoke all on function ... from public`만으로는 anon/authenticated에 **직접 부여된** EXECUTE가
+-- 남는다(테이블 쪽에서 20260704000005가 겪은 함정과 대칭). 그 결과 로그인한 아무 사용자나
+-- PostgREST /rest/v1/rpc/로 SECURITY DEFINER 재무 RPC를 직접 호출할 수 있었다.
+-- 조치: public.fn_% 전수에서 anon/authenticated EXECUTE 회수 + 기본 권한 자체를 닫는다.
+--   예외 ① RLS 정책 표현식 헬퍼 4종(fn_current_role·fn_dealer_owns_rider·
+--        fn_is_assigned_rider_of_caller·fn_is_assigned_supplier_of_caller) — 정책은 질의 주체
+--        권한으로 평가되므로 회수 시 해당 테이블 조회가 통째로 42501.
+--   예외 ② returns trigger 함수 — 직접 호출 경로 없음, 발화 시 EXECUTE 재검사 없음.
+-- 클라이언트에 .rpc( 호출은 0건(전 앱 전수 확인). 모든 RPC는 Edge Function service_role 전용.
+-- 신규 클라이언트 호출 함수를 만들면 해당 마이그레이션에서 명시적 grant execute 할 것.
+-- 회귀 가드: 03_privilege_guards_test.sql이 fn_% 전수를 훑어 위반 함수명을 진단에 노출한다.
+alter default privileges in schema public revoke execute on functions from anon, authenticated;
+
 -- 라이더당 활성 주문 1건 불변식: 동시 이중수락(TOCTOU)을 DB 유니크 제약으로 차단.
 create unique index idx_rider_single_active_order on pickup_orders (rider_id)
   where status in ('ACCEPTED','ARRIVED','PICKED_UP','DISPUTED');
+
+-- ===== [14 J4] 상계 소비처 정리 + 수수료 오버플로 (20260724000011) =====
+-- cash_paid_amount는 폐유 총액(gross)으로 **동결**돼 있고 실제 정산액은 net_amount다. 20260724000008이
+-- v_dealer_rider_stats.point_paid만 net으로 고쳐, 같은 계열의 나머지 뷰가 gross를 계속 쓰고 있었다.
+-- 구매 동반 주문에서 지급액이 과다 계상되고 net<0이면 부호까지 반대가 된다.
+-- → v_pickup_stats_daily / v_rider_payout_daily / v_dealer_rider_stats.cash_paid 모두 net 기준으로 교체
+--   (레거시 net_amount null은 coalesce로 cash_paid_amount 폴백). gross 지표는 컬럼 append로 보존:
+--   v_pickup_stats_daily += total_gross·total_purchase, v_rider_payout_daily += point_spent_amount·gross_amount.
+-- → fn_create_dealer_claim 수수료: round(v_gross::numeric * fee_bp / 10000.0) — int4 곱셈이 먼저
+--   평가돼 gross 5,006,000 × 500bp에서 "integer out of range"로 청구 생성이 영구 실패했다(교착).
+--
+-- ===== [14 J4] RESOLVE_DISPUTE finalCans (20260724000012) =====
+-- 중재는 final_kg만 정정할 수 있었고 delivered_cans는 손댈 수 없었다. 중재 후 SUBMIT_MEASURE는
+-- final_kg 가드에 막히고 pickup_orders에 update 정책이 없어, 잘못된 통수가 그대로 purchase_amount로
+-- 확정됐다. payload에 finalCans(0..50, 선택)를 더해 중재에서 정정 가능하게 한다(14 §3·§8).

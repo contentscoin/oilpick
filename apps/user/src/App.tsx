@@ -1,7 +1,7 @@
 import { Suspense, lazy } from "react";
 import { Navigate, Outlet, Route, Routes, useNavigate } from "react-router-dom";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { BigButton, ErrorScreen, OfflineBanner, ToastProvider } from "@oilpick/ui";
+import { BigButton, ErrorScreen, MobileFrame, OfflineBanner, ToastProvider } from "@oilpick/ui";
 import { AuthGuard } from "./components/AuthGuard";
 import { UserShell } from "./components/UserShell";
 import { useNativeIntegration } from "./hooks/useNativeIntegration";
@@ -99,6 +99,8 @@ export function App() {
     <QueryClientProvider client={queryClient}>
       {/* 06 E6 — 액션 피드백 토스트 전역 프로바이더. offsetBottom은 하단 탭바를 피한 값. */}
       <ToastProvider offsetBottom={76}>
+      {/* [12 §8] 모바일 고정 프레임 — 모든 라우트(셸/풀스크린 공통)를 420px 폭으로 감싼다. */}
+      <MobileFrame>
       {/* 03-frontend.md "공통 규칙" 오프라인 배너 — 셸 래핑과 무관하게 항상 최상단에 고정. */}
       <OfflineBanner />
       <Suspense fallback={<RouteFallback />}>
@@ -171,6 +173,7 @@ export function App() {
           <Route path="*" element={<NotFoundRoute />} />
         </Routes>
       </Suspense>
+      </MobileFrame>
       </ToastProvider>
     </QueryClientProvider>
   );

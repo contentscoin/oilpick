@@ -1,0 +1,11 @@
+-- [14 J2] ledger_type에 TRADE_PURCHASE 추가 — 신유 대금 포인트 차감(음수) 전용 항목.
+-- docs/spec/14-fresh-oil-settlement.md §2-7.
+--
+-- 기존 'PURCHASE'는 "쇼핑몰 결제"(쿠폰 PG 결제) 라벨로 이미 예약돼 있어(LedgerList·SettlementPage
+-- 라벨맵), 재사용하면 지갑·감사 화면에서 오표기된다 → 별도 값 신설. 라벨 "새기름 결제(차감)"은
+-- 프런트 라벨맵에 등록(같은 커밋). 멱등은 기존 unique(order_id, entry_type, user_id)가 담당하고,
+-- v_point_balance의 부호규약(else amount)이 음수를 그대로 차감으로 반영한다.
+--
+-- ALTER TYPE ... ADD VALUE는 추가한 트랜잭션 안에서 그 값을 사용할 수 없어(unsafe use), 이 값을
+-- 사용하는 fn_settle_trade는 다음 마이그레이션(20260724000005)에서 정의한다(dealer_role 선례).
+alter type ledger_type add value if not exists 'TRADE_PURCHASE';

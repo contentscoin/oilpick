@@ -6,27 +6,26 @@
 /** 색상 토큰. 03-frontend.md "디자인 토큰" colors. */
 export const colors = {
   primary: {
-    DEFAULT: "#1B7A43",
-    dark: "#145C32",
-    light: "#E8F5EE",
+    DEFAULT: "#1C5A38",
+    dark: "#123D25",
+    light: "#E7F0EA",
   },
   accent: {
-    DEFAULT: "#F5A623",
-    light: "#FFF4E0",
+    DEFAULT: "#C99A46",
+    light: "#F7EFDC",
     /**
-     * 05-design-upgrade.md 2026-07-10 폴리시 — 밝은 배경 위 "돈" 텍스트 전용 딥앰버.
-     * #F5A623은 흰 배경 대비 ~1.9:1로 텍스트 색으로는 미달(50대 타깃 4.5:1 원칙).
-     * 앰버의 명도 축을 어두운 쪽으로 확장한 것(리브랜딩 아님 — surfaceDark와 같은 방식).
-     * 배경이 앰버(gradient.point)일 때는 기존처럼 흰 텍스트를 쓴다.
+     * 밝은 배경 위 "돈" 텍스트 전용 딥골드. accent.DEFAULT(앤티크골드)는 흰 배경 대비가 낮아
+     * 텍스트로는 미달(50대 타깃 4.5:1 원칙) — 명도 축을 어둡게 확장한 값. 2026-07 폐유 리브랜드로
+     * 앰버(#B45309) → 앤티크골드 계열(#8A6A1A)로 갱신. 배경이 골드(gradient.point)면 흰 텍스트를 쓴다.
      */
-    deep: "#B45309",
+    deep: "#8A6A1A",
   },
   up: "#E5484D",
   down: "#3B82F6",
   status: {
     wait: "#8B8B8B",
     active: "#3B82F6",
-    done: "#1B7A43",
+    done: "#1C5A38",
     danger: "#E5484D",
   },
   /**
@@ -129,8 +128,8 @@ export const radius = {
  * 평평한 회색 배경 위에 흰 카드가 떠 보이도록 앱 배경/카드/경계 색을 분리한다.
  */
 export const surface = {
-  /** 앱 배경(약간 웜뉴트럴). */
-  app: "#F5F6F5",
+  /** 앱 배경(웜크림 — 2026-07 폐유 로고 배경 톤. 흰 카드가 이 위에서 떠 보인다). */
+  app: "#F6F1E7",
   /** 카드/시트 표면. */
   card: "#FFFFFF",
   /** 카드·구획 경계선(zinc-100). */
@@ -160,8 +159,8 @@ export const elevation = {
 export const gradient = {
   /** 딥그린 계열 히어로 배경. */
   brand: `linear-gradient(135deg, ${colors.primary.DEFAULT}, ${colors.primary.dark})`,
-  /** 앰버 계열 포인트 히어로 배경. */
-  point: `linear-gradient(135deg, ${colors.accent.DEFAULT}, #E08A00)`,
+  /** 앤티크골드 계열 포인트 히어로 배경(폐유 리브랜드 — 오렌지 종단색 #E08A00 → 딥골드 #A87E2E). */
+  point: `linear-gradient(135deg, ${colors.accent.DEFAULT}, #A87E2E)`,
   /**
    * 07-pivot-plan.md F7 — 다크 시세 히어로 배경(딥그린 → 더 딥그린 세로 그라디언트).
    * 유저앱 홈 히어로(F8)와 /price 상세가 공유. 05 신규 토큰 절 참조.

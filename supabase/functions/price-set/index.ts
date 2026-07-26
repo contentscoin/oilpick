@@ -7,7 +7,7 @@
 // service_role insert로 충분하다(02-api.md "핵심 RPC: fn_transition_order, fn_post_ledger"에
 // price_ticks는 포함되지 않음). 입력 검증(양수)은 zod 스키마(z.number().int().positive())로 수행.
 
-import { priceSetInputSchema } from "@oilpick/core/index.ts";
+import { priceSetInputSchema, freshOilPriceSetInputSchema } from "@oilpick/core/index.ts";
 import { AuthError, requireAuth, requireRole } from "../_shared/auth.ts";
 import { errorResponse, okResponse, withErrorHandling } from "../_shared/response.ts";
 
@@ -28,6 +28,26 @@ Deno.serve((req) =>
     const { uid, admin } = ctx;
 
     const body = await req.json().catch(() => null);
+
+    // [14 J2] kind='FRESH'면 신유 고시가(fresh_oil_price_ticks), 그 외(기본 폐유 시세)는 price_ticks.
+    if (body && (body as { kind?: string }).kind === "FRESH") {
+      const parsedFresh = freshOilPriceSetInputSchema.safeParse(body);
+      if (!parsedFresh.success) {
+        return errorResponse("VALIDATION_ERROR", 400, parsedFresh.error.issues[0]?.message);
+      }
+      const { data: freshTick, error: freshErr } = await admin
+        .from("fresh_oil_price_ticks")
+        .insert({ price_per_can: parsedFresh.data.pricePerCan, created_by: uid })
+        .select("*")
+        .single();
+      if (freshErr) throw freshErr;
+      return okResponse({
+        id: freshTick.id,
+        pricePerCan: freshTick.price_per_can,
+        effectiveAt: freshTick.effective_at,
+      });
+    }
+
     const parsed = priceSetInputSchema.safeParse(body);
     if (!parsed.success) {
       return errorResponse("VALIDATION_ERROR", 400, parsed.error.issues[0]?.message);

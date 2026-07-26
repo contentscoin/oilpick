@@ -13,17 +13,21 @@ var errorResponseSchema = z.object({
   message: z.string()
 });
 var uuidSchema = z.string().uuid();
-var requestedKgSchema = z.number().min(1).max(500);
 var kgSchema = z.number().nonnegative();
 var latSchema = z.number().min(-90).max(90);
 var lngSchema = z.number().min(-180).max(180);
 var orderCreateInputSchema = z.object({
   requestedCans: z.number().int().positive().optional(),
-  requestedKg: requestedKgSchema,
+  // [14 J2] 구매-only 주문은 폐유 0 → requestedKg 0 허용(폐유 성분 상한 500kg은 유지).
+  requestedKg: z.number().min(0).max(500),
+  // [14 J2] 신유 구매 통수(18L 1종 단일 SKU, 1..50). 있으면 order_kind=PURCHASE/MIXED.
+  purchaseCans: z.number().int().min(1).max(50).optional(),
   address: z.string().min(1),
   lat: latSchema,
   lng: lngSchema,
   preferredTime: z.string().min(1)
+}).refine((v) => v.requestedKg >= 1 || (v.purchaseCans ?? 0) >= 1, {
+  message: "\uD3D0\uC720 \uC218\uAC70 \uB610\uB294 \uC2E0\uC720 \uAD6C\uB9E4 \uC911 \uD558\uB098\uB294 \uC120\uD0DD\uD574\uC57C \uD574\uC694."
 });
 var orderCreateOutputSchema = z.object({
   orderId: uuidSchema,
@@ -40,17 +44,32 @@ var orderAcceptOutputSchema = z.object({
 });
 var arrivePayloadSchema = z.undefined().or(z.object({}).strict());
 var payoutMethodSchema = z.enum(["CASH", "POINT"]);
+var pickupGeoSchema = z.object({
+  lat: latSchema,
+  lng: lngSchema,
+  capturedAt: z.string().optional()
+  // ISO8601 촬영 시각(디바이스). 서버 now()와 별개 기록.
+});
 var submitMeasurePayloadSchema = z.object({
   measuredKg: kgSchema,
   photoUrls: z.array(z.string().url()).min(1),
-  payoutMethod: payoutMethodSchema
+  payoutMethod: payoutMethodSchema,
+  barcodes: z.array(z.string().min(1)).max(50).optional(),
+  geo: pickupGeoSchema.optional(),
+  // [14 J2] 현장 실배달 신유 통수(구매 동반 주문 필수 0..50 — 필수 강제는 RPC가 order_kind로 판정).
+  deliveredCans: z.number().int().min(0).max(50).optional()
 });
 var confirmMeasurePayloadSchema = z.undefined().or(z.object({}).strict());
 var disputePayloadSchema = z.object({
   reason: z.string().min(1)
 });
 var resolveDisputePayloadSchema = z.object({
-  finalKg: kgSchema
+  finalKg: kgSchema,
+  /**
+   * [14 J4] 구매 동반 주문의 배달 통수 중재 정정(14 §3·§8). 선택 — 없으면 delivered_cans 유지.
+   * 중재 후에는 SUBMIT_MEASURE가 막히므로(final_kg 가드) 여기서만 정정할 수 있다.
+   */
+  finalCans: z.number().int().min(0).max(50).optional()
 });
 var deliverPayloadSchema = z.object({
   depotId: uuidSchema,
@@ -131,6 +150,20 @@ var priceSetInputSchema = z.object({
 var priceSetOutputSchema = z.object({
   id: z.number().int(),
   pricePerKg: z.number().int().positive(),
+  effectiveAt: z.string()
+});
+var orderKindSchema = z.enum(["PICKUP", "PURCHASE", "MIXED"]);
+var freshOilPriceSetInputSchema = z.object({
+  pricePerCan: z.number().int().positive()
+});
+var freshOilPriceSetOutputSchema = z.object({
+  id: z.number().int(),
+  pricePerCan: z.number().int().positive(),
+  effectiveAt: z.string()
+});
+var freshOilPriceTickSchema = z.object({
+  id: z.number().int(),
+  pricePerCan: z.number().int().positive(),
   effectiveAt: z.string()
 });
 var pointAdjustInputSchema = z.object({
@@ -258,6 +291,55 @@ var dealerRiderStatsSchema = z.object({
   referral_signed_up: z.number().int().nonnegative(),
   referral_activated: z.number().int().nonnegative()
 });
+var dealerAccountSetInputSchema = z.object({
+  dealerId: uuidSchema,
+  depositAmount: z.number().int().min(0),
+  creditLimit: z.number().int().min(0),
+  claimThreshold: z.number().int().positive(),
+  feeRateBp: z.number().int().min(0).max(1e4)
+  // 요율(bp, 1bp=0.01%). 초기 0
+});
+var dealerAccountSchema = z.object({
+  dealer_id: uuidSchema,
+  deposit_amount: z.number().int(),
+  credit_limit: z.number().int(),
+  claim_threshold: z.number().int(),
+  fee_rate_bp: z.number().int()
+});
+var dealerClaimInputSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("create"), dealerId: uuidSchema }),
+  z.object({ action: z.literal("settle"), settlementId: uuidSchema }),
+  z.object({ action: z.literal("void"), settlementId: uuidSchema })
+]);
+var dealerSettlementStatusSchema = z.enum(["CLAIMED", "SETTLED", "VOID"]);
+var dealerSettlementSchema = z.object({
+  id: uuidSchema,
+  dealer_id: uuidSchema,
+  status: dealerSettlementStatusSchema,
+  point_minted: z.number().int(),
+  point_spent: z.number().int(),
+  fee_amount: z.number().int(),
+  net_due: z.number().int(),
+  period_start: z.string().nullable(),
+  period_end: z.string().nullable(),
+  claimed_at: z.string(),
+  settled_at: z.string().nullable(),
+  voided_at: z.string().nullable()
+});
+var dealerStatementSchema = z.object({
+  dealer_id: uuidSchema,
+  deposit_amount: z.number().int(),
+  credit_limit: z.number().int(),
+  claim_threshold: z.number().int(),
+  fee_rate_bp: z.number().int(),
+  point_minted: z.number().int(),
+  point_spent: z.number().int(),
+  usage: z.number().int(),
+  headroom: z.number().int(),
+  over_threshold: z.boolean(),
+  unsettled_order_count: z.number().int().nonnegative(),
+  unsettled_gross: z.number().int()
+});
 export {
   arrivePayloadSchema,
   cancelPayloadSchema,
@@ -267,17 +349,26 @@ export {
   csReplyOutputSchema,
   csStatusSchema,
   csTicketInputSchema,
+  dealerAccountSchema,
+  dealerAccountSetInputSchema,
   dealerAssignInputSchema,
   dealerAssignOutputSchema,
+  dealerClaimInputSchema,
   dealerCreateInputSchema,
   dealerCreateOutputSchema,
   dealerRiderStatsSchema,
+  dealerSettlementSchema,
+  dealerSettlementStatusSchema,
+  dealerStatementSchema,
   deliverPayloadSchema,
   directionsInputSchema,
   directionsOutputSchema,
   disputePayloadSchema,
   errorResponseSchema,
   forceCompletePayloadSchema,
+  freshOilPriceSetInputSchema,
+  freshOilPriceSetOutputSchema,
+  freshOilPriceTickSchema,
   notifyBroadcastInputSchema,
   notifyBroadcastOutputSchema,
   okResponseSchema,
@@ -287,9 +378,11 @@ export {
   orderCreateOutputSchema,
   orderExpireOutputSchema,
   orderFaultSchema,
+  orderKindSchema,
   orderTransitionInputSchema,
   orderTransitionOutputSchema,
   payoutMethodSchema,
+  pickupGeoSchema,
   pointAdjustInputSchema,
   pointAdjustOutputSchema,
   priceSetInputSchema,

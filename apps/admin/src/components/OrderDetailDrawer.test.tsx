@@ -28,6 +28,8 @@ function makeOrder(overrides: Partial<AdminOrderDetail> = {}): AdminOrderDetail 
     requestedKg: 30,
     measuredKg: 22.5,
     finalKg: null,
+    orderKind: null,
+    deliveredCans: null,
     pickupAddress: "서울 강서구 1",
     createdAt: "2026-07-01T00:00:00.000Z",
     photoUrls: [],

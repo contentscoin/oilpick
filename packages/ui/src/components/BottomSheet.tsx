@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { motion, radius, surface } from "../tokens";
 import { usePrefersReducedMotion } from "../hooks/usePrefersReducedMotion";
+import { FRAME_MAX_WIDTH } from "./MobileFrame";
 
 /** 03-frontend.md "packages/ui 컴포넌트" — BottomSheet. */
 export interface BottomSheetProps {
@@ -47,6 +48,8 @@ export function BottomSheet({ open, onClose, title, children, className }: Botto
         backgroundColor: "rgba(0,0,0,0.4)",
         display: "flex",
         alignItems: "flex-end",
+        // [12 §8] 백드롭은 전체 뷰포트를 덮되(모달 딤), 시트 패널은 프레임 폭으로 중앙 정렬.
+        justifyContent: "center",
         zIndex: 50,
         opacity: shown ? 1 : 0,
         transition: reduce ? undefined : `opacity ${motion.base} ${motion.ease}`,
@@ -61,6 +64,7 @@ export function BottomSheet({ open, onClose, title, children, className }: Botto
         onClick={(e) => e.stopPropagation()}
         style={{
           width: "100%",
+          maxWidth: FRAME_MAX_WIDTH,
           backgroundColor: surface.card,
           borderTopLeftRadius: radius.card,
           borderTopRightRadius: radius.card,

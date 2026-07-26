@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
+import { PayouSymbol } from "@oilpick/ui";
 import { supabase } from "../lib/supabaseClient";
 import { useCurrentRole } from "../hooks/useCurrentRole";
 import { NotificationsBell } from "./NotificationsBell";
@@ -18,6 +19,7 @@ const ADMIN_NAV = [
   { to: "/orders", label: "주문 관리" },
   { to: "/users", label: "회원 관리" },
   { to: "/dealers", label: "좌상 관리" }, // 13 I3 신설
+  { to: "/dealer-settlement", label: "좌상 정산" }, // 14 J3 신설(보증금 크레딧·청구)
   { to: "/settlement", label: "정산" }, // 08 G7-① 재편(출금 큐·포인트 정산)
   { to: "/cs", label: "CS" }, // 07 F12 신설
   { to: "/referrals", label: "레퍼럴" }, // 09 H4 신설(추천 실적분석)
@@ -27,6 +29,7 @@ const ADMIN_NAV = [
 const DEALER_NAV = [
   { to: "/", label: "관할 대시보드", end: true },
   { to: "/performance", label: "소속 실적" },
+  { to: "/statement", label: "정산 명세" }, // 14 J3 신설(본인 사용액·청구 이력)
 ];
 
 export function AdminShell({ children }: { children: ReactNode }) {
@@ -44,9 +47,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
     <div className="flex min-h-screen bg-surface-app">
       <aside className="flex w-56 shrink-0 flex-col border-r border-gray-100 bg-white shadow-card">
         <div className="flex items-center gap-2.5 px-5 py-6">
-          <span className="flex h-9 w-9 items-center justify-center rounded-card bg-primary-light text-base font-bold text-primary">
-            O
-          </span>
+          <PayouSymbol size={36} />
           <div>
             <p className="text-lg font-bold leading-tight text-primary">폐유</p>
             <p className="text-xs text-gray-500" data-testid="admin-role-label">{roleLabel}</p>

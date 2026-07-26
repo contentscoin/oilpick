@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { parseEwkbPoint, type OrderStatus, type PayoutMethod } from "@oilpick/core";
+import { parseEwkbPoint, type OrderKind, type OrderStatus, type PayoutMethod } from "@oilpick/core";
 import { supabase } from "../lib/supabaseClient";
 import { queryKeys } from "../lib/queryClient";
 
@@ -14,6 +14,11 @@ export interface ActiveRun {
   pickupLat: number | null;
   pickupLng: number | null;
   requestedKg: number;
+  /** [14 J2] 주문 종류(PICKUP/PURCHASE/MIXED). null=레거시=PICKUP. */
+  orderKind: OrderKind | null;
+  /** [14 J2] 신청 신유 통수·통당가 스냅샷 — deliveredCans 프리필·상계 미리보기. */
+  purchaseRequestedCans: number | null;
+  snapshotFreshCanPrice: number | null;
   measuredKg: number | null;
   /** 확정(중재 반영) 무게. 07 §1-3: RESOLVE_DISPUTE가 기록하면 ARRIVED 복귀 + 재제출 불가 마킹. */
   finalKg: number | null;
@@ -26,7 +31,11 @@ export interface ActiveRun {
    */
   payoutMethod: PayoutMethod | null;
   /** 확정 지급액(원). POINT 지급도 이 컬럼에 기록(1P=1원, 08 P3). COMPLETED에서만 채워짐. */
+  /** [14 J2] 폐유 총액(gross) 동결값 — 실지급액은 netAmount. */
   cashPaidAmount: number | null;
+  purchaseAmount: number | null;
+  /** 상계 순액. 양수=라이더가 점주에게 지급, 음수=라이더가 점주에게 받음. 레거시는 null. */
+  netAmount: number | null;
   completedAt: string | null;
   createdAt: string;
   /** 06 E8-④ [사장님께 전화]: 배정 주문 supplier의 전화/상호. RLS 정책
@@ -36,7 +45,7 @@ export interface ActiveRun {
 }
 
 const RUN_COLUMNS =
-  "id, status, supplier_id, depot_id, pickup_address, pickup_location, requested_kg, measured_kg, final_kg, photo_urls, snapshot_price_per_kg, snapshot_rider_fee, payout_method, cash_paid_amount, completed_at, created_at";
+  "id, status, supplier_id, depot_id, pickup_address, pickup_location, requested_kg, order_kind, purchase_requested_cans, snapshot_fresh_can_price, delivered_cans, purchase_amount, net_amount, measured_kg, final_kg, photo_urls, snapshot_price_per_kg, snapshot_rider_fee, payout_method, cash_paid_amount, completed_at, created_at";
 
 /**
  * 진행중으로 취급하는 상태(07 F6-②③④).
@@ -59,6 +68,10 @@ function mapRow(row: {
   pickup_address: string;
   pickup_location: string | null;
   requested_kg: number;
+  order_kind: OrderKind | null;
+  purchase_requested_cans: number | null;
+  snapshot_fresh_can_price: number | null;
+  delivered_cans: number | null;
   measured_kg: number | null;
   final_kg: number | null;
   photo_urls: string[];
@@ -66,6 +79,8 @@ function mapRow(row: {
   snapshot_rider_fee: number;
   payout_method: PayoutMethod | null;
   cash_paid_amount: number | null;
+  purchase_amount: number | null;
+  net_amount: number | null;
   completed_at: string | null;
   created_at: string;
 }): Omit<ActiveRun, "supplierPhone" | "supplierName"> {
@@ -79,6 +94,9 @@ function mapRow(row: {
     pickupLat: pickupPoint?.lat ?? null,
     pickupLng: pickupPoint?.lng ?? null,
     requestedKg: row.requested_kg,
+    orderKind: row.order_kind,
+    purchaseRequestedCans: row.purchase_requested_cans,
+    snapshotFreshCanPrice: row.snapshot_fresh_can_price,
     measuredKg: row.measured_kg,
     finalKg: row.final_kg,
     photoUrls: row.photo_urls ?? [],
@@ -86,6 +104,8 @@ function mapRow(row: {
     snapshotRiderFee: row.snapshot_rider_fee,
     payoutMethod: row.payout_method ?? null,
     cashPaidAmount: row.cash_paid_amount ?? null,
+    purchaseAmount: row.purchase_amount ?? null,
+    netAmount: row.net_amount ?? null,
     completedAt: row.completed_at,
     createdAt: row.created_at,
   };

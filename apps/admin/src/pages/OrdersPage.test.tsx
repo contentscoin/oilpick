@@ -63,6 +63,8 @@ function order(overrides: Partial<AdminOrderRow> = {}): AdminOrderRow {
     requestedKg: 30,
     measuredKg: null,
     finalKg: null,
+    orderKind: null,
+    deliveredCans: null,
     pickupAddress: "서울 강서구",
     createdAt: "2026-07-01T00:00:00.000Z",
     arrivedAt: null,

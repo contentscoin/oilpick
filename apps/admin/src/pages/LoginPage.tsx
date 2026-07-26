@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { PayouSymbol } from "@oilpick/ui";
 import { supabase } from "../lib/supabaseClient";
 
 /**
@@ -41,9 +42,7 @@ export function LoginPage() {
         className="w-full max-w-sm rounded-hero bg-white p-8 shadow-raised"
       >
         <div className="mb-6 flex items-center gap-2.5">
-          <span className="flex h-10 w-10 items-center justify-center rounded-card bg-primary-light text-lg font-bold text-primary">
-            O
-          </span>
+          <PayouSymbol size={40} />
           <div>
             <h1 className="text-xl font-bold leading-tight text-primary">폐유 관리자</h1>
             <p className="text-sm text-gray-500">아이디와 비밀번호로 로그인하세요.</p>

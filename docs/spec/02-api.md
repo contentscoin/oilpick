@@ -173,3 +173,25 @@ ACCEPTED 이후 모든 전이 단일 엔드포인트.
 - `sendPush(userIds[], title, body, link)`: profiles.fcm_token 조회 → FCM HTTP v1 멀티캐스트
   + notifications insert. 토큰 만료(UNREGISTERED) 시 fcm_token null 처리.
 - FCM 서비스 계정 키는 Supabase secrets `FCM_SERVICE_ACCOUNT`.
+
+## 14 신유·상계·좌상 정산 엔드포인트 (J-태스크, 14-fresh-oil-settlement.md 단일 진실)
+
+- **order-create** 확장: 입력 += `purchaseCans?`(신유 구매 통수 1..50). `requestedKg`는 0 허용(구매-only).
+  구매 동반 시 최신 `fresh_oil_price_ticks` 스냅샷(부재 404) + `order_kind`(PICKUP/PURCHASE/MIXED) 판정.
+- **order-transition / SUBMIT_MEASURE** payload += `deliveredCans?`(구매 동반 필수 0..50), `barcodes?`, `geo?`.
+  넷팅·게이트는 `fn_settle_trade`(CONFIRM_MEASURE/FORCE_COMPLETE). 부족/한도초과 시 INSUFFICIENT_BALANCE/
+  DEALER_LIMIT_EXCEEDED(롤백) — **둘 다 409로 매핑**(`mapTransitionError`, 14 J4). 매핑이 없으면 폴백
+  INVALID_TRANSITION으로 뭉개져 점주가 원인도 복구 경로("현금으로 재제출")도 알 수 없다.
+  `DEALER_LIMIT_EXCEEDED`는 packages/core `ERROR_CODES`/`ERROR_MESSAGE_KO`에 등록돼 있다.
+- **order-transition / RESOLVE_DISPUTE** payload += `finalCans?`(0..50, 선택 — 14 J4).
+  구매 동반 주문의 배달 통수를 중재에서 정정한다. 없으면 `delivered_cans` 유지. 중재 후에는
+  SUBMIT_MEASURE가 `final_kg` 가드에 막히므로 통수를 고칠 수 있는 **유일한 지점**이다.
+- **알림 금액은 `net_amount`(상계 순액) 기준**(14 J4). `cash_paid_amount`는 폐유 총액으로 동결돼 있어
+  구매 동반 주문에서 금액이 다르고 net&lt;0이면 부호까지 반대다. 원장이 net으로 발행되므로 통지도 net을 따른다.
+- **price-set** 분기: `kind='FRESH'`면 `{ pricePerCan }` → fresh_oil_price_ticks. 미지정=폐유 시세(기존).
+- **dealer-account-set**(admin): `{ dealerId, depositAmount, creditLimit, claimThreshold, feeRateBp }` →
+  fn_set_dealer_account upsert.
+- **dealer-claim**(admin): `{ action:'create', dealerId }` / `{ action:'settle'|'void', settlementId }` →
+  fn_create/settle/void_dealer_claim. create=미정산 주문 집계·스탬핑, void=스탬프 해제(풀 복귀).
+- 조회 뷰: `v_dealer_statement`(usage/limit/headroom/over_threshold), `v_dealer_settlement_orders`(청구 상세/CSV).
+  RLS: 좌상 본인 + admin.

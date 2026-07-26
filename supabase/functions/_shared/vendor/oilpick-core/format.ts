@@ -41,7 +41,17 @@ function formatRelativeTime(date, now = /* @__PURE__ */ new Date()) {
   }
   return isFuture ? "\uBA3C \uBBF8\uB798" : "\uC624\uB798 \uC804";
 }
+function formatEta(durationSeconds) {
+  if (durationSeconds == null || !Number.isFinite(durationSeconds) || durationSeconds < 0) return null;
+  const totalMin = Math.round(durationSeconds / 60);
+  if (totalMin < 1) return "\uACE7 \uB3C4\uCC29";
+  if (totalMin < 60) return `${totalMin}\uBD84 \uD6C4 \uB3C4\uCC29`;
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return m === 0 ? `${h}\uC2DC\uAC04 \uD6C4 \uB3C4\uCC29` : `${h}\uC2DC\uAC04 ${m}\uBD84 \uD6C4 \uB3C4\uCC29`;
+}
 export {
+  formatEta,
   formatKg,
   formatKrw,
   formatPoint,

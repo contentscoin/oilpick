@@ -64,6 +64,28 @@ Deno.serve((req) =>
       return errorResponse("NOT_FOUND", 404, "현재 시세 정보를 찾을 수 없어요.");
     }
 
+    // [14 J2] 신유 구매 동반 시 최신 신유 고시가를 스냅샷한다. 폐유 성분(requestedKg≥1) 유무로
+    // order_kind를 판정: 구매만=PURCHASE / 수거+구매=MIXED / 수거만=PICKUP. 신유 tick이 없으면
+    // 구매 신청을 받을 수 없으므로 404(클라이언트는 tick 부재 시 구매 UI를 숨긴다).
+    let orderKind: "PICKUP" | "PURCHASE" | "MIXED" = "PICKUP";
+    let purchaseRequestedCans: number | null = null;
+    let snapshotFreshCanPrice: number | null = null;
+    if (input.purchaseCans != null) {
+      const { data: freshTick, error: freshErr } = await admin
+        .from("fresh_oil_price_ticks")
+        .select("price_per_can")
+        .order("effective_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (freshErr) throw freshErr;
+      if (!freshTick) {
+        return errorResponse("NOT_FOUND", 404, "현재 새 기름 판매가 정보를 찾을 수 없어요.");
+      }
+      purchaseRequestedCans = input.purchaseCans;
+      snapshotFreshCanPrice = freshTick.price_per_can;
+      orderKind = input.requestedKg >= 1 ? "MIXED" : "PURCHASE";
+    }
+
     // 08 P1: coupon_cost 스냅샷 중지 — 신규 주문은 null(쿠폰 게이트 자연 소멸).
     const { data: order, error: insertErr } = await admin
       .from("pickup_orders")
@@ -77,6 +99,9 @@ Deno.serve((req) =>
         preferred_time: input.preferredTime,
         snapshot_price_per_kg: priceTick.price_per_kg,
         broadcast_radius_km: INITIAL_BROADCAST_RADIUS_KM,
+        order_kind: orderKind,
+        purchase_requested_cans: purchaseRequestedCans,
+        snapshot_fresh_can_price: snapshotFreshCanPrice,
       })
       .select("*")
       .single();

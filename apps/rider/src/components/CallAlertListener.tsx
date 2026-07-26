@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { colors, elevation, radius } from "@oilpick/ui";
+import { colors, elevation, radius, frameFixedStyle, FRAME_MAX_WIDTH } from "@oilpick/ui";
 import { useCallAlert } from "../hooks/useCallAlert";
 
 /**
@@ -9,10 +9,12 @@ import { useCallAlert } from "../hooks/useCallAlert";
  */
 
 /** 배너 슬라이드다운 keyframes. 인라인 style로는 @keyframes를 못 쓰므로 <style>로 1회 주입. */
+// [12 §8] 프레임 중앙 정렬(translateX(-50%))과 슬라이드다운을 합성한다. 애니메이션 transform이
+// 인라인 translateX(-50%)를 통째로 덮으므로 keyframes에 translateX(-50%)를 함께 넣어야 가로 밀림이 없다.
 const SLIDE_DOWN_CSS = `
 @keyframes oilpick-call-alert-slide {
-  from { transform: translateY(-100%); }
-  to { transform: translateY(0); }
+  from { transform: translateX(-50%) translateY(-100%); }
+  to { transform: translateX(-50%) translateY(0); }
 }
 `;
 
@@ -35,11 +37,12 @@ export function CallAlertListener() {
           navigate(`/calls/${alert.orderId}`);
         }}
         style={{
-          position: "fixed",
+          // [12 §8] 프레임 폭 중앙 정렬 + 좌우 12px 여백 유지(모바일/데스크톱 공통).
+          ...frameFixedStyle,
+          width: "calc(100% - 24px)",
+          maxWidth: FRAME_MAX_WIDTH - 24,
           /* 노치/상태바 아래에서 시작하도록 상단 safe-area 반영. */
           top: "calc(12px + env(safe-area-inset-top, 0px))",
-          left: 12,
-          right: 12,
           zIndex: 950,
           display: "flex",
           alignItems: "center",

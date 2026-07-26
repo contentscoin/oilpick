@@ -25,12 +25,23 @@ export interface OrderDetail {
   couponCost: number | null;
   /** [08 P2] 현장 지급수단 — 라이더가 SUBMIT_MEASURE에서 선택. null=계량 제출 전 또는 레거시(CASH 간주). */
   payoutMethod: PayoutMethod | null;
+  /** [14 J2] 폐유 총액(gross)으로 **동결**된 값 — 실지급액이 아니다. 화면 금액은 netAmount를 쓸 것. */
   cashPaidAmount: number | null;
+  // [14 J2] 신유 구매·현장 상계. orderKind null=레거시=PICKUP.
+  orderKind: "PICKUP" | "PURCHASE" | "MIXED" | null;
+  purchaseRequestedCans: number | null;
+  snapshotFreshCanPrice: number | null;
+  deliveredCans: number | null;
+  purchaseAmount: number | null;
+  /** 상계 순액 = cashPaidAmount − purchaseAmount. 음수면 점주가 지불. 레거시는 null. */
+  netAmount: number | null;
   photoUrls: string[];
   cancelReason: string | null;
   disputeReason: string | null;
   createdAt: string;
   acceptedAt: string | null;
+  /** [14 J1] ARRIVE 전이 시각 — 타임라인 'ARRIVED' 노드 시각. */
+  arrivedAt: string | null;
   pickedUpAt: string | null;
   deliveredAt: string | null;
   completedAt: string | null;
@@ -55,11 +66,18 @@ function mapRow(row: {
   coupon_cost: number | null;
   payout_method: PayoutMethod | null;
   cash_paid_amount: number | null;
+  order_kind: "PICKUP" | "PURCHASE" | "MIXED" | null;
+  purchase_requested_cans: number | null;
+  snapshot_fresh_can_price: number | null;
+  delivered_cans: number | null;
+  purchase_amount: number | null;
+  net_amount: number | null;
   photo_urls: string[];
   cancel_reason: string | null;
   dispute_reason: string | null;
   created_at: string;
   accepted_at: string | null;
+  arrived_at: string | null;
   picked_up_at: string | null;
   delivered_at: string | null;
   completed_at: string | null;
@@ -85,11 +103,18 @@ function mapRow(row: {
     couponCost: row.coupon_cost,
     payoutMethod: row.payout_method,
     cashPaidAmount: row.cash_paid_amount,
+    orderKind: row.order_kind ?? null,
+    purchaseRequestedCans: row.purchase_requested_cans,
+    snapshotFreshCanPrice: row.snapshot_fresh_can_price,
+    deliveredCans: row.delivered_cans,
+    purchaseAmount: row.purchase_amount,
+    netAmount: row.net_amount,
     photoUrls: row.photo_urls ?? [],
     cancelReason: row.cancel_reason,
     disputeReason: row.dispute_reason,
     createdAt: row.created_at,
     acceptedAt: row.accepted_at,
+    arrivedAt: row.arrived_at,
     pickedUpAt: row.picked_up_at,
     deliveredAt: row.delivered_at,
     completedAt: row.completed_at,
@@ -97,7 +122,7 @@ function mapRow(row: {
 }
 
 const ORDER_DETAIL_COLUMNS =
-  "id, status, supplier_id, rider_id, depot_id, requested_cans, requested_kg, pickup_address, pickup_location, preferred_time, snapshot_price_per_kg, snapshot_rider_fee, measured_kg, final_kg, supplier_point, coupon_cost, payout_method, cash_paid_amount, photo_urls, cancel_reason, dispute_reason, created_at, accepted_at, picked_up_at, delivered_at, completed_at";
+  "id, status, supplier_id, rider_id, depot_id, requested_cans, requested_kg, pickup_address, pickup_location, preferred_time, snapshot_price_per_kg, snapshot_rider_fee, measured_kg, final_kg, supplier_point, coupon_cost, payout_method, cash_paid_amount, order_kind, purchase_requested_cans, snapshot_fresh_can_price, delivered_cans, purchase_amount, net_amount, photo_urls, cancel_reason, dispute_reason, created_at, accepted_at, arrived_at, picked_up_at, delivered_at, completed_at";
 
 /**
  * 단일 주문 상세 조회 + Realtime 구독. 03-frontend.md U6~U9 "/orders/:id":

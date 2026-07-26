@@ -86,6 +86,12 @@ CallCard 거리 nullable("—"), CallHomePage 거리정렬·CallDetailPage 지�
 
 **수정 계획**:
 1. **Daum 우편번호 위젯**(postcode.v2.js — **API 키 불필요**)으로 주소검색 구현.
+   ⚠️ 스크립트 경로는 `https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js`(공식 임베드 경로).
+   최초 구현(b901e4e)이 쓴 `mapjsdk/mapcomponent/postcode/postcode.v2.js`는 **존재하지 않는 경로**라
+   CDN이 403을 돌려줬고, 프로덕션에서 주소검색이 통째로 동작하지 않았다. 키·도메인 등록 문제가 아니다.
+   또한 로더는 "사용자 취소"와 "위젯 로드 실패"를 구분해 반환해야 한다(`PostcodeResult`) —
+   둘 다 null로 뭉개면 AddressField가 조용히 return해 **버튼이 먹통으로 보인다**(실제 증상).
+   로드 실패 시에는 안내를 띄우고 좌표 수동 입력을 열어 진행 경로를 남긴다.
 2. 주소→좌표 변환은 **VWorld Geocoder API**(이미 발급한 인증키 재사용, `api.vworld.kr/req/address`)
    — 카카오 REST 키 신규 발급 없이 해결. 실패 시 수동 좌표 폴백 유지.
 3. (선택 고도화) MapView로 지도핀 미세조정(03-frontend U2 원 스펙 "지도핀 미세조정" 복원).
@@ -100,14 +106,17 @@ CallCard 거리 nullable("—"), CallHomePage 거리정렬·CallDetailPage 지�
 
 ## 계층 2 — P2 미구현·열화 (스펙 약속 대비)
 
-### S3. user 주문상세 — 지도 실좌표 + 데모 ETA 제거 【일부 완료】
-✅ **완료**: ① 지도 센터를 주문 `pickup_location` 파싱 실좌표(+핀)로 교체(useOrder에
-pickupLat/Lng 추가, core 파서). ③ 데모 ETA("12분 후 도착") 제거 — 00-domain "장식 프리뷰에
-임의 시간 표기 금지" 정합.
-⏳ **후속(M9-b)**: ② 라이더 위치 Realtime — rider-location이 갱신하는
-`rider_profiles.last_location`을 postgres_changes로 구독(배정 라이더 row, RLS
-p_rider_read_assigned 확인)해 지도에 라이더 마커 표시 + 실 ETA. 카카오모빌리티 라우팅과 함께
-11-map-renderer M9-b에서 진행.
+### S3. user 주문상세 — 지도 실좌표 + 데모 ETA 제거 【✅ 완료 — 2026-07-25】
+✅ ① 지도 센터를 주문 `pickup_location` 파싱 실좌표(+핀)로 교체(useOrder에 pickupLat/Lng 추가, core 파서).
+✅ ③ 데모 ETA("12분 후 도착") 제거 — 00-domain "장식 프리뷰에 임의 시간 표기 금지" 정합.
+✅ ② **라이더 위치 + 실 ETA 완료**(14 J1 + 11 M9-b):
+  - 위치는 원 진단의 `rider_profiles.last_location` postgres_changes 구독 대신 **broadcast 채널
+    `order:{id}:location` 구독**으로 구현했다 — rider-location Edge가 실제로 push하는 경로가 그쪽이고
+    (02-api.md), 15초 간격 좌표를 테이블 왕복 없이 받는다. 채널은 private + realtime.messages RLS로
+    당사자만 구독(무인증 GPS 도청 차단). `useRiderLocation` + MapView `riderMarker`(60초 무갱신 흐림).
+  - ETA는 `useDirections` → directions Edge(카카오모빌리티) 실 라우팅 값. `formatEta`로 라벨링하고
+    MapView `routePath`로 경로선까지 그린다. `KAKAO_MOBILITY_KEY` 미설정 시 Edge가 `configured:false`를
+    주므로 선·ETA가 자연히 미표시(조용한 비활성) — 가짜 시간 표기 금지 원칙 유지.
 
 ### S4. rider 콜 목록/상세 — S1 후 실측 검증 【P2】
 S1 수정 후: 거리순 정렬·거리 표기·콜 상세 지도 센터·M9-a 내비 딥링크 좌표를 로컬 스택

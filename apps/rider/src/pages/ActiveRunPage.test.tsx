@@ -30,6 +30,9 @@ function makeRun(overrides: Partial<ActiveRun> = {}): ActiveRun {
     pickupLat: 37.5509,
     pickupLng: 126.8225,
     requestedKg: 45,
+    orderKind: null,
+    purchaseRequestedCans: null,
+    snapshotFreshCanPrice: null,
     measuredKg: null,
     finalKg: null,
     photoUrls: [],
@@ -37,6 +40,8 @@ function makeRun(overrides: Partial<ActiveRun> = {}): ActiveRun {
     snapshotRiderFee: 0,
     payoutMethod: null,
     cashPaidAmount: null,
+    purchaseAmount: null,
+    netAmount: null,
     completedAt: null,
     createdAt: "2026-07-09T00:00:00Z",
     supplierPhone: null,
@@ -198,7 +203,39 @@ describe("ActiveRunPage — 계량 제출: 업로드 진행 + 토스트(06 E6/E8
       new File(["b"], "b.jpg", { type: "image/jpeg" }),
     ];
     fireEvent.change(screen.getByTestId("photo-uploader-input"), { target: { files } });
+    // [12 §4] 첫 제출 시 바코드 ≥1건 필수 — 수동 입력으로 1건 추가.
+    fireEvent.change(screen.getByTestId("barcode-input"), { target: { value: "8801234567890" } });
+    fireEvent.click(screen.getByTestId("barcode-add"));
   }
+
+  it("[12 §4] 바코드 없이 제출하면 인라인 에러(첫 제출 필수)", () => {
+    renderRun(makeRun({ status: "ARRIVED" }));
+    fireEvent.change(screen.getByTestId("measured-kg-input"), { target: { value: "40" } });
+    fireEvent.click(screen.getByTestId("payout-option-cash"));
+    fireEvent.change(screen.getByTestId("photo-uploader-input"), {
+      target: { files: [new File(["a"], "a.jpg", { type: "image/jpeg" })] },
+    });
+    fireEvent.click(screen.getByTestId("submit-measure-button"));
+    expect(screen.getByTestId("run-action-error")).toHaveTextContent("바코드");
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it("[12 §4] 바코드를 SUBMIT_MEASURE payload에 실어 보낸다", async () => {
+    mockStorageFrom.mockReturnValue({
+      upload: vi.fn(() => Promise.resolve({ error: null })),
+      createSignedUrl: vi.fn(() =>
+        Promise.resolve({ data: { signedUrl: "https://signed.example/p.jpg" }, error: null }),
+      ),
+    });
+    mockInvoke.mockResolvedValue({ ok: true, data: {} });
+    renderRun(makeRun({ status: "ARRIVED" }));
+    fillMeasureForm();
+    fireEvent.click(screen.getByTestId("submit-measure-button"));
+    await waitFor(() => expect(mockInvoke).toHaveBeenCalled());
+    const [, body] = mockInvoke.mock.calls[0]!;
+    expect(body.action).toBe("SUBMIT_MEASURE");
+    expect(body.payload.barcodes).toEqual(["8801234567890"]);
+  });
 
   it("순차 업로드 중 '사진 N/M 업로드 중' 표시 후 성공 토스트", async () => {
     // 업로드 promise를 수동 resolve해 진행 카운트 전환을 관찰한다.

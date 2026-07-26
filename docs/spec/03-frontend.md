@@ -215,3 +215,14 @@ Realtime: `pickup_orders` 자기 행 UPDATE 구독으로 상태 자동 갱신 (�
 - 에러 표시: errorCodes → 한글 메시지 맵 (packages/core). 네트워크 오류 공통 토스트 + 재시도.
 - 로딩: 스켈레톤 (스피너 금지, 시세/잔액 카드는 스켈레톤 형태 유지).
 - 날짜: date-fns + ko locale.
+
+## 14 신유·정산 화면 (J-태스크, 14-fresh-oil-settlement.md 단일 진실)
+
+- **user**: RequestPage 신유 구매 스텝(고시가·상계 미리보기, `?mode=purchase` 단독 진입, 폐유 0 허용) +
+  OrderDetailPage 라이더 실시간 마커(useRiderLocation) + arrived_at 타임라인. 훅 useFreshOilPrice.
+- **rider**: ActiveRunPage ArrivedPanel deliveredCans 스테퍼 + 현장 상계 미리보기(net 양/음) + measuredKg/바코드
+  게이트 완화(구매 동반). useActiveRun에 order_kind·purchase_* 컬럼 추가.
+- **admin**: PricePage 신유 판매가 섹션. DealerSettlementPage(/dealer-settlement — 좌상별 계정 폼·명세·청구/정산/무효·
+  CSV). 나브 "좌상 정산" 추가.
+- **dealer**: DealerStatementPage(/statement — 본인 사용액/한도/여유·청구 이력, 읽기 전용). 나브 "정산 명세" 추가.
+- ui: QtyStepper `subLabel` prop(신유 통수엔 kg 환산 억제), MapView `riderMarker` prop(앰버 실시간 마커).
