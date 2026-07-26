@@ -18,7 +18,8 @@ export interface AddressFieldProps {
 /**
  * U2 가입/수거요청의 매장 주소 입력(12 S2 재구현). 03-frontend.md: "주소 검색 → 좌표 저장".
  * - [주소 검색]: Daum 우편번호 위젯(API 키 불필요) → 도로명 주소 선택.
- * - 좌표: 선택한 주소를 VWorld Geocoder(VWORLD_KEY/MAP_STYLE_URL에서 키 재사용)로 변환.
+ * - 좌표: 선택한 주소를 geocode Edge Function(서버측 VWorld 프록시)으로 변환 — 브라우저
+ *   직접 호출은 CORS로 차단되고 키가 번들에 노출된다(12 S2 재설계).
  * - 지오코딩 실패·위젯 로드 실패: 주소 텍스트 직접 입력 + 위/경도 수동 입력으로 강등.
  * 좌표가 확정되기 전(lat/lng null)에는 호출부가 제출을 막는다 — 기본 좌표 저장(데이터 오염)
  * 을 근본 차단한다(구현 전에는 카카오 키 유무로 UI가 사라지거나 기본 좌표가 저장됐다).

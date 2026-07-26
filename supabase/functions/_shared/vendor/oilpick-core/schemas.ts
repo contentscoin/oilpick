@@ -248,6 +248,15 @@ var referralSettleOutputSchema = z.object({
   settled: z.boolean(),
   settledAt: z.string().nullable()
 });
+var geocodeInputSchema = z.object({
+  address: z.string().trim().min(1).max(200)
+});
+var geocodeOutputSchema = z.object({
+  /** 서버에 VWORLD_KEY가 설정돼 지오코딩이 가능한지. false면 point는 null. */
+  configured: z.boolean(),
+  /** 변환된 좌표. 주소를 못 찾았거나 미구성이면 null → 호출부는 수동 좌표 입력으로 강등. */
+  point: z.object({ lat: latSchema, lng: lngSchema }).nullable()
+});
 var directionsInputSchema = z.object({
   origin: z.object({ lat: latSchema, lng: lngSchema }),
   destination: z.object({ lat: latSchema, lng: lngSchema })
@@ -369,6 +378,8 @@ export {
   freshOilPriceSetInputSchema,
   freshOilPriceSetOutputSchema,
   freshOilPriceTickSchema,
+  geocodeInputSchema,
+  geocodeOutputSchema,
   notifyBroadcastInputSchema,
   notifyBroadcastOutputSchema,
   okResponseSchema,
