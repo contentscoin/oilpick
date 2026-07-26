@@ -122,6 +122,44 @@ CallCard 거리 nullable("—"), CallHomePage 거리정렬·CallDetailPage 지�
 S1 수정 후: 거리순 정렬·거리 표기·콜 상세 지도 센터·M9-a 내비 딥링크 좌표를 로컬 스택
 실데이터로 검증(qa-checklist 갱신). 좌표 null 콜의 UI(거리 미표기·지도 프리뷰) 확정.
 
+### S6. `PICKED_UP` 주문은 운영자가 꺼낼 수 없다 — 상태머신 막다른 길 【P2, 미수정·기록】
+
+**증상(2026-07-26 프로덕션 실측)**: 레거시 `PICKED_UP` 주문 1건이 남아 라이더 한 명이 영구히
+콜을 받지 못했다. 라이더당 활성 주문 1건 제약(`idx_rider_single_active_order`)과 order-accept
+가드가 `PICKED_UP`을 활성으로 세기 때문이다.
+
+**막다른 길인 이유** — `PICKED_UP`에서 나가는 경로가 전부 닫혀 있다:
+
+| 액션 | 허용 상태 | `PICKED_UP` |
+|---|---|---|
+| `CANCEL`(admin) | `ACCEPTED`·`ARRIVED`·`DISPUTED` | ❌ 목록에 없음 |
+| `FORCE_COMPLETE`(admin) | `ARRIVED` + 계량 존재 | ❌ |
+| `DELIVER`(rider) | `PICKED_UP` → `COMPLETED` | ⚠️ RPC에는 있으나 **호출 UI가 없다** |
+
+`DELIVER`는 `fn_transition_order`에 그대로 살아 있지만, 07 F13이 집하장 개념을 폐기하며 라이더 앱의
+호출부와 어드민 `/depots` 메뉴·라우트를 제거했다(`AdminShell.tsx` 주석 참조). 스캐너 모듈
+(`apps/rider/src/lib/native/scanner.ts`)만 잔존한다. 즉 **RPC는 있는데 누를 버튼이 없다.**
+
+**행 삭제도 불가** — 해당 주문에는 `point_ledger` 참조가 있다(실측: 점주 `EARN` +405,000,
+라이더 `HOLD` 2,000). `point_ledger.order_id`는 cascade가 아니라 FK 위반으로 막히고, 애초에
+포인트 원장은 append-only 감사 기록이라 삭제 대상이 아니다.
+
+**취소는 의미상으로도 틀리다** — `EARN`이 이미 발행됐다는 건 거래가 성립했다는 뜻이다. 취소하면
+지급은 남고 주문만 사라져 대사가 어긋난다. (초기에 "CANCEL 허용 상태에 `PICKED_UP` 추가"를
+검토했으나 원장 확인 후 폐기 — 맞는 방향은 **완료 처리**다.)
+
+**현재 판단(CEO, 2026-07-26): 방치.** 신 모델은 `PICKED_UP`을 생성하지 않으므로(07 이후 경로는
+`ARRIVED → COMPLETED`) 재발하지 않고, 영향은 테스트 라이더 1명이 묶이는 것뿐이다.
+
+**수정하게 된다면** 두 갈래:
+1. 어드민 `FORCE_COMPLETE` 허용 상태에 `PICKED_UP` 추가 — 원장은 `on conflict do nothing`으로
+   멱등이라 EARN 중복 지급은 없다. 단 `fn_settle_trade`가 `final_kg` 기준으로 도는데 레거시 주문에
+   `final_kg`가 없으면 전무거래로 거부되므로 사전 확인 필요.
+2. **레거시 완결 전용 어드민 액션 신설**(권장) — `PICKED_UP → COMPLETED`만 하고 원장은 손대지 않는
+   경로. `DELIVER`가 이미 정확히 그 일을 하므로 어드민에 진입점만 붙이는 수준이다.
+
+⚠️ 레거시 데이터를 손대거나 상태머신을 확장할 때 이 항목을 먼저 볼 것.
+
 ### S5. 실기기/실서비스 검증 항목 (qa-checklist 🔴 재확인)
 - Capacitor WebView WebGL(MapLibre) 실기기, 카카오맵/TMap 딥링크 앱 호출, FCM 실푸시,
   QR 카메라, OTP 실SMS — 코드가 아니라 **실기기·시크릿 확보 후 검증**이 필요한 것들.
@@ -130,5 +168,7 @@ S1 수정 후: 거리순 정렬·거리 표기·콜 상세 지도 센터·M9-a �
 ## 작업 순서 (코딩 세션 지시)
 1. **사용자**: 0-1 확인(1분 SQL) → 미실행이면 컷오버 → 0-2 시세 tick·admin 계정 → 재현 테스트.
 2. S1(좌표 파서 통일 — 파급 최대·리스크 최소) → S2(주소 입력 재구현+보정) → S3 → S4.
+3. S6는 **의도적 미수정**(CEO 판단) — 신 모델 미도달이라 재발 없음. 레거시 데이터 정리나
+   상태머신 확장 시에만 꺼내 볼 것.
 3. 각 태스크: 스펙 문서(00/01/02/03) 동기화 → 구현 → 게이트(lint/test/build+pgTAP) →
    로컬 스택 실측 → 커밋/PR. 13-org-dealer.md(좌상 구조)는 안정화 뒤 착수 권장.
