@@ -28,6 +28,16 @@ export const MIN_WITHDRAW = 10000;
 export const BROADCAST_RADII = [3, 7, 15] as const;
 
 /** 콜 수락 타임아웃(초). 03-frontend.md 상수 목록. */
+/**
+ * 라이더가 동시에 보유할 수 있는 활성 주문(ACCEPTED/ARRIVED/PICKED_UP/DISPUTED) 상한.
+ * 거리·동선을 묶어 여러 콜을 받을 수 있게 하되, 앞 건이 지연되면 뒤 점주들의 대기가 길어져
+ * 분쟁 위험이 커지므로 상한을 둔다. 점주 측 진행중 주문 상한(order-create의 3건)과 같은 값.
+ *
+ * ⚠️ SQL은 이 상수를 import할 수 없어 fn_transition_order/fn_find_eligible_riders에 리터럴 3이
+ * 중복돼 있다. 값을 바꾸면 마이그레이션도 함께 고칠 것(pgTAP 14_rider_multi_active_test가 고정).
+ */
+export const MAX_RIDER_ACTIVE_ORDERS = 3;
+
 export const CALL_ACCEPT_TIMEOUT_SEC = 15;
 
 /**

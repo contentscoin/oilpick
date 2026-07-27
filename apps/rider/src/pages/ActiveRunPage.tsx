@@ -33,12 +33,13 @@ import {
   type OrderStatus,
   type PayoutMethod,
   type PickupGeo,
+  ORDER_STATUS_LABEL,
 } from "@oilpick/core";
 import { MAP_STYLE_URL } from "../lib/env";
 import { invokeEdgeFunction } from "../lib/edgeFunction";
 import { supabase } from "../lib/supabaseClient";
 import { useSession } from "../hooks/useSession";
-import { useActiveRun } from "../hooks/useActiveRun";
+import { useActiveRun, useActiveRunSummaries, type ActiveRunSummary } from "../hooks/useActiveRun";
 import { useRiderLocationPusher } from "../hooks/useRiderLocationPusher";
 import { isScannerAvailable, scanQrCode } from "../lib/native/scanner";
 
@@ -61,7 +62,11 @@ export function ActiveRunPage() {
   const navigate = useNavigate();
   const { session } = useSession();
   const riderId = session?.user.id;
-  const { data: run, isLoading } = useActiveRun(riderId);
+  // [다중 콜] 활성 주문이 최대 3건이 될 수 있다. 어느 건을 보고 있는지는 화면 상태로 들고,
+  // 미선택이면 가장 최근 건을 보여준다(단건일 때는 전환기가 아예 렌더되지 않아 기존과 동일).
+  const [selectedOrderId, setSelectedOrderId] = useState<string | undefined>(undefined);
+  const { data: run, isLoading } = useActiveRun(riderId, selectedOrderId);
+  const { data: summaries } = useActiveRunSummaries(riderId);
 
   useRiderLocationPusher(Boolean(run));
 
@@ -91,6 +96,10 @@ export function ActiveRunPage() {
 
   return (
     <main style={{ display: "flex", flexDirection: "column", gap: 20, padding: 20, maxWidth: 480, margin: "0 auto" }}>
+      {/* [다중 콜] 진행 중인 운행이 2건 이상일 때만 전환기를 띄운다. 단건이면 렌더되지 않아
+          기존 화면과 동일하다. 이게 없으면 3건을 수락해도 한 건만 보여 나머지가 갇힌다. */}
+      <RunSwitcher runs={summaries ?? []} currentId={run.id} onSelect={setSelectedOrderId} />
+
       {/* 05-design-upgrade.md 상태 헤드라인 패턴을 라이더 관점 카피로. 주소는 헤드라인 카드 안에 묶어
           "어디로 가야 하는지"를 함께 안내한다. */}
       <RiderRunHeadline status={run.status} address={run.pickupAddress} />
@@ -179,6 +188,61 @@ const RIDER_HEADLINE: Partial<Record<OrderStatus, { title: string; hint: string 
   // 레거시 전용(구모델 PICKED_UP 잔존분).
   PICKED_UP: { title: "집하장으로 이동해주세요", hint: "QR로 배송을 완료하세요." },
 };
+
+/**
+ * 진행 중 운행 전환기(다중 콜). 2건 이상일 때만 렌더한다.
+ * 상태 라벨 + 주소 앞부분으로 어느 건인지 구분하고, 탭하면 해당 운행 화면으로 전환한다.
+ */
+function RunSwitcher({
+  runs,
+  currentId,
+  onSelect,
+}: {
+  runs: ActiveRunSummary[];
+  currentId: string;
+  onSelect: (id: string) => void;
+}) {
+  if (runs.length < 2) return null;
+  return (
+    <section data-testid="run-switcher" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: colors.status.wait }}>
+        진행 중 {runs.length}건 — 탭해서 전환
+      </p>
+      <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4 }}>
+        {runs.map((r) => {
+          const active = r.id === currentId;
+          return (
+            <button
+              key={r.id}
+              type="button"
+              data-testid={`run-switch-${r.id}`}
+              aria-current={active ? "true" : undefined}
+              onClick={() => onSelect(r.id)}
+              style={{
+                flexShrink: 0,
+                maxWidth: 200,
+                textAlign: "left",
+                padding: "8px 12px",
+                borderRadius: radius.button,
+                border: `1px solid ${active ? colors.primary.DEFAULT : surface.border}`,
+                backgroundColor: active ? colors.primary.light : "#fff",
+                color: active ? colors.primary.dark : gray[900],
+                fontSize: 13,
+                lineHeight: 1.35,
+                cursor: "pointer",
+              }}
+            >
+              <span style={{ display: "block", fontWeight: 700 }}>{ORDER_STATUS_LABEL[r.status]}</span>
+              <span style={{ display: "block", opacity: 0.8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {r.pickupAddress}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
 
 function RiderRunHeadline({ status, address }: { status: OrderStatus; address: string }) {
   const copy = RIDER_HEADLINE[status] ?? { title: "운행 중", hint: "" };

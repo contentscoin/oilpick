@@ -4,16 +4,20 @@ import { ToastProvider } from "@oilpick/ui";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OrderStatus } from "@oilpick/core";
 import { ActiveRunPage } from "./ActiveRunPage";
-import type { ActiveRun } from "../hooks/useActiveRun";
+import type { ActiveRun, ActiveRunSummary } from "../hooks/useActiveRun";
 
-const { mockUseSession, mockUseActiveRun, mockInvoke, mockStorageFrom } = vi.hoisted(() => ({
+const { mockUseSession, mockUseActiveRun, mockInvoke, mockStorageFrom, mockUseActiveRunSummaries } = vi.hoisted(() => ({
   mockUseSession: vi.fn(),
   mockUseActiveRun: vi.fn(),
+  mockUseActiveRunSummaries: vi.fn<() => { data: ActiveRunSummary[] }>(() => ({ data: [] })),
   mockInvoke: vi.fn(),
   mockStorageFrom: vi.fn(),
 }));
 vi.mock("../hooks/useSession", () => ({ useSession: mockUseSession }));
-vi.mock("../hooks/useActiveRun", () => ({ useActiveRun: mockUseActiveRun }));
+vi.mock("../hooks/useActiveRun", () => ({
+  useActiveRun: mockUseActiveRun,
+  useActiveRunSummaries: mockUseActiveRunSummaries,
+}));
 vi.mock("../hooks/useRiderLocationPusher", () => ({ useRiderLocationPusher: vi.fn() }));
 vi.mock("../lib/native/scanner", () => ({ isScannerAvailable: () => false, scanQrCode: vi.fn() }));
 vi.mock("../lib/edgeFunction", () => ({ invokeEdgeFunction: mockInvoke }));
@@ -143,6 +147,35 @@ describe("ActiveRunPage — 레거시 PICKED_UP(07 F6-②)", () => {
     expect(screen.getByTestId("depot-id-input")).toBeInTheDocument();
     expect(screen.getByTestId("qr-secret-input")).toBeInTheDocument();
     expect(screen.getByTestId("deliver-button")).toBeInTheDocument();
+  });
+});
+
+describe("ActiveRunPage — 다중 콜 전환기", () => {
+  it("진행 중 2건 이상이면 전환기를 띄우고, 탭하면 해당 운행으로 전환한다", async () => {
+    const runs = [
+      { id: "o-1", status: "ACCEPTED" as const, pickupAddress: "서울 강서구 화곡로 1", createdAt: "2026-07-26T00:00:00Z" },
+      { id: "o-2", status: "ARRIVED" as const, pickupAddress: "서울 성북구 장월로 120", createdAt: "2026-07-26T01:00:00Z" },
+    ];
+    mockUseActiveRunSummaries.mockReturnValue({ data: runs });
+    renderRun(makeRun({ id: "o-1", status: "ACCEPTED" }));
+
+    expect(screen.getByTestId("run-switcher")).toBeInTheDocument();
+    expect(screen.getByText("진행 중 2건 — 탭해서 전환")).toBeInTheDocument();
+    // 현재 보고 있는 건이 표시된다.
+    expect(screen.getByTestId("run-switch-o-1")).toHaveAttribute("aria-current", "true");
+    expect(screen.getByTestId("run-switch-o-2")).not.toHaveAttribute("aria-current");
+
+    fireEvent.click(screen.getByTestId("run-switch-o-2"));
+    // 선택이 훅으로 전달돼야 한다(선택된 orderId로 재조회).
+    await waitFor(() => expect(mockUseActiveRun).toHaveBeenCalledWith(expect.anything(), "o-2"));
+  });
+
+  it("진행 중 1건이면 전환기를 렌더하지 않는다(기존 화면과 동일)", () => {
+    mockUseActiveRunSummaries.mockReturnValue({
+      data: [{ id: "o-1", status: "ACCEPTED" as const, pickupAddress: "서울 강서구 화곡로 1", createdAt: "2026-07-26T00:00:00Z" }],
+    });
+    renderRun(makeRun({ id: "o-1", status: "ACCEPTED" }));
+    expect(screen.queryByTestId("run-switcher")).not.toBeInTheDocument();
   });
 });
 

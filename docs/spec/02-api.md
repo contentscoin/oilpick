@@ -33,7 +33,11 @@ and last_location 반경 내 and 진행중 주문 없음` 검색 → FCM 멀티�
 
 ## 2. `order-accept` (rider)
 - 입력: `{ orderId }`
-- 가드: verified·online·**진행중 주문 없음(ACCEPTED/ARRIVED/PICKED_UP/DISPUTED 포함**, idx_rider_single_active_order와 정합). 아니면 403 `RIDER_NOT_ELIGIBLE`.
+- 가드: verified·online·**활성 주문 상한 미만**(ACCEPTED/ARRIVED/PICKED_UP/DISPUTED 합계 < `MAX_RIDER_ACTIVE_ORDERS`=3).
+  verified/online 위반은 403 `RIDER_NOT_ELIGIBLE`, 상한 초과는 409 `RIDER_TOO_MANY_ACTIVE`.
+  ⚠️ Edge 가드는 **fail-fast 선차단**일 뿐이고 진짜 방어는 RPC다 — 동시 수락은 Edge를 둘 다 통과할 수 있고,
+  `fn_transition_order` ACCEPT의 advisory lock(`rider_active:{riderId}`) + 카운트 체크가 상한을 강제한다.
+  (구 설계는 유니크 인덱스 `idx_rider_single_active_order`로 1건을 강제했다 — "N건 이하"는 유니크로 표현 불가해 RPC로 이관.)
 - **쿠폰 사전 체크 삭제**(08 P1 — 신규 주문 coupon_cost null). `mapTransitionError`의
   `INSUFFICIENT_COUPON → 409` 매핑은 전환기 잔존 쿠폰 주문(coupon_cost not null) 대비로 보존.
 - 처리: fn_transition_order ACCEPT — 조건부 `update ... where status='REQUESTED'`(0행이면 409 `ALREADY_ACCEPTED`).
