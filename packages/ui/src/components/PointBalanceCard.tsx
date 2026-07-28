@@ -1,6 +1,6 @@
 import type { ButtonHTMLAttributes, KeyboardEvent, ReactNode } from "react";
 import { formatPoint } from "@oilpick/core";
-import { colors, elevation, gradient, radius } from "../tokens";
+import { colors, elevation, gradient, radius, surfaceDark } from "../tokens";
 
 /**
  * 03-frontend.md "packages/ui 컴포넌트" — PointBalanceCard.
@@ -33,6 +33,12 @@ export interface PointBalanceCardProps {
   action?: ReactNode;
   /** 카드 전체 탭 핸들러(예: 쿠폰 내역으로 이동). 지정 시 카드가 버튼 역할을 한다. */
   onClick?: () => void;
+  /**
+   * [15] 카드 톤. 기본 "point"(앰버 gradient, 05 이래의 포인트 히어로).
+   * "dark"는 beUI 목업의 월렛 카드 — 뉴트럴 다크 패널 + 라임 글로우. 지갑처럼 "돈이 쌓이는 곳"을
+   * 화면에서 가장 무겁게 보이게 할 때 쓴다. 라임은 다크 배경 전용이라 이 톤에서만 등장한다.
+   */
+  tone?: "point" | "dark";
   className?: string;
 }
 
@@ -44,8 +50,10 @@ export function PointBalanceCard({
   formatValue = formatPoint,
   action,
   onClick,
+  tone = "point",
   className,
 }: PointBalanceCardProps) {
+  const dark = tone === "dark";
   return (
     <div
       className={className}
@@ -63,11 +71,14 @@ export function PointBalanceCard({
             },
           }
         : {})}
+      data-tone={tone}
       style={{
         borderRadius: radius.hero,
         padding: 20,
-        background: gradient.point,
-        boxShadow: elevation.raised,
+        background: dark
+          ? `radial-gradient(circle at 82% 10%, ${colors.lime.soft}, transparent 38%), ${surfaceDark.panel}`
+          : gradient.point,
+        boxShadow: dark ? elevation.heroDark : elevation.raised,
         color: "#fff",
         cursor: onClick ? "pointer" : "default",
         textAlign: "left",

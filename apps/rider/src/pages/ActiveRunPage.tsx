@@ -15,6 +15,7 @@ import {
   gray,
   radius,
   surface,
+  surfaceDark,
   touchTarget,
   useToast,
   type PhotoAsset,
@@ -799,20 +800,22 @@ function ArrivedPanel({
               alignItems: "center",
               justifyContent: "space-between",
               gap: 8,
-              padding: "12px 14px",
-              borderRadius: radius.button,
-              backgroundColor: colors.accent.light,
+              padding: "16px 16px",
+              borderRadius: radius.card,
+              // [15] 목업의 "최종 현장 지급액" 다크 바 — 이 화면에서 라이더가 확인해야 할
+              // 단 하나의 숫자라 주변 폼과 톤을 분리한다.
+              backgroundColor: surfaceDark.panel,
+              boxShadow: elevation.heroDark,
             }}
           >
-            <span style={{ fontSize: 13, fontWeight: 600, color: colors.status.wait }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: surfaceDark.textOnDarkMuted }}>
               {isPointSelected ? "점주에게 적립될 포인트" : "점주에게 지급할 현금"}
             </span>
-            {/* 05 폴리시: 밝은 배경(accent.light) 위 앰버 "텍스트"는 accent.deep(대비 4.5:1).
-                [15] kg를 입력하는 동안 금액이 따라 움직인다 — 얼마를 지급할지가 실시간으로 보인다. */}
+            {/* [15] kg를 입력하는 동안 금액이 따라 움직인다 — 얼마를 지급할지가 실시간으로 보인다. */}
             <NumberFlow
               value={payoutAmount}
               format={(n) => (isPointSelected ? formatPoint(Math.round(n)) : formatKrw(Math.round(n)))}
-              style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-0.01em", color: colors.accent.deep }}
+              style={{ fontSize: 24, fontWeight: 800, letterSpacing: "-0.01em", color: surfaceDark.textOnDark }}
             />
           </div>
         )}

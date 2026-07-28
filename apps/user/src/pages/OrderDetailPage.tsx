@@ -332,12 +332,47 @@ export function OrderDetailPage() {
           routePath={directions?.path ?? []}
           etaLabel={formatEta(directions?.durationSeconds) ?? undefined}
           pickupLabel={order.pickupAddress}
-          style={{ minHeight: 220 }}
+          style={{ minHeight: 300 }}
         />
       )}
 
-      {/* 05-design-upgrade.md "라이더/기사 카드": 아바타 이니셜+이름+인증 pill+차량번호+전화 버튼. */}
-      {showRiderCard && rider && (
+      {/* [15] 목업 추적 구성 — 지도 위로 시트가 올라온다. 지도를 배경으로 밀어내고 라이더·상태
+          정보를 한 덩어리로 묶어 "지금 어디까지 왔는가"가 한 눈에 읽히게 한다.
+          지도가 없는 상태(REQUESTED/COMPLETED 등)에서는 시트 껍데기 없이 그대로 흐른다. */}
+      {showMapAndTimeline && (
+        <div
+          data-testid="order-track-sheet"
+          style={{
+            position: "relative",
+            zIndex: 1,
+            marginTop: -22,
+            padding: "10px 16px 16px",
+            borderRadius: `${radius.hero}px ${radius.hero}px ${radius.card}px ${radius.card}px`,
+            backgroundColor: surface.app,
+            border: `1px solid ${surface.border}`,
+            boxShadow: "0 -12px 32px rgba(17,24,39,0.10)",
+            display: "flex",
+            flexDirection: "column",
+            gap: 12,
+          }}
+        >
+          <span
+            aria-hidden
+            style={{ width: 42, height: 5, borderRadius: 999, backgroundColor: gray[300], margin: "0 auto 2px" }}
+          />
+          {showRiderCard && rider && (
+            <DriverCard
+              name={rider.displayName}
+              vehicleNo={rider.vehicleNumber}
+              phone={rider.phone}
+              verified={rider.verifyStatus === "APPROVED"}
+            />
+          )}
+        </div>
+      )}
+
+      {/* 지도 구간이 아닐 때는 라이더 카드를 그대로 흐름에 둔다. */}
+      {!showMapAndTimeline && showRiderCard && rider && (
         <DriverCard
           name={rider.displayName}
           vehicleNo={rider.vehicleNumber}
