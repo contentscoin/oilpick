@@ -44,10 +44,34 @@ describe("OrderTimeline", () => {
     );
     expect(screen.getByTestId("order-timeline-time-REQUESTED")).toHaveTextContent("오늘 09:00");
     expect(screen.getByTestId("order-timeline-time-ACCEPTED")).toHaveTextContent("오늘 09:05");
-    // 시각이 없는 미래/미기록 스텝은 "-".
+    // 도달했는데 시각이 없는 스텝(현재 ARRIVED)은 "-"로 공백을 드러낸다.
     expect(screen.getByTestId("order-timeline-time-ARRIVED")).toHaveTextContent("-");
-    expect(screen.getByTestId("order-timeline-time-COMPLETED")).toHaveTextContent("-");
+    // [15] 아직 오지 않은 스텝은 시각 줄 자체를 렌더하지 않는다("예정" pill이 대신 말한다).
+    expect(screen.queryByTestId("order-timeline-time-COMPLETED")).not.toBeInTheDocument();
     // 신규 경로에는 PICKED_UP 스텝(시각 컬럼)이 없다.
     expect(screen.queryByTestId("order-timeline-time-PICKED_UP")).not.toBeInTheDocument();
+  });
+
+  it("[15] 스텝마다 완료됨/진행 중/예정 상태 pill을 붙인다", () => {
+    render(<OrderTimeline currentStatus="ARRIVED" />);
+    expect(screen.getByTestId("order-timeline-state-REQUESTED")).toHaveTextContent("완료됨");
+    expect(screen.getByTestId("order-timeline-state-ACCEPTED")).toHaveTextContent("완료됨");
+    expect(screen.getByTestId("order-timeline-state-ARRIVED")).toHaveTextContent("진행 중");
+    expect(screen.getByTestId("order-timeline-state-COMPLETED")).toHaveTextContent("예정");
+  });
+
+  it("[15] COMPLETED 주문은 마지막 스텝이 '진행 중'이 아니라 종결이다", () => {
+    render(<OrderTimeline currentStatus="COMPLETED" />);
+    expect(screen.getByTestId("order-timeline-state-ARRIVED")).toHaveTextContent("완료됨");
+    // 도달한 마지막 스텝은 라벨("완료")이 종결을 말하므로 pill을 겹쳐 붙이지 않는다.
+    expect(screen.queryByTestId("order-timeline-state-COMPLETED")).not.toBeInTheDocument();
+    expect(screen.getByTestId("order-timeline")).not.toHaveTextContent("진행 중");
+  });
+
+  it("[15] 레거시 DELIVERED는 PICKED_UP까지 완료로 읽는다", () => {
+    // path.indexOf("DELIVERED") === -1이라 예전엔 전 스텝이 미완("예정")으로 보였다.
+    render(<OrderTimeline currentStatus="DELIVERED" />);
+    expect(screen.getByTestId("order-timeline-state-PICKED_UP")).toHaveTextContent("완료됨");
+    expect(screen.getByTestId("order-timeline-state-REQUESTED")).toHaveTextContent("완료됨");
   });
 });

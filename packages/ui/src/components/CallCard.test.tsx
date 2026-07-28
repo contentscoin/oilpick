@@ -9,7 +9,9 @@ describe("CallCard", () => {
     expect(screen.getByTestId("call-card")).toHaveTextContent("3.2km");
     expect(screen.getByText(/45\.0kg/)).toBeInTheDocument();
     expect(screen.getByTestId("call-card-cash")).toHaveTextContent("72,000원");
-    expect(screen.getByText("예상 매입 지급액")).toBeInTheDocument();
+    // [15] 목록에선 라벨을 "지급액"으로 줄이고, 뜻(라이더가 점주에게 줄 돈)은 접근성 이름에 남긴다.
+    expect(screen.getByText("지급액")).toBeInTheDocument();
+    expect(screen.getByLabelText("예상 매입 지급액 72,000원")).toBeInTheDocument();
   });
 
   it("[08 G6-②] 쿠폰 칩 없음 — 쿠폰 모델 폐기", () => {

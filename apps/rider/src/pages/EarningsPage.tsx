@@ -32,8 +32,9 @@ export function EarningsPage() {
               gap: 14,
               padding: "24px 20px",
               borderRadius: radius.hero,
-              background: gradient.point,
-              boxShadow: elevation.raised,
+              // [15] 목업의 다크 실적 히어로 — 이번 달 지급이 이 화면의 주인공이다.
+              background: `radial-gradient(circle at 82% 12%, ${colors.lime.soft}, transparent 40%), ${gradient.heroDeep}`,
+              boxShadow: elevation.heroDark,
             }}
           >
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>

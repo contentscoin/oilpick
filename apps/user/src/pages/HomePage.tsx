@@ -26,6 +26,7 @@ import { useActiveOrder } from "../hooks/useActiveOrder";
 import { useOrderHistory } from "../hooks/useOrderHistory";
 import { useMonthlyCashReceipt } from "../hooks/useCashReceipts";
 import { useUnreadCount } from "../hooks/useUnreadCount";
+import { useProfile } from "../hooks/useProfile";
 
 /**
  * U3 홈 — 07 F8 전면 리디자인. **일별 시세 히어로가 주인공**.
@@ -117,6 +118,9 @@ export function HomePage() {
   const { data: monthly } = useMonthlyCashReceipt(userId);
   // 06 E7: 미읽음 카운트 — 주문상세 헤더와 공용 훅(리스트 기반 인라인 계산의 공통 추출).
   const unread = useUnreadCount(userId);
+  // [15] 헤더 매장명. 조회 실패·미등록이면 빈 문자열 → 헤더는 로고만 렌더한다.
+  const { data: profile } = useProfile(userId);
+  const storeName = profile?.storeName ?? "";
 
   const daily = resampleDaily(ticks ?? [], days);
   const hasChart = daily.length >= 2;
@@ -139,19 +143,43 @@ export function HomePage() {
           display: "flex",
           flexDirection: "column",
           gap: 16,
-          padding: "16px 20px 148px",
+          padding: "16px 20px 88px",
           maxWidth: 480,
           margin: "0 auto",
           backgroundColor: surface.app,
           minHeight: "100vh",
         }}
       >
-        {/* 헤더: 로고 + 알림 벨/이력 */}
-        <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: 4 }}>
-          <h1 style={{ margin: 0, display: "flex", alignItems: "center" }} aria-label="폐유">
-            <PayouLockup height={32} />
-          </h1>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        {/* 헤더 — [15] 목업 02 홈 "screen-top": 작은 브랜드 줄 + 큰 매장명.
+            예전엔 로고 하나뿐이라 "내 매장의 화면"이라는 신호가 없었다. 매장명을 아직 못
+            받았으면(로딩·미등록) 예전처럼 로고만 크게 둔다 — 빈 제목을 지어내지 않는다. */}
+        <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, paddingTop: 4 }}>
+          {storeName ? (
+            <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
+              <PayouLockup height={16} />
+              <h1
+                data-testid="home-store-name"
+                style={{
+                  margin: 0,
+                  fontSize: typeScale.title,
+                  fontWeight: 800,
+                  lineHeight: 1.15,
+                  letterSpacing: "-0.01em",
+                  color: gray[900],
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {storeName}
+              </h1>
+            </div>
+          ) : (
+            <h1 style={{ margin: 0, display: "flex", alignItems: "center" }} aria-label="폐유">
+              <PayouLockup height={32} />
+            </h1>
+          )}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
             <button
               type="button"
               data-testid="notifications-link"
@@ -164,8 +192,11 @@ export function HomePage() {
                 justifyContent: "center",
                 width: 44,
                 height: 44,
-                border: "none",
-                background: "none",
+                // [15] 목업 screen-top의 icon-btn — 흰 사각 버튼(테두리 있음). 예전엔 배경도
+                // 테두리도 없어 크림 배경 위에서 아이콘이 떠다니는 것처럼 보였다.
+                borderRadius: radius.button,
+                border: `1px solid ${surface.border}`,
+                backgroundColor: surface.card,
                 color: gray[600],
                 cursor: "pointer",
                 padding: 0,
@@ -183,7 +214,8 @@ export function HomePage() {
                     height: 8,
                     borderRadius: radius.pill,
                     backgroundColor: colors.up,
-                    border: `1.5px solid ${surface.app}`,
+                    // 버튼이 흰 배경을 갖게 되어 테두리색도 카드색으로 맞춘다(크림이면 테가 뜬다).
+                    border: `1.5px solid ${surface.card}`,
                   }}
                 />
               )}
@@ -358,6 +390,16 @@ export function HomePage() {
               />
             </>
           )}
+
+          {/* [15] 목업처럼 CTA를 히어로 안에 둔다. 예전엔 화면 위에 떠 있는 fixed 바라
+              스크롤에 따라 위치가 흔들리고 최근 이력 목록을 가렸다. */}
+          <BigButton
+            data-testid="request-pickup-button"
+            onClick={() => navigate("/request")}
+            style={{ backgroundColor: "#FFFFFF", color: colors.primary.dark, boxShadow: "none" }}
+          >
+            수거 요청하기
+          </BigButton>
         </section>
 
         {/* 진행중 주문 카드 — [15] 상태는 DynamicIsland 하나로 축약한다.
@@ -499,23 +541,6 @@ export function HomePage() {
         </section>
       </main>
 
-      {/* 하단 fixed CTA — 탭바 위, safe-area */}
-      <div
-        style={{
-          position: "fixed",
-          left: 0,
-          right: 0,
-          bottom: "calc(60px + env(safe-area-inset-bottom, 0px))",
-          zIndex: 10,
-          pointerEvents: "none",
-        }}
-      >
-        <div style={{ maxWidth: 480, margin: "0 auto", padding: "0 20px", pointerEvents: "auto" }}>
-          <BigButton data-testid="request-pickup-button" onClick={() => navigate("/request")}>
-            수거 요청하기
-          </BigButton>
-        </div>
-      </div>
     </>
   );
 }

@@ -417,6 +417,35 @@ export function DevUiPage() {
             <NumberFlow value={43800} format={(n) => formatKrw(Math.round(n))} style={{ fontSize: 24, fontWeight: 800, color: surfaceDark.textOnDark }} />
           </div>
         </div>
+
+        <h2 style={{ marginTop: 20 }}>[15] 수거요청 예상액 푸터 — 변경 전 / 후</h2>
+        <div style={{ display: "grid", gap: 12 }}>
+          <div style={{ backgroundColor: surface.card, border: `1px solid ${surface.border}`, borderRadius: radius.card, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+            <span style={{ fontSize: 14, color: colors.status.wait }}>예상 수령액</span>
+            <span className="oilpick-tabular-nums" style={{ fontSize: 22, fontWeight: 800, color: colors.primary.dark }}>42,000원</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "14px 16px", borderRadius: radius.card, backgroundColor: surfaceDark.panel, boxShadow: elevation.heroDark }}>
+            <span style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+              <span style={{ fontSize: 13, color: surfaceDark.textOnDarkMuted }}>예상 수령액</span>
+              <span style={{ fontSize: 11, color: "rgba(255,255,255,0.42)" }}>현장 계량·상계 기준으로 확정돼요</span>
+            </span>
+            <NumberFlow value={42000} format={(n) => formatKrw(Math.round(n))} style={{ fontSize: 24, fontWeight: 800, color: surfaceDark.textOnDark }} />
+          </div>
+        </div>
+
+        <h2 style={{ marginTop: 20 }}>[15] 라이더 지급액 히어로 — 변경 전 / 후</h2>
+        <div style={{ display: "grid", gap: 12 }}>
+          <div style={{ padding: "24px 20px", borderRadius: radius.hero, background: gradient.point, boxShadow: elevation.raised, textAlign: "center" }}>
+            <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "rgba(255,255,255,0.8)" }}>예상 매입 지급액</p>
+            <p className="oilpick-tabular-nums" style={{ margin: "4px 0 0", fontSize: 40, fontWeight: 800, color: "#fff" }}>42,000원</p>
+          </div>
+          <div style={{ padding: "24px 20px", borderRadius: radius.hero, background: `radial-gradient(circle at 82% 12%, ${colors.lime.soft}, transparent 40%), ${gradient.heroDeep}`, boxShadow: elevation.heroDark, textAlign: "center" }}>
+            <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: surfaceDark.textOnDarkMuted }}>예상 매입 지급액</p>
+            <p style={{ margin: "4px 0 0" }}>
+              <NumberFlow value={42000} format={(n) => formatKrw(Math.round(n))} style={{ fontSize: 40, fontWeight: 800, color: surfaceDark.textOnDark }} />
+            </p>
+          </div>
+        </div>
       </section>
 
       <section>

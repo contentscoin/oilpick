@@ -161,9 +161,12 @@ export function ActiveRunPage() {
             minHeight: touchTarget,
             padding: "14px 20px",
             borderRadius: radius.button,
-            backgroundColor: colors.primary.DEFAULT,
-            color: "#fff",
-            fontSize: 17,
+            // [15] 보조 액션이다. 예전엔 제출 CTA와 똑같은 초록 채움이라 초록 버튼 두 개가
+            // 나란히 서서 무엇이 이 화면의 주 행동인지 읽히지 않았다(목업은 primary 하나).
+            backgroundColor: surface.card,
+            border: `1px solid ${colors.primary.DEFAULT}`,
+            color: colors.primary.DEFAULT,
+            fontSize: 16,
             fontWeight: 700,
             textDecoration: "none",
           }}
@@ -756,6 +759,19 @@ function ArrivedPanel({
     }
   }
 
+  // [15] 계량 화면 2열 스탯(총 무게/단가) 스타일.
+  const measureStatStyle = {
+    display: "flex",
+    flexDirection: "column",
+    gap: 4,
+    padding: 12,
+    borderRadius: radius.button,
+    backgroundColor: gray[50],
+    border: `1px solid ${surface.border}`,
+  } as const;
+  const measureStatLabelStyle = { fontSize: 12, color: colors.status.wait } as const;
+  const measureStatValueStyle = { fontSize: 18, fontWeight: 800, letterSpacing: "-0.01em" } as const;
+
   const payoutAmount = kg ? estimateCash(Number(kg), snapshotPricePerKg) : 0;
   const showEstimate = Boolean(kg) && !Number.isNaN(Number(kg));
   const isPointSelected = payout === "POINT";
@@ -783,6 +799,23 @@ function ArrivedPanel({
             onChange={(e) => setKg(e.target.value)}
             style={inputStyle}
           />
+        </div>
+
+        {/* [15] 목업의 총 무게 / 단가 2열 스탯. 입력한 kg와 주문 시점 시세 스냅샷을 나란히 둬
+            "이 숫자 × 이 단가"가 아래 지급액이라는 계산이 눈에 보이게 한다. */}
+        <div data-testid="run-measure-stats" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          <div style={measureStatStyle}>
+            <span style={measureStatLabelStyle}>총 무게</span>
+            <span className="oilpick-tabular-nums" style={measureStatValueStyle}>
+              {showEstimate ? formatKg(Number(kg)) : "—"}
+            </span>
+          </div>
+          <div style={measureStatStyle}>
+            <span style={measureStatLabelStyle}>단가</span>
+            <span className="oilpick-tabular-nums" style={measureStatValueStyle}>
+              {formatKrw(snapshotPricePerKg)}/kg
+            </span>
+          </div>
         </div>
 
         {/* 08 P2: 지급 수단 선택(필수) — 현금/포인트 세그먼트. */}
@@ -1269,12 +1302,14 @@ function CheckMarkIcon() {
 }
 
 /** [사장님께 전화] CTA 전화 아이콘 — user OrderDetailPage PhoneCtaIcon과 동형(E8-④). */
+/** 전화 CTA 아이콘. stroke는 currentColor라 버튼 톤(채움/아웃라인)을 그대로 따라간다 —
+ *  흰 배경 보조 버튼 위에서 흰 아이콘이 사라지는 것을 막는다. */
 function PhoneCtaIcon() {
   return (
     <svg width={20} height={20} viewBox="0 0 24 24" fill="none" aria-hidden>
       <path
         d="M6.5 4h3l1.2 3.2-1.8 1.4a11 11 0 0 0 4.5 4.5l1.4-1.8L18.5 12.5V15.5c0 1-.8 1.8-1.8 1.7A13.5 13.5 0 0 1 4.8 5.8C4.7 4.8 5.5 4 6.5 4Z"
-        stroke="#fff"
+        stroke="currentColor"
         strokeWidth={1.6}
         strokeLinejoin="round"
       />

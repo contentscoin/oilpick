@@ -46,6 +46,22 @@
 | `motion.count` | `900ms` | NumberFlow 카운트업/롤링 |
 | `motion.pulse` | `3s` | Island 호흡, 라이브 도트 |
 
+## 전역 `box-sizing: border-box` (`packages/ui/styles.css`, 2026-07-28)
+
+유저·라이더 앱에는 리셋이 없어 `content-box`가 기본이었다. 이 레포의 인라인 스타일 관례는
+`width: "100%"` + 좌우 padding + 테두리를 한 요소에 함께 쓰는 경우가 많은데, `content-box`
+에서는 padding·border가 100% **바깥**에 더해져 요소가 프레임(`FRAME_MAX_WIDTH` 420) 밖으로
+튀어나간다 — 라이더 운행화면 [사장님께 전화] CTA가 좌우로 42px 넘쳐 나온 것이 이 원인이었다.
+
+지금까지는 `frameFixedStyle`처럼 **요소마다** `boxSizing`을 따로 붙여 막았고, 빠뜨린 곳에서
+같은 결함이 반복됐다. `packages/ui/src/styles.css`에 `*, *::before, *::after { box-sizing:
+border-box }`를 두어 3앱 공통 기준으로 삼는다(admin은 Tailwind preflight가 이미 border-box라
+동작 변화 없음 — 이 규칙으로 세 앱의 박스 모델이 같아진다).
+
+- 새 컴포넌트에서 `boxSizing`을 개별 지정할 필요 없다.
+- 고정 크기(`height`/`width` 숫자)와 padding을 함께 쓰는 요소는 내부 콘텐츠 높이가 줄어드는
+  쪽으로 바뀌므로, 그런 요소는 `minHeight`를 쓴다(이 레포는 이미 `minHeight` 관례).
+
 ## 컴포넌트 매핑 (목업 → payou 화면)
 
 `packages/ui`에 신설. 각 컴포넌트는 vitest 테스트 필수(CLAUDE.md 절대규칙 8은 원장·상태머신·매칭

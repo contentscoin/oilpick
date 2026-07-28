@@ -3,10 +3,15 @@ import { colors, elevation, gray, radius, surface } from "../tokens";
 
 /**
  * 03-frontend.md "packages/ui 컴포넌트" — CallCard(거리/수량/매입액).
- * 05-design-upgrade.md "CallCard(콜 카드)": 리치 카드 — 좌측 거리(큰 숫자+km),
- * 중앙 수량(kg)·주소(truncate). 좌측 얇은 green 액센트 바.
  * [08 G6-②] "쿠폰 N장 소진" 칩 제거(쿠폰 모델 폐기) — 우측은 "예상 매입 지급액 ₩M"
- * (requested_kg×시세, 라이더가 점주에게 현금 또는 포인트로 지급할 금액) 앰버 강조만.
+ * (requested_kg×시세, 라이더가 점주에게 현금 또는 포인트로 지급할 금액)만 남는다.
+ *
+ * [15] beUI 목업 "01 콜 홈 — Toast Stack" 행 구조로 재구성한다.
+ * `[36px 원형 아이콘] [수거지 / 거리·수량] [금액 pill]` 3열 그리드.
+ * 예전 레이아웃은 좌측에 거리 숫자를 22px로 크게 세우고 우측에 금액을 20px 앰버로 세워
+ * **한 카드 안에 큰 숫자가 둘** 있었다 — 목록으로 쌓이면 무엇을 먼저 읽어야 할지 흔들린다.
+ * 목업은 "어디(제목) / 조건(보조) / 얼마(pill)" 한 방향으로만 읽히게 만든다.
+ *
  * apps/rider R2 콜 홈 목록에서 쓰인다. 거리·매입액 계산은 클라이언트 책임 —
  * 이 컴포넌트는 계산된 값만 받는다.
  */
@@ -17,10 +22,26 @@ export interface CallCardProps {
   estimatedKg: number;
   /** 예상 매입 지급액(원) = requested_kg × snapshot_price_per_kg. 현장에서 현금/포인트로 지급. */
   estimatedCash: number;
-  /** 수거 주소(선택). 지정 시 중앙에 한 줄 truncate로 표시. */
+  /** 수거 주소(선택). 지정 시 제목 줄에 한 줄 truncate로 표시. */
   address?: string;
   onClick?: () => void;
   className?: string;
+}
+
+/** 새 콜(브로드캐스트) 아이콘 — 목업 toast-icon의 radio-tower 자리. */
+function CallIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden focusable="false">
+      <circle cx="12" cy="8.5" r="2.2" stroke="currentColor" strokeWidth="1.7" />
+      <path
+        d="M7.4 13.4a6.5 6.5 0 0 1 0-9.8M16.6 3.6a6.5 6.5 0 0 1 0 9.8"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+      />
+      <path d="M11 10.6 9.4 20M13 10.6 14.6 20M10.2 16.4h3.6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    </svg>
+  );
 }
 
 export function CallCard({
@@ -32,71 +53,99 @@ export function CallCard({
   className,
 }: CallCardProps) {
   const Tag = onClick ? "button" : "div";
+  const kg = formatKg(estimatedKg);
+  const distance = distanceKm == null ? "—km" : `${distanceKm.toFixed(1)}km`;
+  // 주소가 있으면 그것이 제목이고 수량은 보조 줄로 내려간다. 주소가 없는(비정상) 콜은
+  // 수량이 제목 자리를 대신한다 — 같은 값을 두 줄에 겹쳐 쓰지 않는다.
+  const title = address ?? kg;
+  const subtitle = address ? `${distance} · ${kg}` : distance;
+
   return (
     <Tag
       className={className}
       data-testid="call-card"
       onClick={onClick}
       style={{
-        display: "flex",
-        alignItems: "stretch",
-        justifyContent: "space-between",
+        display: "grid",
+        gridTemplateColumns: "36px 1fr auto",
+        alignItems: "center",
         gap: 12,
         width: "100%",
         textAlign: "left",
         border: `1px solid ${surface.border}`,
         cursor: onClick ? "pointer" : "default",
         borderRadius: radius.card,
-        // 좌측 얇은 green 액센트 바.
-        borderLeft: `4px solid ${colors.primary.DEFAULT}`,
         padding: "14px 16px",
         backgroundColor: surface.card,
         boxShadow: elevation.card,
         minHeight: 48,
       }}
     >
-      {/* 좌: 거리 */}
-      <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", flexShrink: 0 }}>
+      {/* 좌: 원형 아이콘(그린 채움) — 예전 좌측 액센트 바를 대신한다. */}
+      <span
+        aria-hidden
+        style={{
+          display: "grid",
+          placeItems: "center",
+          width: 36,
+          height: 36,
+          borderRadius: 12,
+          backgroundColor: colors.primary.DEFAULT,
+          color: "#fff",
+        }}
+      >
+        <CallIcon />
+      </span>
+
+      {/* 중앙: 수거지(제목) + 거리·수량(보조) */}
+      <span style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 3 }}>
+        <span
+          style={{
+            fontSize: 16,
+            fontWeight: 700,
+            color: gray[900],
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {title}
+        </span>
         <span
           className="oilpick-tabular-nums"
-          style={{ fontSize: 22, fontWeight: 800, lineHeight: 1, color: gray[900] }}
+          style={{ fontSize: 13, fontWeight: 500, color: colors.status.wait }}
         >
-          {distanceKm == null ? "—" : distanceKm.toFixed(1)}
-          <span style={{ fontSize: 13, fontWeight: 600, color: colors.status.wait }}>km</span>
+          {subtitle}
         </span>
-      </div>
+      </span>
 
-      {/* 중앙: 수량 + 주소 */}
-      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center", gap: 2 }}>
-        <span className="oilpick-tabular-nums" style={{ fontSize: 15, fontWeight: 700 }}>
-          {formatKg(estimatedKg)}
-        </span>
-        {address && (
-          <span
-            style={{
-              fontSize: 13,
-              color: colors.status.wait,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {address}
-          </span>
-        )}
-      </div>
-
-      {/* 우: 예상 매입 지급액(앰버 강조) */}
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", justifyContent: "center", gap: 4, flexShrink: 0 }}>
-        <span style={{ fontSize: 11, fontWeight: 600, color: colors.status.wait }}>예상 매입 지급액</span>
+      {/* 우: 예상 매입 지급액 — 목업 pill.lime(밝은 배경 위 lime.soft 배경 + primary.dark 텍스트,
+          tokens.ts colors.lime 주석의 허용 조합). 라벨은 남긴다: 이 금액은 라이더가 "받는" 돈이
+          아니라 점주에게 "지급할" 돈이라 숫자만 두면 뜻이 뒤집힌다. */}
+      <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+        {/* 라벨은 "지급액"으로 줄인다 — "예상 매입 지급액"은 폭을 110px 넘게 먹어 정작 중요한
+            수거지 주소가 두세 글자만 남고 잘렸다. 전체 문구는 접근성 이름으로 남긴다. */}
+        <span style={{ fontSize: 11, fontWeight: 600, color: colors.status.wait }}>지급액</span>
         <span
           className="oilpick-tabular-nums"
           data-testid="call-card-cash"
-          style={{ fontSize: 20, fontWeight: 800, color: colors.accent.deep, lineHeight: 1.1 }}
+          aria-label={`예상 매입 지급액 ${formatKrw(estimatedCash)}`}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            minHeight: 26,
+            padding: "0 10px",
+            borderRadius: radius.pill,
+            backgroundColor: colors.lime.soft,
+            color: colors.primary.dark,
+            fontSize: 15,
+            fontWeight: 800,
+            whiteSpace: "nowrap",
+          }}
         >
           {formatKrw(estimatedCash)}
         </span>
-      </div>
+      </span>
     </Tag>
   );
 }

@@ -1,6 +1,21 @@
 import { useRef } from "react";
 import { colors, radius } from "../tokens";
 
+/** [15] 업로드 타일 안내 아이콘(카메라). 목업 04 계량 upload 타일. */
+function CameraIcon() {
+  return (
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden focusable="false">
+      <path
+        d="M4 8.5h2.6l1.2-2h8.4l1.2 2H20a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+      <circle cx="12" cy="13.5" r="3.2" stroke="currentColor" strokeWidth="1.6" />
+    </svg>
+  );
+}
+
 /**
  * 03-frontend.md "packages/ui 컴포넌트" — PhotoUploader(카메라 촬영 전용, Capacitor Camera).
  *
@@ -10,6 +25,13 @@ import { colors, radius } from "../tokens";
  * T12에서 내부 구현만 @capacitor/camera로 교체 가능하게 설계했다 — 이 컴포넌트를 쓰는
  * 화면(예: R4 계량 제출)은 onChange 콜백 시그니처가 바뀌지 않는 한 수정이 필요 없다.
  */
+/** 목업 upload 타일 높이(2열 그리드 기준). */
+const TILE_HEIGHT = 82;
+/** 목업 upload 타일 점선 — primary(#1C5A38) 34%. */
+const UPLOAD_BORDER = "rgba(28,90,56,0.34)";
+/** 목업 upload 타일 바탕(아주 옅은 그린 틴트). */
+const UPLOAD_BG = "#F8FBF8";
+
 export interface PhotoAsset {
   /** 미리보기/표시용 URL. 웹 구현에서는 URL.createObjectURL(file) 결과, Capacitor 구현에서는
    * webPath 또는 dataUrl이 들어올 수 있다 — 소비 측은 <img src>로만 사용할 것. */
@@ -48,27 +70,30 @@ export function PhotoUploader({ photos, onChange, maxCount = 1, disabled, classN
 
   return (
     <div className={className} data-testid="photo-uploader">
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+      {/* [15] 목업 04 계량 "upload-grid" — 2열 고정 그리드. 예전엔 flex-wrap 88px 정사각
+          타일이라 타일 수에 따라 줄바꿈 위치가 널뛰고 우측에 빈 여백이 남았다. */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
         {photos.map((photo, i) => (
           <div
             key={photo.url}
             data-testid="photo-uploader-thumb"
-            style={{ position: "relative", width: 88, height: 88 }}
+            style={{ position: "relative", height: TILE_HEIGHT }}
           >
             <img
               src={photo.url}
               alt={`촬영 사진 ${i + 1}`}
               style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: radius.button }}
             />
-            {/* 시각 24px 원 유지 + 투명 패딩으로 히트 영역 40px 확보(라이더 장갑 낀 손 고려). */}
+            {/* 시각 24px 원 유지 + 투명 패딩으로 히트 영역 40px 확보(라이더 장갑 낀 손 고려).
+                그리드로 바뀌며 타일 바깥으로 튀어나온 위치(-14)는 옆 칸을 침범한다 — 안쪽 정렬. */}
             <button
               type="button"
               aria-label="사진 삭제"
               onClick={() => removeAt(i)}
               style={{
                 position: "absolute",
-                top: -14,
-                right: -14,
+                top: 0,
+                right: 0,
                 width: 40,
                 height: 40,
                 padding: 8,
@@ -106,17 +131,25 @@ export function PhotoUploader({ photos, onChange, maxCount = 1, disabled, classN
             disabled={disabled}
             onClick={() => inputRef.current?.click()}
             style={{
-              width: 88,
-              height: 88,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              // 아직 찍은 사진이 없으면 타일이 하나뿐이라 반쪽만 차지해 어색하다 — 두 칸을 다 쓴다.
+              gridColumn: photos.length === 0 ? "1 / -1" : "auto",
+              width: "100%",
+              height: TILE_HEIGHT,
               borderRadius: radius.button,
-              border: `1px dashed ${colors.status.wait}`,
-              backgroundColor: "#fafafa",
-              color: colors.status.wait,
-              fontSize: 28,
+              // 목업의 dashed 초록 테두리 — 회색 점선은 "비활성"으로 읽혀 촬영 유도가 약했다.
+              border: `1.6px dashed ${UPLOAD_BORDER}`,
+              backgroundColor: UPLOAD_BG,
+              color: colors.primary.DEFAULT,
               cursor: disabled ? "not-allowed" : "pointer",
             }}
           >
-            +
+            <CameraIcon />
+            {/* 전폭일 때만 글자를 붙인다 — 반칸에선 아이콘만으로 충분하고 글자가 눌린다. */}
+            {photos.length === 0 && <span style={{ fontSize: 14, fontWeight: 600 }}>사진 촬영</span>}
           </button>
         )}
       </div>
