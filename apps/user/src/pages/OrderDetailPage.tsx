@@ -344,7 +344,7 @@ export function OrderDetailPage() {
           routePath={directions?.path ?? []}
           etaLabel={formatEta(directions?.durationSeconds) ?? undefined}
           pickupLabel={order.pickupAddress}
-          style={{ minHeight: 300 }}
+          style={{ minHeight: 320, marginLeft: -20, marginRight: -20, borderRadius: 0 }}
         />
       )}
 
@@ -357,9 +357,11 @@ export function OrderDetailPage() {
           style={{
             position: "relative",
             zIndex: 1,
-            marginTop: -22,
-            padding: "10px 16px 16px",
-            borderRadius: `${radius.hero}px ${radius.hero}px ${radius.card}px ${radius.card}px`,
+            marginTop: -26,
+            marginLeft: -20,
+            marginRight: -20,
+            padding: "10px 20px 16px",
+            borderRadius: `${radius.hero}px ${radius.hero}px 0 0`,
             backgroundColor: surface.app,
             border: `1px solid ${surface.border}`,
             boxShadow: "0 -12px 32px rgba(17,24,39,0.10)",

@@ -161,9 +161,12 @@ export function ActiveRunPage() {
             minHeight: touchTarget,
             padding: "14px 20px",
             borderRadius: radius.button,
-            backgroundColor: colors.primary.DEFAULT,
-            color: "#fff",
-            fontSize: 17,
+            // [15] 보조 액션이다. 예전엔 제출 CTA와 똑같은 초록 채움이라 초록 버튼 두 개가
+            // 나란히 서서 무엇이 이 화면의 주 행동인지 읽히지 않았다(목업은 primary 하나).
+            backgroundColor: surface.card,
+            border: `1px solid ${colors.primary.DEFAULT}`,
+            color: colors.primary.DEFAULT,
+            fontSize: 16,
             fontWeight: 700,
             textDecoration: "none",
           }}
@@ -1299,12 +1302,14 @@ function CheckMarkIcon() {
 }
 
 /** [사장님께 전화] CTA 전화 아이콘 — user OrderDetailPage PhoneCtaIcon과 동형(E8-④). */
+/** 전화 CTA 아이콘. stroke는 currentColor라 버튼 톤(채움/아웃라인)을 그대로 따라간다 —
+ *  흰 배경 보조 버튼 위에서 흰 아이콘이 사라지는 것을 막는다. */
 function PhoneCtaIcon() {
   return (
     <svg width={20} height={20} viewBox="0 0 24 24" fill="none" aria-hidden>
       <path
         d="M6.5 4h3l1.2 3.2-1.8 1.4a11 11 0 0 0 4.5 4.5l1.4-1.8L18.5 12.5V15.5c0 1-.8 1.8-1.8 1.7A13.5 13.5 0 0 1 4.8 5.8C4.7 4.8 5.5 4 6.5 4Z"
-        stroke="#fff"
+        stroke="currentColor"
         strokeWidth={1.6}
         strokeLinejoin="round"
       />
