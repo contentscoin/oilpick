@@ -5,6 +5,19 @@
    (pretendardvariable-dynamic-subset.css — unicode-range로 필요한 조각만 로드).
    여기서 풀 가변 폰트(2MB) @font-face를 선언하면 전체 파일을 받게 되므로 금지. */
 
+/* [15] 전역 border-box.
+   유저·라이더 앱은 이 리셋이 없어 content-box가 기본이었다. 인라인 스타일 관례상
+   `width: 100%` + 좌우 padding + 테두리를 함께 쓰는 요소가 많은데(예: 라이더 운행화면
+   [사장님께 전화] CTA), content-box에서는 padding·border가 100% "바깥"에 더해져 프레임
+   밖으로 42px씩 튀어나갔다. 지금까지는 frameFixedStyle처럼 요소마다 boxSizing을 따로
+   붙여 막아 왔지만, 빠뜨린 곳에서 같은 결함이 계속 났다.
+   admin은 Tailwind preflight가 이미 border-box라 이 규칙으로 3앱 기준이 같아진다. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 body {
   font-family:
     "Pretendard Variable",
