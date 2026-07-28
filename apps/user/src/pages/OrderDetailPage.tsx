@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { BigButton, ConfirmSheet, DriverCard, ErrorScreen, InfoStatCard, MapView, OrderTimeline, PageHeader, PayoutMethodChip, StatusHeadline, colors, elevation, gradient, gray, radius, surface, touchTarget, useToast } from "@oilpick/ui";
+import { BigButton, ConfirmSheet, DriverCard, DynamicIsland, ErrorScreen, InfoStatCard, MapView, OrderTimeline, PageHeader, PayoutMethodChip, StatusHeadline, colors, elevation, gradient, gray, radius, surface, touchTarget, useToast } from "@oilpick/ui";
 import { estimateCash, formatEta, formatKg, formatKrw, formatPoint, formatTimeOfDay, type OrderStatus } from "@oilpick/core";
 import { MAP_STYLE_URL } from "../lib/env";
 import { invokeEdgeFunction } from "../lib/edgeFunction";
@@ -302,6 +302,19 @@ export function OrderDetailPage() {
           서울 기본 센터로 프리뷰. [11 M9-b] 데모 ETA는 제거됐고, 지금 표시되는 ETA는 라이더 실좌표
           (broadcast) → directions Edge(카카오모빌리티)의 실 라우팅 값이다. 키 미설정이면 Edge가
           configured:false를 주므로 선·ETA가 자연히 미표시된다(00-domain "가짜 시간 표기 금지" 준수). */}
+      {/* [15] 지도 위 상태 축약 — 진행 중인 상태 하나만 말한다.
+          ETA는 directions Edge가 실제 값을 줄 때만 띄운다(00-domain "가짜 시간 표기 금지").
+          실좌표만 있고 경로가 없으면 "실시간 갱신 중"까지만, 신호가 끊겼으면 그 사실을 말한다. */}
+      {showMapAndTimeline && riderLoc && (
+        <div style={{ display: "flex" }}>
+          <DynamicIsland live={!riderLoc.stale}>
+            {riderLoc.stale
+              ? "라이더 위치 신호가 끊겼어요"
+              : (formatEta(directions?.durationSeconds) ?? "라이더 위치 실시간 갱신 중")}
+          </DynamicIsland>
+        </div>
+      )}
+
       {showMapAndTimeline && (
         <MapView
           styleUrl={MAP_STYLE_URL}

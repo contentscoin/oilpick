@@ -36,6 +36,24 @@ export const colors = {
     lineOnDark: "#4ADE9B",
     areaTop: "rgba(74,222,155,0.20)",
   },
+  /**
+   * 15-motion-design.md "팔레트 확장" — 라이브 상태 액센트(라임).
+   * chart.lineOnDark(#4ADE9B)는 딥그린 명도 확장이라 다크 히어로 위에서 브랜드와 너무 가깝게
+   * 붙는다. 라임은 "지금 살아 있다"는 신호를 브랜드 그린과 분리해 읽히게 한다.
+   * ⚠️ **다크 배경 전용.** 흰 배경 위 텍스트로 쓰면 4.5:1 미달 — 밝은 배경에선 soft(배경) +
+   * primary.dark(텍스트) 조합만 허용.
+   */
+  lime: {
+    DEFAULT: "#CCFF66",
+    /** 밝은 배경 위 pill 배경 전용(텍스트는 primary.dark). */
+    soft: "rgba(204,255,102,0.32)",
+  },
+  /**
+   * 15-motion-design.md — 라이더 앱 실시간/추적 상태 강조. 라임과 같은 제약(다크 배경 전용).
+   */
+  cyan: {
+    DEFAULT: "#5EE6F2",
+  },
 } as const;
 
 /**
@@ -186,6 +204,10 @@ export const surfaceDark = {
   pill: "rgba(255,255,255,0.10)",
   /** 07 F8 — 다크 히어로 위 스켈레톤/플레이스홀더 배경(화이트 6% 오버레이). */
   skeleton: "rgba(255,255,255,0.06)",
+  /** 15 — beUI식 최심층 배경(DynamicIsland 본체). 딥그린이 아닌 뉴트럴 블랙 계열. */
+  beui: "#08090A",
+  /** 15 — 다크 패널(지갑 카드·정산 블록·예상액 바). beui보다 한 단계 밝다. */
+  panel: "#101317",
 } as const;
 
 /**
@@ -210,6 +232,14 @@ export const motion = {
   base: "250ms",
   slow: "400ms",
   ease: "cubic-bezier(0.2,0.8,0.2,1)",
+  /** 15 — 감속 강조 이징(시트 등장·아일랜드 확장). ease보다 끝이 길게 눕는다. */
+  spring: "cubic-bezier(0.23,1,0.32,1)",
+  /** 15 — Bottom Sheet 등장 시간. */
+  sheet: "600ms",
+  /** 15 — NumberFlow 카운트업/롤링 시간. */
+  count: "900ms",
+  /** 15 — Island 호흡·라이브 도트 주기. */
+  pulse: "3s",
 } as const;
 
 /**

@@ -38,3 +38,11 @@ export * from "./components/PayouSymbol";
 export * from "./components/PayouWordmark";
 export * from "./components/PayouLockup";
 export * from "./components/MobileFrame";
+// [15 §컴포넌트 매핑] beUI 모션 프리미티브 — 모션은 상태 서술이지 장식이 아니다.
+export * from "./components/LiveDot";
+export * from "./components/DynamicIsland";
+export * from "./components/NumberFlow";
+export * from "./components/HeroCard";
+export * from "./components/CheckList";
+export * from "./components/OtpInput";
+export * from "./components/SwipeableRow";

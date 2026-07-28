@@ -181,7 +181,18 @@ describe("HomePage", () => {
     });
     renderHome();
     expect(screen.getByTestId("active-order-card")).toBeInTheDocument();
-    expect(screen.getByTestId("status-badge")).toHaveTextContent("라이더 배정");
+    // [15] 상태는 DynamicIsland 하나로 축약한다(StatusBadge와 이중 표기하지 않는다).
+    expect(screen.getByTestId("dynamic-island")).toHaveTextContent("라이더 배정");
+  });
+
+  it("announces the active order status politely so screen readers hear the change", () => {
+    mockUseActiveOrder.mockReturnValue({
+      data: { id: "order-1", status: "ARRIVED", requestedKg: 30, snapshotPricePerKg: 700, createdAt: "2026-07-01T00:00:00Z" },
+    });
+    renderHome();
+    const island = screen.getByTestId("dynamic-island");
+    expect(island).toHaveAttribute("aria-live", "polite");
+    expect(island).toHaveTextContent("현장 도착");
   });
 
   it("renders up to 2 recent order rows", () => {

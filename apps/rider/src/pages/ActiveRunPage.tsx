@@ -2,8 +2,10 @@ import { type CSSProperties, type FormEvent, type ReactNode, useState } from "re
 import { useNavigate } from "react-router-dom";
 import {
   BigButton,
+  CheckList,
   EmptyState,
   MapView,
+  NumberFlow,
   OrderTimeline,
   PayoutMethodChip,
   PhotoUploader,
@@ -402,6 +404,16 @@ function AcceptedPanel({
           </a>
         </div>
       )}
+      {/* [15] 현장 절차의 남은 단계 — 주문 상태(서버 소유)가 아니라 라이더의 행동 순서다.
+          이동 중에는 "매장 이동"이 진행 중, 나머지는 아직 남은 단계로 보인다. */}
+      <CheckList
+        items={[
+          { label: "콜 수락", state: "done" },
+          { label: "매장 이동", state: "current" },
+          { label: "현장 도착 알림", state: "todo" },
+          { label: "계량·지급 수단 선택", state: "todo" },
+        ]}
+      />
       <BigButton data-testid="arrive-button" loading={arriving} onClick={handleArrive}>
         도착
       </BigButton>
@@ -795,13 +807,13 @@ function ArrivedPanel({
             <span style={{ fontSize: 13, fontWeight: 600, color: colors.status.wait }}>
               {isPointSelected ? "점주에게 적립될 포인트" : "점주에게 지급할 현금"}
             </span>
-            {/* 05 폴리시: 밝은 배경(accent.light) 위 앰버 "텍스트"는 accent.deep(대비 4.5:1). */}
-            <span
-              className="oilpick-tabular-nums"
+            {/* 05 폴리시: 밝은 배경(accent.light) 위 앰버 "텍스트"는 accent.deep(대비 4.5:1).
+                [15] kg를 입력하는 동안 금액이 따라 움직인다 — 얼마를 지급할지가 실시간으로 보인다. */}
+            <NumberFlow
+              value={payoutAmount}
+              format={(n) => (isPointSelected ? formatPoint(Math.round(n)) : formatKrw(Math.round(n)))}
               style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-0.01em", color: colors.accent.deep }}
-            >
-              {isPointSelected ? formatPoint(payoutAmount) : formatKrw(payoutAmount)}
-            </span>
+            />
           </div>
         )}
         {showEstimate && (

@@ -108,6 +108,117 @@ body {
   filter: brightness(0.97);
 }
 
+/* 시각적으로만 숨기고 스크린리더에는 남기는 텍스트(15 — NumberFlow 최종값 등). */
+.oilpick-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── 15-motion-design.md — beUI 모션 패턴 ──────────────────────────────────
+   모든 키프레임은 파일 끝 prefers-reduced-motion 블록에서 정지된다.
+   정지 시에도 정보는 동일해야 한다(모션에만 담긴 정보 금지). */
+
+/* DynamicIsland 호흡 — "이 상태가 살아 있다". 진폭을 2.5%로 눌러 시선을 뺏지 않는다. */
+@keyframes oilpick-island-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.025);
+  }
+}
+.oilpick-island {
+  animation: oilpick-island-pulse 3s ease-in-out infinite;
+}
+
+/* 라이브 도트 글로우 — 실시간 갱신 중임을 나타낸다. */
+@keyframes oilpick-live-dot {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 currentColor;
+  }
+  50% {
+    opacity: 0.82;
+    box-shadow: 0 0 10px 1px currentColor;
+  }
+}
+.oilpick-live-dot {
+  animation: oilpick-live-dot 3s ease-in-out infinite;
+}
+
+/* HeroCard 글레어 — 카드 위를 지나는 빛. 값이 갱신됐다는 주의 환기용. */
+@keyframes oilpick-glare {
+  0%,
+  100% {
+    transform: translateX(-120px) rotate(-24deg);
+    opacity: 0;
+  }
+  50% {
+    transform: translateX(220px) rotate(-24deg);
+    opacity: 0.7;
+  }
+}
+.oilpick-glare {
+  animation: oilpick-glare 4.8s ease-in-out infinite;
+}
+
+/* Bottom Sheet 등장 — tokens.motion.sheet(600ms) / motion.spring과 동일 값. */
+@keyframes oilpick-sheet-in {
+  from {
+    transform: translateY(36px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+.oilpick-sheet-in {
+  animation: oilpick-sheet-in 600ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* OTP 오류 흔들림 — 입력이 틀렸다는 즉각 피드백(색만으로 알리지 않는다). */
+@keyframes oilpick-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20%,
+  60% {
+    transform: translateX(-5px);
+  }
+  40%,
+  80% {
+    transform: translateX(5px);
+  }
+}
+.oilpick-shake {
+  animation: oilpick-shake 380ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .oilpick-island,
+  .oilpick-live-dot,
+  .oilpick-glare,
+  .oilpick-sheet-in,
+  .oilpick-shake {
+    animation: none;
+  }
+  /* 글레어는 정지 시 잔상이 남지 않게 완전히 숨긴다(장식 전용이라 정보 손실 없음). */
+  .oilpick-glare {
+    opacity: 0;
+  }
+}
+
 /* 08 G4 — PriceChart v2 마지막 값 펄스 도트(링 확산). reduced-motion 시 정지. */
 @keyframes oilpick-chart-pulse {
   0% {

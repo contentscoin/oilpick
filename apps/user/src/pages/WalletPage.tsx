@@ -123,17 +123,14 @@ export function WalletPage() {
             />
           </div>
         ) : ledger && ledger.length > 0 ? (
-          <div
-            style={{
-              borderRadius: radius.card,
-              border: `1px solid ${surface.border}`,
-              backgroundColor: surface.card,
-              boxShadow: elevation.card,
-              padding: "0 16px",
-            }}
-          >
-            <LedgerList entries={ledger} variant="point" />
-          </div>
+          // [15] 원장 행은 좌스와이프로 문의 액션을 드러낸다. 스와이프는 추가 경로일 뿐이고,
+          // 액션 버튼은 항상 DOM에 있어 키보드·스크린리더로도 도달한다(SwipeableRow).
+          <LedgerList
+            entries={ledger}
+            variant="point"
+            rowActionLabel="문의"
+            onRowAction={() => navigate("/support")}
+          />
         ) : (
           <EmptyState
             title="아직 포인트 내역이 없어요"

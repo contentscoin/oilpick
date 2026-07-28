@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   BigButton,
   ConfirmSheet,
+  NumberFlow,
   PageHeader,
   QtyStepper,
   colors,
@@ -398,13 +399,14 @@ export function RequestPage() {
         <div style={{ maxWidth: 480, margin: "0 auto", padding: "12px 20px", display: "flex", flexDirection: "column", gap: 2 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
             <span style={{ fontSize: 14, color: colors.status.wait }}>{footerLabel}</span>
-            <span
-              data-testid="request-estimate-cash"
-              className="oilpick-tabular-nums"
+            {/* [15] 통 수·신유 수량을 바꾸면 금액이 굴러가듯 갱신된다 — "값이 바뀌었다"는 사실 자체를
+                말하는 자리. 접근성 트리에는 언제나 최종 금액만 노출된다. */}
+            <NumberFlow
+              testId="request-estimate-cash"
+              value={footerAmount}
+              format={(n) => formatKrw(Math.round(n))}
               style={{ fontSize: 22, fontWeight: 800, color: colors.primary.dark }}
-            >
-              {formatKrw(footerAmount)}
-            </span>
+            />
           </div>
           <p style={{ margin: 0, fontSize: 12, color: colors.status.wait }}>현장 계량·상계 기준으로 확정돼요</p>
         </div>

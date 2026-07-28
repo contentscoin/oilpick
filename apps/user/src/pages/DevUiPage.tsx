@@ -3,9 +3,15 @@ import {
   BigButton,
   BottomSheet,
   CallCard,
+  CheckList,
   ConfirmSheet,
   DriverCard,
+  DynamicIsland,
   EmptyState,
+  HeroCard,
+  NumberFlow,
+  OtpInput,
+  SwipeableRow,
   ErrorScreen,
   InfoStatCard,
   LedgerList,
@@ -61,6 +67,9 @@ export function DevUiPage() {
   const [photos, setPhotos] = useState<PhotoAsset[]>([]);
   const [chartDays, setChartDays] = useState<"7" | "30" | "90">("30");
   const [scrub, setScrub] = useState<{ date: string; price: number } | null>(null);
+  // [15] 모션 프리미티브 프리뷰용 로컬 상태.
+  const [devAmount, setDevAmount] = useState(42000);
+  const [devOtp, setDevOtp] = useState("482");
   const dailySeries = resampleDaily(DUMMY_PRICE_TICKS, Number(chartDays));
   const heroPrice = scrub?.price ?? dailySeries[dailySeries.length - 1]?.price ?? 0;
 
@@ -381,6 +390,53 @@ export function DevUiPage() {
           <Mascot size={48} />
           <Mascot size={96} />
         </div>
+      </section>
+
+      <section>
+        {/* 15-motion-design.md — beUI 모션 프리미티브. 모션은 상태 서술이므로 정지해도 정보가 남는다. */}
+        <h2>[15] DynamicIsland / NumberFlow</h2>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, alignItems: "flex-start" }}>
+          <DynamicIsland>14:35 도착 · 1.8km</DynamicIsland>
+          <DynamicIsland live={false}>라이더 위치 신호가 끊겼어요</DynamicIsland>
+          <BigButton variant="secondary" onClick={() => setDevAmount((n) => (n === 42000 ? 128400 : 42000))}>
+            금액 바꾸기 (NumberFlow)
+          </BigButton>
+          <NumberFlow
+            value={devAmount}
+            format={(n) => formatKrw(Math.round(n))}
+            style={{ fontSize: 32, fontWeight: 800, color: colors.primary.dark }}
+          />
+        </div>
+
+        <h2 style={{ marginTop: 20 }}>[15] HeroCard</h2>
+        <HeroCard
+          eyebrow="Live Activity"
+          title="성수동 튀김공방 2.4km"
+          description="상태가 접히면 island로 축약되고, 펼치면 운행 체크리스트로 전환됩니다."
+        />
+
+        <h2 style={{ marginTop: 20 }}>[15] CheckList</h2>
+        <CheckList
+          items={[
+            { label: "상호 확인", state: "done" },
+            { label: "현장 도착 인증", state: "current" },
+            { label: "계량 입력", state: "todo" },
+          ]}
+        />
+
+        <h2 style={{ marginTop: 20 }}>[15] OtpInput (정상 / 오류)</h2>
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <OtpInput value={devOtp} onChange={setDevOtp} />
+          <OtpInput value="482910" onChange={() => {}} error errorMessage="인증번호가 올바르지 않습니다" />
+        </div>
+
+        <h2 style={{ marginTop: 20 }}>[15] SwipeableRow (왼쪽으로 스와이프 · Tab으로도 도달)</h2>
+        <SwipeableRow actionLabel="문의" onAction={() => {}}>
+          <div style={{ padding: "14px 16px", display: "flex", justifyContent: "space-between" }}>
+            <span style={{ fontWeight: 600 }}>계량 완료 정산</span>
+            <span style={{ fontWeight: 700, color: colors.primary.DEFAULT }}>+42,000원</span>
+          </div>
+        </SwipeableRow>
       </section>
 
       <section>

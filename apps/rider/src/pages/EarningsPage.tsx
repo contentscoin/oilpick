@@ -1,4 +1,4 @@
-import { colors, elevation, gradient, gray, radius, surface } from "@oilpick/ui";
+import { NumberFlow, colors, elevation, gradient, gray, radius, surface } from "@oilpick/ui";
 import { formatKg, formatKrw, formatPoint } from "@oilpick/core";
 import { useSession } from "../hooks/useSession";
 import { useMonthlyPickupStats } from "../hooks/useTodayStats";
@@ -40,12 +40,14 @@ export function EarningsPage() {
               <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.8)" }}>
                 💵 이번 달 현금 지급 · {stats?.cashCount ?? 0}건
               </p>
-              <p
-                data-testid="monthly-cash-amount"
-                className="oilpick-tabular-nums"
-                style={{ margin: 0, fontSize: 32, fontWeight: 800, letterSpacing: "-0.02em", color: "#FFFFFF" }}
-              >
-                {formatKrw(stats?.cash ?? 0)}
+              {/* [15] 화면 진입·갱신 시 카운트업 — 접근성 트리에는 최종 금액만 노출된다. */}
+              <p style={{ margin: 0 }}>
+                <NumberFlow
+                  testId="monthly-cash-amount"
+                  value={stats?.cash ?? 0}
+                  format={(n) => formatKrw(Math.round(n))}
+                  style={{ fontSize: 32, fontWeight: 800, letterSpacing: "-0.02em", color: "#FFFFFF" }}
+                />
               </p>
             </div>
             <div style={{ height: 1, backgroundColor: "rgba(255,255,255,0.25)" }} />
@@ -53,12 +55,13 @@ export function EarningsPage() {
               <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.8)" }}>
                 🪙 이번 달 포인트 지급 · {stats?.pointCount ?? 0}건
               </p>
-              <p
-                data-testid="monthly-point-amount"
-                className="oilpick-tabular-nums"
-                style={{ margin: 0, fontSize: 32, fontWeight: 800, letterSpacing: "-0.02em", color: "#FFFFFF" }}
-              >
-                {formatPoint(stats?.point ?? 0)}
+              <p style={{ margin: 0 }}>
+                <NumberFlow
+                  testId="monthly-point-amount"
+                  value={stats?.point ?? 0}
+                  format={(n) => formatPoint(Math.round(n))}
+                  style={{ fontSize: 32, fontWeight: 800, letterSpacing: "-0.02em", color: "#FFFFFF" }}
+                />
               </p>
             </div>
           </section>
