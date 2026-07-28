@@ -8,6 +8,7 @@ import {
   QtyStepper,
   colors,
   elevation,
+  frameFixedStyle,
   gray,
   inputClassName,
   inputStyle,
@@ -122,6 +123,28 @@ export function RequestPage() {
   // 폐유 수거 또는 신유 구매 중 하나는 있어야 다음 단계로 진행 가능(구매-only 허용).
   const step1Valid = cans >= 1 || hasPurchase;
 
+  /**
+   * [15] 스텝 CTA를 sticky 푸터로 끌어내린다. 예전엔 CTA가 폼 바로 아래(화면 위쪽)에 있고
+   * 금액 바만 뷰포트 바닥에 fixed라, 화면이 길면 "얼마 받는지"와 "다음으로 간다"가 수백 px
+   * 떨어져 보였다. 목업처럼 금액과 액션을 한 덩어리로 둔다.
+   */
+  const stepCta =
+    step === 1
+      ? { testId: "request-step-1-next", label: "다음", disabled: !step1Valid, loading: false, onClick: () => setStep(2) }
+      : step === 2
+        ? {
+            testId: "request-step-2-next",
+            label: "다음",
+            disabled:
+              !address.address ||
+              address.lat == null ||
+              address.lng == null ||
+              (timeChip === "custom" && !customTime),
+            loading: false,
+            onClick: () => setStep(3),
+          }
+        : { testId: "request-submit", label: "수거 요청하기", disabled: false, loading: submitting, onClick: handleSubmit };
+
   function applyRecentAddress(recent: RecentAddress) {
     setAddress({ address: recent.address, lat: recent.lat, lng: recent.lng });
   }
@@ -165,7 +188,7 @@ export function RequestPage() {
   }
 
   return (
-    <main style={{ display: "flex", flexDirection: "column", gap: 20, padding: 20, paddingBottom: 108, maxWidth: 480, margin: "0 auto" }}>
+    <main style={{ display: "flex", flexDirection: "column", gap: 20, padding: 20, paddingBottom: 184, maxWidth: 480, margin: "0 auto" }}>
       {/* step>1이면 뒤로가 스텝 후퇴(라우트 이탈은 step 1에서만) — 기존 로직 유지. */}
       <PageHeader
         title="수거 요청"
@@ -253,9 +276,6 @@ export function RequestPage() {
             </div>
           )}
 
-          <BigButton data-testid="request-step-1-next" disabled={!step1Valid} onClick={() => setStep(2)}>
-            다음
-          </BigButton>
         </section>
       )}
 
@@ -346,18 +366,6 @@ export function RequestPage() {
             )}
           </div>
 
-          <BigButton
-            data-testid="request-step-2-next"
-            disabled={
-              !address.address ||
-              address.lat == null ||
-              address.lng == null ||
-              (timeChip === "custom" && !customTime)
-            }
-            onClick={() => setStep(3)}
-          >
-            다음
-          </BigButton>
         </section>
       )}
 
@@ -378,9 +386,6 @@ export function RequestPage() {
             <Row label="희망 시간" value={preferredTimeValue} />
           </div>
 
-          <BigButton data-testid="request-submit" loading={submitting} onClick={handleSubmit}>
-            수거 요청하기
-          </BigButton>
         </section>
       )}
 
@@ -388,9 +393,7 @@ export function RequestPage() {
       <div
         data-testid="request-estimate-footer"
         style={{
-          position: "fixed",
-          left: 0,
-          right: 0,
+          ...frameFixedStyle,
           bottom: 0,
           backgroundColor: surface.card,
           borderTop: `1px solid ${surface.border}`,
@@ -400,7 +403,7 @@ export function RequestPage() {
       >
         {/* [15] 목업의 다크 예상액 바 — 이 화면에서 점주가 확인해야 할 단 하나의 숫자라
             흰 폼 위에서 톤을 분리해 띄운다. */}
-        <div style={{ maxWidth: 480, margin: "0 auto", padding: "12px 20px" }}>
+        <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
           <div
             style={{
               display: "flex",
@@ -426,6 +429,14 @@ export function RequestPage() {
               style={{ fontSize: 24, fontWeight: 800, color: surfaceDark.textOnDark, whiteSpace: "nowrap" }}
             />
           </div>
+          <BigButton
+            data-testid={stepCta.testId}
+            disabled={stepCta.disabled}
+            loading={stepCta.loading}
+            onClick={stepCta.onClick}
+          >
+            {stepCta.label}
+          </BigButton>
         </div>
       </div>
 

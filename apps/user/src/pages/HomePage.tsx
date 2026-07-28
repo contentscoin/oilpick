@@ -139,7 +139,7 @@ export function HomePage() {
           display: "flex",
           flexDirection: "column",
           gap: 16,
-          padding: "16px 20px 148px",
+          padding: "16px 20px 88px",
           maxWidth: 480,
           margin: "0 auto",
           backgroundColor: surface.app,
@@ -358,6 +358,16 @@ export function HomePage() {
               />
             </>
           )}
+
+          {/* [15] 목업처럼 CTA를 히어로 안에 둔다. 예전엔 화면 위에 떠 있는 fixed 바라
+              스크롤에 따라 위치가 흔들리고 최근 이력 목록을 가렸다. */}
+          <BigButton
+            data-testid="request-pickup-button"
+            onClick={() => navigate("/request")}
+            style={{ backgroundColor: "#FFFFFF", color: colors.primary.dark, boxShadow: "none" }}
+          >
+            수거 요청하기
+          </BigButton>
         </section>
 
         {/* 진행중 주문 카드 — [15] 상태는 DynamicIsland 하나로 축약한다.
@@ -499,23 +509,6 @@ export function HomePage() {
         </section>
       </main>
 
-      {/* 하단 fixed CTA — 탭바 위, safe-area */}
-      <div
-        style={{
-          position: "fixed",
-          left: 0,
-          right: 0,
-          bottom: "calc(60px + env(safe-area-inset-bottom, 0px))",
-          zIndex: 10,
-          pointerEvents: "none",
-        }}
-      >
-        <div style={{ maxWidth: 480, margin: "0 auto", padding: "0 20px", pointerEvents: "auto" }}>
-          <BigButton data-testid="request-pickup-button" onClick={() => navigate("/request")}>
-            수거 요청하기
-          </BigButton>
-        </div>
-      </div>
     </>
   );
 }
