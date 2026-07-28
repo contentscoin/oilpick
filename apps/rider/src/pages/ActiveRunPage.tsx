@@ -756,6 +756,19 @@ function ArrivedPanel({
     }
   }
 
+  // [15] 계량 화면 2열 스탯(총 무게/단가) 스타일.
+  const measureStatStyle = {
+    display: "flex",
+    flexDirection: "column",
+    gap: 4,
+    padding: 12,
+    borderRadius: radius.button,
+    backgroundColor: gray[50],
+    border: `1px solid ${surface.border}`,
+  } as const;
+  const measureStatLabelStyle = { fontSize: 12, color: colors.status.wait } as const;
+  const measureStatValueStyle = { fontSize: 18, fontWeight: 800, letterSpacing: "-0.01em" } as const;
+
   const payoutAmount = kg ? estimateCash(Number(kg), snapshotPricePerKg) : 0;
   const showEstimate = Boolean(kg) && !Number.isNaN(Number(kg));
   const isPointSelected = payout === "POINT";
@@ -783,6 +796,23 @@ function ArrivedPanel({
             onChange={(e) => setKg(e.target.value)}
             style={inputStyle}
           />
+        </div>
+
+        {/* [15] 목업의 총 무게 / 단가 2열 스탯. 입력한 kg와 주문 시점 시세 스냅샷을 나란히 둬
+            "이 숫자 × 이 단가"가 아래 지급액이라는 계산이 눈에 보이게 한다. */}
+        <div data-testid="run-measure-stats" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          <div style={measureStatStyle}>
+            <span style={measureStatLabelStyle}>총 무게</span>
+            <span className="oilpick-tabular-nums" style={measureStatValueStyle}>
+              {showEstimate ? formatKg(Number(kg)) : "—"}
+            </span>
+          </div>
+          <div style={measureStatStyle}>
+            <span style={measureStatLabelStyle}>단가</span>
+            <span className="oilpick-tabular-nums" style={measureStatValueStyle}>
+              {formatKrw(snapshotPricePerKg)}/kg
+            </span>
+          </div>
         </div>
 
         {/* 08 P2: 지급 수단 선택(필수) — 현금/포인트 세그먼트. */}
