@@ -7,11 +7,13 @@ import {
   PageHeader,
   QtyStepper,
   colors,
+  elevation,
   gray,
   inputClassName,
   inputStyle,
   radius,
   surface,
+  surfaceDark,
 } from "@oilpick/ui";
 import {
   estimateCash,
@@ -390,25 +392,40 @@ export function RequestPage() {
           left: 0,
           right: 0,
           bottom: 0,
-          backgroundColor: "#fff",
+          backgroundColor: surface.card,
           borderTop: `1px solid ${surface.border}`,
           boxShadow: "0 -2px 12px rgba(0,0,0,0.05)",
           paddingBottom: "env(safe-area-inset-bottom)",
         }}
       >
-        <div style={{ maxWidth: 480, margin: "0 auto", padding: "12px 20px", display: "flex", flexDirection: "column", gap: 2 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-            <span style={{ fontSize: 14, color: colors.status.wait }}>{footerLabel}</span>
+        {/* [15] 목업의 다크 예상액 바 — 이 화면에서 점주가 확인해야 할 단 하나의 숫자라
+            흰 폼 위에서 톤을 분리해 띄운다. */}
+        <div style={{ maxWidth: 480, margin: "0 auto", padding: "12px 20px" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+              padding: "14px 16px",
+              borderRadius: radius.card,
+              backgroundColor: surfaceDark.panel,
+              boxShadow: elevation.heroDark,
+            }}
+          >
+            <span style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
+              <span style={{ fontSize: 13, color: surfaceDark.textOnDarkMuted }}>{footerLabel}</span>
+              <span style={{ fontSize: 11, color: "rgba(255,255,255,0.42)" }}>현장 계량·상계 기준으로 확정돼요</span>
+            </span>
             {/* [15] 통 수·신유 수량을 바꾸면 금액이 굴러가듯 갱신된다 — "값이 바뀌었다"는 사실 자체를
                 말하는 자리. 접근성 트리에는 언제나 최종 금액만 노출된다. */}
             <NumberFlow
               testId="request-estimate-cash"
               value={footerAmount}
               format={(n) => formatKrw(Math.round(n))}
-              style={{ fontSize: 22, fontWeight: 800, color: colors.primary.dark }}
+              style={{ fontSize: 24, fontWeight: 800, color: surfaceDark.textOnDark, whiteSpace: "nowrap" }}
             />
           </div>
-          <p style={{ margin: 0, fontSize: 12, color: colors.status.wait }}>현장 계량·상계 기준으로 확정돼요</p>
         </div>
       </div>
 

@@ -128,8 +128,9 @@ export function CallDetailPage() {
           alignItems: "center",
           padding: "28px 20px",
           borderRadius: radius.hero,
-          background: gradient.point,
-          boxShadow: elevation.raised,
+          // [15] 목업의 다크 지급액 히어로 — 수락 판단의 근거가 되는 단 하나의 숫자.
+          background: `radial-gradient(circle at 82% 12%, ${colors.lime.soft}, transparent 40%), ${gradient.heroDeep}`,
+          boxShadow: elevation.heroDark,
         }}
       >
         <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: surfaceDark.textOnDarkMuted }}>예상 매입 지급액</p>

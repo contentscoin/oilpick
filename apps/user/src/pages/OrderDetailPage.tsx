@@ -182,6 +182,18 @@ export function OrderDetailPage() {
   const showRiderCard = order.status !== "REQUESTED" && order.status !== "CANCELLED";
   const showMapAndTimeline = order.status !== "REQUESTED" && order.status !== "CANCELLED";
 
+  // [15] 추적 시트 하단 퀵액션 버튼 스타일.
+  const sheetActionStyle = {
+    minHeight: touchTarget,
+    borderRadius: radius.button,
+    border: `1px solid ${surface.border}`,
+    backgroundColor: surface.card,
+    color: colors.primary.dark,
+    fontSize: 14,
+    fontWeight: 700,
+    cursor: "pointer",
+  } as const;
+
   // "예상" 스탯 카드는 계량 확정 전(ACCEPTED, 또는 계량/중재 전 ARRIVED)에만 노출한다.
   const showInfoStatCard =
     order.status === "ACCEPTED" ||
@@ -368,6 +380,27 @@ export function OrderDetailPage() {
               verified={rider.verifyStatus === "APPROVED"}
             />
           )}
+          {/* 목업처럼 타임라인까지 시트 안에 둔다 — 라이더와 진행 단계가 한 덩어리로 읽힌다. */}
+          <OrderTimeline currentStatus={order.status} timestamps={timelineTimestamps} legacy={isLegacyOrder} />
+          {/* 시트 하단 퀵액션. 존재하는 목적지만 넣는다(없는 화면을 만들지 않는다). */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <button
+              type="button"
+              data-testid="order-track-history"
+              onClick={() => navigate("/orders")}
+              style={sheetActionStyle}
+            >
+              수거 이력
+            </button>
+            <button
+              type="button"
+              data-testid="order-track-support"
+              onClick={() => navigate("/support")}
+              style={sheetActionStyle}
+            >
+              문의하기
+            </button>
+          </div>
         </div>
       )}
 
@@ -393,9 +426,8 @@ export function OrderDetailPage() {
         />
       )}
 
-      {showMapAndTimeline && (
-        <OrderTimeline currentStatus={order.status} timestamps={timelineTimestamps} legacy={isLegacyOrder} />
-      )}
+      {/* [15] 타임라인은 추적 시트 안으로 옮겼다(위 order-track-sheet).
+          showMapAndTimeline이 false인 REQUESTED/CANCELLED는 원래도 타임라인을 그리지 않았다. */}
 
       {showMeasureConfirmUi && !showDisputeForm && (
         <section data-testid="measure-confirm-panel" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
