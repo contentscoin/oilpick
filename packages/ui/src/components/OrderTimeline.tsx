@@ -1,5 +1,5 @@
 import { ORDER_STATUS_LABEL, type OrderStatus } from "@oilpick/core";
-import { colors, gray } from "../tokens";
+import { colors, gray, radius } from "../tokens";
 
 /**
  * 03-frontend.md "packages/ui 컴포넌트" — OrderTimeline(상태 스텝퍼, 세로형).
@@ -54,6 +54,16 @@ export function OrderTimeline({ currentStatus, timestamps, legacy, className }: 
   const isLegacy = legacy || currentStatus === "PICKED_UP" || currentStatus === "DELIVERED";
   const path = isLegacy ? LEGACY_PATH : HAPPY_PATH;
   const currentIndex = path.indexOf(currentStatus);
+  /**
+   * "여기까지 완료"의 마지막 인덱스. 보통은 현재 스텝 직전이다.
+   * 레거시 DELIVERED(07 §1-3 구전이 PICKED_UP→DELIVERED→COMPLETED)는 스텝으로 렌더하지
+   * 않는 중간 상태라 path.indexOf가 -1이 된다 — 그대로 두면 완료 구간이 통째로 미완으로
+   * 보인다(상태 pill을 붙이면서 드러난 기존 결함). 진행도만 PICKED_UP 완료로 읽는다.
+   */
+  const doneThrough =
+    currentIndex >= 0 ? currentIndex - 1 : currentStatus === "DELIVERED" ? path.indexOf("PICKED_UP") : -1;
+  /** 종결 주문 — 마지막 스텝을 "현재 진행 중"이 아니라 "완료"로 그린다. */
+  const finished = currentStatus === "COMPLETED";
 
   if (isExceptional) {
     const color = currentStatus === "CANCELLED" ? colors.status.danger : colors.status.wait;
@@ -74,9 +84,14 @@ export function OrderTimeline({ currentStatus, timestamps, legacy, className }: 
       style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column" }}
     >
       {path.map((step, i) => {
-        const done = i < currentIndex;
-        const active = i === currentIndex;
+        // 마지막 스텝(COMPLETED)에 도달한 주문은 "진행 중"이 아니라 끝난 것이다 — 노드도 체크로 채운다.
+        const done = i <= doneThrough || (finished && i === currentIndex);
+        const active = i === currentIndex && !finished;
         const isLast = i === path.length - 1;
+        const stateLabel = active ? "진행 중" : done ? "완료됨" : "예정";
+        // 도달한 COMPLETED 스텝은 라벨("완료")이 이미 종결을 말한다 — "완료 완료됨"으로 겹쳐 쓰지
+        // 않는다. 아직 도달 전이면 "완료 [예정]"이라 겹치지 않으므로 그대로 붙인다.
+        const showStatePill = !(done && step === "COMPLETED");
         return (
           <li key={step} style={{ display: "flex", gap: 14, minHeight: 52 }}>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
@@ -123,35 +138,63 @@ export function OrderTimeline({ currentStatus, timestamps, legacy, className }: 
                 flex: 1,
                 minWidth: 0,
                 display: "flex",
-                alignItems: "baseline",
+                alignItems: "center",
                 justifyContent: "space-between",
                 gap: 8,
                 paddingTop: 1,
                 paddingBottom: 12,
               }}
             >
-              <span
-                style={{
-                  fontSize: 16,
-                  fontWeight: active ? 700 : 500,
-                  color: active ? green : done ? gray[900] : colors.status.wait,
-                }}
-              >
-                {ORDER_STATUS_LABEL[step]}
-              </span>
-              {timestamps && (
+              <span style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
                 <span
-                  data-testid={`order-timeline-time-${step}`}
-                  className="oilpick-tabular-nums"
                   style={{
-                    flexShrink: 0,
-                    fontSize: 13,
+                    fontSize: 16,
                     fontWeight: active ? 700 : 500,
-                    // 현재 스텝 시각은 green, 완료 스텝은 회색, 미래("-")는 옅은 회색.
-                    color: active ? green : timestamps[step] ? colors.status.wait : gray[400],
+                    color: active ? green : done ? gray[900] : colors.status.wait,
                   }}
                 >
-                  {timestamps[step] ?? "-"}
+                  {ORDER_STATUS_LABEL[step]}
+                </span>
+                {timestamps && (done || active) && (
+                  <span
+                    data-testid={`order-timeline-time-${step}`}
+                    className="oilpick-tabular-nums"
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 500,
+                      // 시각은 라벨의 보조 정보로 아래에 붙는다(목업 time-row의 small 자리).
+                      // 아직 오지 않은 스텝에는 아예 렌더하지 않는다 — 라벨 밑에 "-"만 덩그러니
+                      // 남아 오타처럼 보였다. 미래라는 사실은 "예정" pill이 이미 말한다.
+                      color: timestamps[step] ? colors.status.wait : gray[400],
+                    }}
+                  >
+                    {timestamps[step] ?? "-"}
+                  </span>
+                )}
+              </span>
+              {/* [15] 목업 04 추적 time-row의 완료/진행/다음 pill. 예전엔 우측이 시각 하나뿐이라
+                  "지금 어디까지 왔는가"를 점 색깔로만 읽어야 했다 — 글자로도 말해준다. */}
+              {showStatePill && (
+                <span
+                  data-testid={`order-timeline-state-${step}`}
+                  style={{
+                    flexShrink: 0,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    minHeight: 26,
+                    padding: "0 10px",
+                    borderRadius: radius.pill,
+                    fontSize: 12,
+                    fontWeight: 800,
+                    whiteSpace: "nowrap",
+                    ...(active
+                      ? { backgroundColor: colors.lime.soft, color: colors.primary.dark }
+                      : done
+                        ? { backgroundColor: colors.primary.light, color: colors.primary.dark }
+                        : { border: `1px solid ${gray[200]}`, color: gray[400] }),
+                  }}
+                >
+                  {stateLabel}
                 </span>
               )}
             </div>

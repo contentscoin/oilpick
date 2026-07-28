@@ -17,6 +17,7 @@ const {
   mockUseOrderHistory,
   mockUseMonthlyCashReceipt,
   mockUseNotifications,
+  mockUseProfile,
 } = vi.hoisted(() => ({
   mockUseSession: vi.fn(),
   mockUsePriceTicksSince: vi.fn(),
@@ -24,6 +25,7 @@ const {
   mockUseOrderHistory: vi.fn(),
   mockUseMonthlyCashReceipt: vi.fn(),
   mockUseNotifications: vi.fn(),
+  mockUseProfile: vi.fn(),
 }));
 
 vi.mock("../hooks/useSession", () => ({ useSession: mockUseSession }));
@@ -32,6 +34,7 @@ vi.mock("../hooks/useActiveOrder", () => ({ useActiveOrder: mockUseActiveOrder }
 vi.mock("../hooks/useOrderHistory", () => ({ useOrderHistory: mockUseOrderHistory }));
 vi.mock("../hooks/useCashReceipts", () => ({ useMonthlyCashReceipt: mockUseMonthlyCashReceipt }));
 vi.mock("../hooks/useNotifications", () => ({ useNotifications: mockUseNotifications }));
+vi.mock("../hooks/useProfile", () => ({ useProfile: mockUseProfile }));
 
 // 3일치 tick(상승) — resampleDaily로 3점 일별 시계열이 되어 차트가 렌더된다.
 const RISING_TICKS = [
@@ -66,6 +69,19 @@ describe("HomePage", () => {
     mockUseOrderHistory.mockReturnValue({ data: { items: [], hasNextPage: false } });
     mockUseMonthlyCashReceipt.mockReturnValue({ data: { count: 2, cash: 48000 } });
     mockUseNotifications.mockReturnValue({ data: [] });
+    mockUseProfile.mockReturnValue({ data: { id: "user-1", displayName: "김점주", storeName: "행복식당", address: "서울시 강서구" } });
+  });
+
+  it("[15] 헤더에 매장명을 제목으로 세운다", () => {
+    renderHome();
+    expect(screen.getByTestId("home-store-name")).toHaveTextContent("행복식당");
+  });
+
+  it("[15] 매장명을 아직 못 받았으면 로고만 렌더한다(빈 제목 금지)", () => {
+    mockUseProfile.mockReturnValue({ data: undefined });
+    renderHome();
+    expect(screen.queryByTestId("home-store-name")).not.toBeInTheDocument();
+    expect(screen.getAllByTestId("payou-lockup").length).toBeGreaterThan(0);
   });
 
   it("renders the daily price hero at the top with current price and chart", () => {
