@@ -62,6 +62,20 @@ export function WalletPage() {
     cursor: "pointer",
   } as const;
 
+  // [15] 목업의 잔액 하단 2열 스탯 카드.
+  const statCardStyle = {
+    display: "flex",
+    flexDirection: "column",
+    gap: 6,
+    padding: 14,
+    borderRadius: radius.card,
+    backgroundColor: surface.card,
+    border: `1px solid ${surface.border}`,
+    boxShadow: elevation.card,
+  } as const;
+  const statLabelStyle = { fontSize: typeScale.caption, color: colors.status.wait } as const;
+  const statValueStyle = { fontSize: 20, fontWeight: 800, letterSpacing: "-0.01em" } as const;
+
   return (
     <main
       data-testid="wallet-page"
@@ -83,7 +97,10 @@ export function WalletPage() {
         <div data-testid="wallet-balance-skeleton" style={{ borderRadius: radius.hero, height: 160, backgroundColor: gray[100] }} />
       ) : (
         <section data-testid="wallet-balance-hero" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {/* [15] 목업 월렛 카드 — 지갑은 화면에서 가장 무거운 다크 패널이 된다.
+              라벨/잔액/CTA 구성은 그대로 두고 톤만 바꾼다(정보구조 불변). */}
           <PointBalanceCard
+            tone="dark"
             available={available}
             held={balance?.held ?? 0}
             action={
@@ -96,6 +113,21 @@ export function WalletPage() {
               </PointHeroAction>
             }
           />
+          {/* 보류/이번 달 현금 스탯 페어 — 목업의 잔액 하단 2열. */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <div data-testid="wallet-held-stat" style={statCardStyle}>
+              <span style={statLabelStyle}>지급 확정 대기</span>
+              <span className="oilpick-tabular-nums" style={statValueStyle}>
+                {formatPoint(balance?.held ?? 0)}
+              </span>
+            </div>
+            <div data-testid="wallet-available-stat" style={statCardStyle}>
+              <span style={statLabelStyle}>사용 가능</span>
+              <span className="oilpick-tabular-nums" style={statValueStyle}>
+                {formatPoint(available)}
+              </span>
+            </div>
+          </div>
           {!canWithdraw && (
             <p data-testid="wallet-withdraw-min-caption" style={{ margin: 0, fontSize: typeScale.caption, color: colors.status.wait }}>
               {formatPoint(MIN_WITHDRAW)}부터 출금을 신청할 수 있어요.

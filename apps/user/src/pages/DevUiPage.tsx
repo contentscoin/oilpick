@@ -392,6 +392,33 @@ export function DevUiPage() {
         </div>
       </section>
 
+      <section data-testid="k-compare">
+        {/* [15] 목업 반영 전/후 비교 — 정지 화면에서 무엇이 달라졌는지 눈으로 확인하는 자리. */}
+        <h2>[15] 지갑 잔액 카드 — 변경 전 / 후</h2>
+        <div style={{ display: "grid", gap: 12 }}>
+          <div>
+            <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.status.wait }}>변경 전 (앰버 포인트 히어로)</p>
+            <PointBalanceCard available={128400} held={12000} />
+          </div>
+          <div>
+            <p style={{ margin: "0 0 6px", fontSize: 12, color: colors.status.wait }}>변경 후 (다크 월렛 카드)</p>
+            <PointBalanceCard tone="dark" available={128400} held={12000} />
+          </div>
+        </div>
+
+        <h2 style={{ marginTop: 20 }}>[15] 라이더 현장 지급액 바 — 변경 전 / 후</h2>
+        <div style={{ display: "grid", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "12px 14px", borderRadius: radius.button, backgroundColor: colors.accent.light }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: colors.status.wait }}>점주에게 지급할 현금</span>
+            <span className="oilpick-tabular-nums" style={{ fontSize: 20, fontWeight: 800, color: colors.accent.deep }}>43,800원</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: 16, borderRadius: radius.card, backgroundColor: surfaceDark.panel, boxShadow: elevation.heroDark }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: surfaceDark.textOnDarkMuted }}>점주에게 지급할 현금</span>
+            <NumberFlow value={43800} format={(n) => formatKrw(Math.round(n))} style={{ fontSize: 24, fontWeight: 800, color: surfaceDark.textOnDark }} />
+          </div>
+        </div>
+      </section>
+
       <section>
         {/* 15-motion-design.md — beUI 모션 프리미티브. 모션은 상태 서술이므로 정지해도 정보가 남는다. */}
         <h2>[15] DynamicIsland / NumberFlow</h2>
