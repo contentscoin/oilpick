@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   BigButton,
+  DynamicIsland,
   PayouLockup,
   PriceChart,
   PriceStatsRow,
@@ -359,7 +360,8 @@ export function HomePage() {
           )}
         </section>
 
-        {/* 진행중 주문 카드(좌측 그린 바) */}
+        {/* 진행중 주문 카드 — [15] 상태는 DynamicIsland 하나로 축약한다.
+            같은 화면에 상태 표현을 둘 두지 않으므로 기존 StatusBadge는 island 텍스트로 흡수. */}
         {activeOrder && (
           <button
             type="button"
@@ -369,6 +371,7 @@ export function HomePage() {
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
+              gap: 12,
               borderRadius: radius.card,
               padding: 16,
               backgroundColor: surface.card,
@@ -379,13 +382,15 @@ export function HomePage() {
               cursor: "pointer",
             }}
           >
-            <div>
-              <p style={{ margin: 0, fontSize: typeScale.label, color: colors.status.wait }}>진행중인 수거 요청</p>
-              <p style={{ margin: "4px 0 0", fontSize: typeScale.body, fontWeight: 700 }}>
-                {ORDER_STATUS_LABEL[activeOrder.status]}
+            <div style={{ minWidth: 0 }}>
+              <p style={{ margin: "0 0 8px", fontSize: typeScale.label, color: colors.status.wait }}>
+                진행중인 수거 요청
               </p>
+              <DynamicIsland>{ORDER_STATUS_LABEL[activeOrder.status]}</DynamicIsland>
             </div>
-            <StatusBadge status={activeOrder.status} />
+            <span aria-hidden style={{ fontSize: 18, color: gray[400], flex: "0 0 auto" }}>
+              ›
+            </span>
           </button>
         )}
 

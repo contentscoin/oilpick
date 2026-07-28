@@ -265,3 +265,31 @@ CI가 pgTAP를 완주하자 `03_privilege_guards_test.sql`이 4건 실패했다.
 재현: `bash scripts/pgtap-local/run.sh` (Docker 불필요 폴백 하네스). 정식 경로는 여전히 `supabase test db`다.
 하네스의 `supabase-shim.sql`은 Supabase의 함수 기본권한(`alter default privileges ... grant execute`)까지
 재현하므로 위 권한 구멍이 로컬에서도 동일하게 재현된다.
+
+### 10-8. 프로덕션 실증 (2026-07-27)
+
+pgTAP는 픽스처 위에서 도는 검증이라 "실제 앱 3종 + 배포된 Edge Function + 실데이터"의 통과를 대신하지
+못한다. 컷오버(마이그레이션 46건 + Edge Function 20종 배포) 후 **첫 MIXED 주문이 끝까지 완주**했다.
+
+| 항목 | 실측 |
+|---|---|
+| 주문 | `order_kind=MIXED`, 요청 15.0kg + 신유 2캔 |
+| 스냅샷 | 폐유 1,580원/kg · 신유 55,000원/캔 (주문 생성 시점 고정) |
+| 실계량 | `final_kg=12.0` (요청 대비 감소 — 현장 대사 반영) |
+| 배달 | `delivered_cans=2` |
+| `cash_paid_amount` | 18,960 = round(12.0 × 1,580) — **폐유 총액**(의미 동결 유지) |
+| `purchase_amount` | 110,000 = 2 × 55,000 |
+| `net_amount` | **−91,040** (점주 지불 방향) |
+| `payout_method` | CASH → **원장 무기록**(정의대로) |
+
+경로: REQUESTED → ACCEPTED → ARRIVED → SUBMIT_MEASURE → CONFIRM_MEASURE → COMPLETED.
+`dealer_id`가 null(본사 직속)이라 좌상 크레딧 게이트는 우회됐다.
+
+**실증된 것**: 이중 스냅샷(폐유·신유 각각), 음수 net 산출, `cash_paid_amount` 동결(기존 통계·CSV
+무손상 = §8 "하위호환" 항목의 실데이터 확인), CASH 무기록 분기, 라이더 다중 콜 수락(3건 수락 ·
+4건째 `RIDER_TOO_MANY_ACTIVE` 거부 · 2건 이상에서 콜 스위처 노출).
+
+**아직 미실증**: POINT 상계 경로 — `net<0`의 `TRADE_PURCHASE` 차감과 잔액부족 롤백은 pgTAP
+(`12_purchase_netting_test.sql`)에서만 통과했고 프로덕션에서 돈 적이 없다. `net>0`의 EARN 및
+좌상 크레딧 게이트(`DEALER_LIMIT_EXCEEDED`)도 마찬가지다(본사 직속 주문뿐이라 미도달).
+다음 MIXED 주문에서 지급수단을 포인트로 잡아 확인할 것.

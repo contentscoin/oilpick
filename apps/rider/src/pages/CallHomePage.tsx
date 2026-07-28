@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import {
   CallCard,
+  DynamicIsland,
   EmptyState,
   colors,
   elevation,
@@ -113,6 +114,20 @@ export function CallHomePage() {
           {rider?.isOnline ? "온라인" : "오프라인"}
         </button>
       </div>
+
+      {/* [15] 온라인일 때만 "지금 무엇이 진행 중인가"를 한 줄로 축약한다.
+          콜 수는 실제 조회 결과가 있을 때만 붙인다(로딩·실패 중엔 개수를 지어내지 않는다). */}
+      {rider?.isOnline && (
+        <div style={{ display: "flex" }}>
+          <DynamicIsland>
+            {isLoading || callsLoadFailed
+              ? "콜 받는 중"
+              : sortedCalls.length > 0
+                ? `콜 받는 중 · 주변 ${sortedCalls.length}건`
+                : "콜 받는 중 · 주변 콜 없음"}
+          </DynamicIsland>
+        </div>
+      )}
 
       {/* 08 G6-④ "오늘 실적": 수거 kg + 지급 수단 분리(현금/포인트, completed_at 기준).
           쿠폰 잔액 히어로·소진 집계는 쿠폰 모델 폐기(08 P1)로 제거. */}

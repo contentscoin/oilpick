@@ -1,6 +1,14 @@
 import { type FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { BigButton, PhotoUploader, colors, inputClassName, inputStyle, type PhotoAsset } from "@oilpick/ui";
+import {
+  BigButton,
+  OtpInput,
+  PhotoUploader,
+  colors,
+  inputClassName,
+  inputStyle,
+  type PhotoAsset,
+} from "@oilpick/ui";
 import { humanizeSupabaseError, isValidKrMobilePhone, toE164Kr } from "@oilpick/core";
 import { supabase } from "../lib/supabaseClient";
 
@@ -206,24 +214,17 @@ export function AuthPage() {
       {step === "CODE" && (
         <form onSubmit={handleVerifyOtp} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <label htmlFor="code-input" style={{ fontSize: 14, fontWeight: 600 }}>
-              인증번호
-            </label>
+            <span style={{ fontSize: 14, fontWeight: 600 }}>인증번호</span>
             <p style={{ margin: 0, fontSize: 13, color: colors.status.wait }}>
               {phone}로 전송된 6자리 코드를 입력해주세요.
             </p>
-            <input
-              id="code-input"
-              data-testid="code-input"
-              type="text"
-              inputMode="numeric"
-              maxLength={6}
-              required
-              placeholder="123456"
+            {/* [15] 자리별 슬롯 — 입력은 투명 input 하나가 받아 SMS 자동완성을 유지한다. */}
+            <OtpInput
               value={code}
-              onChange={(e) => setCode(e.target.value)}
-              className={inputClassName}
-              style={{ ...inputStyle, letterSpacing: 4 }}
+              onChange={setCode}
+              inputTestId="code-input"
+              error={Boolean(error)}
+              autoFocus
             />
           </div>
           <BigButton type="submit" loading={loading} data-testid="verify-otp-button">

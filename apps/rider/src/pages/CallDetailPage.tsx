@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { BigButton, ErrorScreen, MapView, PageHeader, colors, elevation, gradient, gray, radius, surface, surfaceDark, useToast } from "@oilpick/ui";
+import { BigButton, ErrorScreen, MapView, NumberFlow, PageHeader, colors, elevation, gradient, gray, radius, surface, surfaceDark, useToast } from "@oilpick/ui";
 import { estimateCash, formatKg, formatKrw } from "@oilpick/core";
 import { MAP_STYLE_URL } from "../lib/env";
 import { invokeEdgeFunction } from "../lib/edgeFunction";
@@ -133,8 +133,13 @@ export function CallDetailPage() {
         }}
       >
         <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: surfaceDark.textOnDarkMuted }}>예상 매입 지급액</p>
-        <p className="oilpick-tabular-nums" style={{ margin: 0, fontSize: 40, fontWeight: 800, letterSpacing: "-0.02em", color: surfaceDark.textOnDark }}>
-          {formatKrw(estimateCash(call.requestedKg, call.snapshotPricePerKg))}
+        {/* [15] 콜을 열면 금액이 카운트업한다 — 수락 판단의 주인공 숫자. */}
+        <p style={{ margin: 0 }}>
+          <NumberFlow
+            value={estimateCash(call.requestedKg, call.snapshotPricePerKg)}
+            format={(n) => formatKrw(Math.round(n))}
+            style={{ fontSize: 40, fontWeight: 800, letterSpacing: "-0.02em", color: surfaceDark.textOnDark }}
+          />
         </p>
         <p style={{ margin: 0, fontSize: 12, color: surfaceDark.textOnDarkMuted }}>현장 계량 기준으로 확정 · 현금 또는 포인트로 지급</p>
       </section>

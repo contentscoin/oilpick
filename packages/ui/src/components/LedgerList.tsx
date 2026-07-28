@@ -1,5 +1,6 @@
 import { formatPoint, formatRelativeTime } from "@oilpick/core";
 import { colors } from "../tokens";
+import { SwipeableRow } from "./SwipeableRow";
 
 /**
  * 03-frontend.md "packages/ui 컴포넌트" — LedgerList(원장 행: 타입 한글 라벨 + 부호 색상).
@@ -65,6 +66,13 @@ export interface LedgerListProps {
   entries: LedgerEntry[];
   /** "point"(기본, P 단위) 또는 "coupon"(장 단위·쿠폰 라벨). 07 F5 쿠폰 내역 화면용. */
   variant?: LedgerVariant;
+  /**
+   * [15] 넘기면 각 행이 좌스와이프로 액션을 드러내는 카드가 된다(SwipeableRow).
+   * 넘기지 않으면 기존 구분선 목록 그대로 — 기존 사용처는 무영향.
+   */
+  onRowAction?: (entry: LedgerEntry) => void;
+  /** onRowAction과 짝. 드러나는 액션 라벨. 기본 "영수증". */
+  rowActionLabel?: string;
   className?: string;
 }
 
@@ -73,29 +81,43 @@ function formatCouponQty(n: number): string {
   return `${Math.abs(Math.trunc(n)).toLocaleString("ko-KR")}장`;
 }
 
-export function LedgerList({ entries, variant = "point", className }: LedgerListProps) {
+export function LedgerList({
+  entries,
+  variant = "point",
+  onRowAction,
+  rowActionLabel = "영수증",
+  className,
+}: LedgerListProps) {
   const labelOf = (entryType: LedgerEntry["entryType"]): string =>
     variant === "coupon"
       ? (COUPON_LEDGER_ENTRY_LABEL[entryType as CouponLedgerEntryType] ?? entryType)
       : (LEDGER_ENTRY_LABEL[entryType as PointLedgerEntryType] ?? entryType);
+  const swipeable = Boolean(onRowAction);
 
   return (
-    <ul className={className} data-testid="ledger-list" style={{ listStyle: "none", margin: 0, padding: 0 }}>
+    <ul
+      className={className}
+      data-testid="ledger-list"
+      style={{
+        listStyle: "none",
+        margin: 0,
+        padding: 0,
+        ...(swipeable ? { display: "grid", gap: 8 } : null),
+      }}
+    >
       {entries.map((entry) => {
         const isPositive = entry.amount >= 0;
         const color = isPositive ? colors.primary.DEFAULT : colors.status.danger;
         const magnitude =
           variant === "coupon" ? formatCouponQty(entry.amount) : formatPoint(Math.abs(entry.amount));
-        return (
-          <li
-            key={entry.id}
-            data-testid="ledger-list-row"
+
+        const body = (
+          <div
             style={{
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              padding: "12px 0",
-              borderBottom: "1px solid #f4f4f5",
+              padding: swipeable ? "12px 14px" : "12px 0",
               minHeight: 48,
             }}
           >
@@ -105,13 +127,26 @@ export function LedgerList({ entries, variant = "point", className }: LedgerList
                 {entry.memo ?? formatRelativeTime(entry.createdAt)}
               </p>
             </div>
-            <span
-              className="oilpick-tabular-nums"
-              style={{ fontSize: 16, fontWeight: 700, color }}
-            >
+            <span className="oilpick-tabular-nums" style={{ fontSize: 16, fontWeight: 700, color }}>
               {isPositive ? "+" : "-"}
               {magnitude}
             </span>
+          </div>
+        );
+
+        return (
+          <li
+            key={entry.id}
+            data-testid="ledger-list-row"
+            style={swipeable ? undefined : { borderBottom: "1px solid #f4f4f5" }}
+          >
+            {onRowAction ? (
+              <SwipeableRow actionLabel={rowActionLabel} onAction={() => onRowAction(entry)}>
+                {body}
+              </SwipeableRow>
+            ) : (
+              body
+            )}
           </li>
         );
       })}

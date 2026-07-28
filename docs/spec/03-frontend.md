@@ -47,6 +47,12 @@ fontSize: base 16px 미만 금지. 시세/포인트 강조 32~40px bold
 spacing: 4px 그리드. 터치 타깃 최소 48px. radius: 카드 16px, 버튼 12px
 ```
 
+- **[15]** 모션 토큰(`motion.spring/sheet/count/pulse`)과 **UI 액센트 확장**(`colors.lime`·
+  `colors.cyan`·`surfaceDark.beui`·`surfaceDark.panel`)이 추가됐다. 라임/시안은 **다크 배경
+  전용**(밝은 배경 위 텍스트 금지). 값·용도·제약의 단일 진실은 15-motion-design.md.
+  ※ 위 코드블록의 primary/accent 값은 작성 시점(오일픽) 표기이며, 현행 값은 tokens.ts와
+  10-brand.md B6이 진실이다(딥그린 `#1C5A38` / 앤티크골드 `#C99A46`).
+
 ## packages/ui 컴포넌트 (user/rider 공용)
 `PriceCard`(현재가+등락+스파크라인), `OrderTimeline`(상태 스텝퍼, 세로형),
 `CallCard`(거리/수량/수거비), `PointBalanceCard`(available 크게, held는 "지급 확정 대기 nP" 보조 표기),
