@@ -191,6 +191,18 @@ ACCEPTED 이후 모든 전이 단일 엔드포인트.
   CONFIRM_MEASURE / admin FORCE_COMPLETE 전용).
 - 에러: NOT_FOUND(주문 없음) / FORBIDDEN(타인 주문) / INVALID_TRANSITION(확인 대기 상태 아님).
 
+## 23. `settlement-watch` (cron, 15분 권고) — 16 L8
+- 입력 없음(POST, admin/service_role 인증 — order-expire와 동일). 출력: `{ band80Alerts, thresholdAlerts }`.
+- 처리: `v_dealer_statement` 전 좌상 스캔(service_role — invoker 뷰지만 RLS 우회) →
+  ① usage/credit_limit **≥ 80%** 밴드 ② **over_threshold** 진입 시 좌상 본인(link=/statement) +
+  admin 전원(link=/dealer-settlement?dealer=<id> — 좌상별 dedupe 키 분리)에게 푸시.
+  판정은 `_shared/creditWatch.dueCreditAlerts` 순수 함수(deno test), 재발화 억제는
+  `sendPushDeduped` kind별 **24h 윈도**. 한도 0(미설정)은 밴드 판정 제외.
+- **자동청구 없음**(14 §4 확정 불변) — 청구 생성·정산·무효는 계속 admin 수동. 상태·원장 무접촉.
+- cron 배선은 배포 설정(DEPLOY.md §1-4) — 미배선 시 curl 수동 검증 절차 동봉.
+- **dealer-claim 개정**: create/settle/void 성공 시 좌상에게 청구 라이프사이클 통지
+  (kind=CLAIM_CREATED/SETTLED/VOIDED, link=/statement) — 실패는 응답을 막지 않음(격리).
+
 ## 푸시 발송 헬퍼 `_shared/push.ts`
 - `sendPush(userIds[], title, body, link)`: profiles.fcm_token 조회 → FCM HTTP v1 멀티캐스트
   + notifications insert. 토큰 만료(UNREGISTERED) 시 fcm_token null 처리.

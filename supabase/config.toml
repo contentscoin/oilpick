@@ -428,6 +428,11 @@ import_map = "./functions/import_map.json"
 verify_jwt = true
 import_map = "./functions/import_map.json"
 
+# [16 L8] 좌상 크레딧 임계·한도 경보 cron(15분 권고) — 배선은 배포 설정(DEPLOY.md), 로컬은 curl 검증.
+[functions.settlement-watch]
+verify_jwt = true
+import_map = "./functions/import_map.json"
+
 # T5: price-set/rider-verify/rider-location.
 [functions.price-set]
 verify_jwt = true
