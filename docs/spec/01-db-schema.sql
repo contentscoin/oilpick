@@ -176,6 +176,10 @@ create table dealer_settlements (
 );
 -- RLS: read=본인+admin. 쓰기=service_role RPC(fn_create/settle/void_dealer_claim)만.
 -- 뷰: v_dealer_statement(usage/limit/headroom/over_threshold), v_dealer_settlement_orders(청구 상세/CSV).
+-- [16 L6] v_dealer_active_orders(security_invoker, 20260802000002) — 좌상 관제. 진행중
+-- (ACCEPTED/ARRIVED/DISPUTED) 주문의 **재무 컬럼 제외** 최소 컬럼(14 §2-5 예약 실행 — pgTAP
+-- columns_are로 컬럼 집합 고정). 라이더 표시명은 left join profiles + rider_id 축약 폴백
+-- (재배정 시 전 소속 라이더 이름 미누출). grant select to authenticated.
 
 create table order_events (
   id bigint generated always as identity primary key,
