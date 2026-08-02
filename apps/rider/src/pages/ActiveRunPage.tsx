@@ -1,4 +1,4 @@
-import { type CSSProperties, type FormEvent, type ReactNode, useState } from "react";
+import { type CSSProperties, type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   BigButton,
@@ -48,6 +48,15 @@ import { useDirections } from "../hooks/useDirections";
 import { useGeolocation, type GeoPosition } from "../hooks/useGeolocation";
 import { useRiderLocationPusher } from "../hooks/useRiderLocationPusher";
 import { distanceKm } from "../lib/geo";
+import {
+  clearDraft,
+  loadDraft,
+  photoFingerprint,
+  purgeExpiredDrafts,
+  recordUploadedUrl,
+  saveDraftPhotos,
+  saveDraftText,
+} from "../lib/measureDraft";
 import { isScannerAvailable, scanQrCode } from "../lib/native/scanner";
 
 /**
@@ -615,6 +624,100 @@ function ArrivedPanel({
   const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null);
   const { showToast } = useToast();
 
+  // ── [16 L4 §3-2] 드래프트: 입력 즉시 저장 + 재진입 복원 + 업로드 체크포인트 ──
+  // 복원이 끝나기 전의 초기 상태 저장(빈 값으로 덮어쓰기)을 막는 준비 플래그.
+  // state여야 한다 — 복원 완료 시 저장 이펙트를 한 번 재실행시켜, 복원 전에 들어온 입력도 저장된다.
+  const [draftReady, setDraftReady] = useState(false);
+  // 업로드 체크포인트(사진 지문→서명 URL) — 재시도 시 성공분 재업로드 스킵.
+  const uploadedUrlsRef = useRef<Record<string, string>>({});
+  // 마지막 제출 실패 여부 — 온라인 복귀 시 재시도 유도 토스트 조건.
+  const lastSubmitFailedRef = useRef(false);
+  const [draftRestoredAt, setDraftRestoredAt] = useState<number | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    // 중재 완료(final_kg) 주문은 재제출이 서버에서 거부된다 — 낡은 드래프트를 파기(오제출 가드 ①).
+    if (finalKg != null) {
+      void clearDraft(orderId);
+      setDraftReady(true);
+      return;
+    }
+    void purgeExpiredDrafts();
+    void loadDraft(orderId).then((draft) => {
+      if (cancelled) return;
+      if (draft) {
+        setKg(draft.text.kg);
+        setPayout(draft.text.payout ?? submittedPayoutMethod);
+        setDeliveredCans(draft.text.deliveredCans);
+        setBarcodes(draft.text.barcodes);
+        setGeo(draft.text.geo);
+        uploadedUrlsRef.current = draft.text.uploadedUrls;
+        if (draft.photos.length > 0) setPhotos(draft.photos);
+        setDraftRestoredAt(draft.text.savedAt);
+      }
+      setDraftReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // orderId 전환(다중 콜) 시 해당 주문의 드래프트로 다시 복원한다.
+  }, [orderId, finalKg]);
+
+  // 텍스트 입력은 변경 즉시 저장. 전부 초기값(빈 폼)이면 드래프트를 지운다(빈 배너 방지).
+  useEffect(() => {
+    if (!draftReady || finalKg != null) return;
+    const pristine =
+      kg === "" &&
+      barcodes.length === 0 &&
+      photos.length === 0 &&
+      geo == null &&
+      payout === submittedPayoutMethod &&
+      deliveredCans === (purchaseRequestedCans ?? 0);
+    if (pristine) {
+      void clearDraft(orderId);
+      setDraftRestoredAt(null);
+      return;
+    }
+    saveDraftText(orderId, {
+      kg,
+      payout,
+      deliveredCans,
+      barcodes,
+      geo,
+      uploadedUrls: uploadedUrlsRef.current,
+    });
+  }, [draftReady, kg, payout, deliveredCans, barcodes, geo, photos.length, orderId, finalKg]);
+
+  // 사진 Blob은 IndexedDB에 별도 저장(용량) — 실패해도 텍스트 드래프트는 유지(강등).
+  useEffect(() => {
+    if (!draftReady || finalKg != null) return;
+    void saveDraftPhotos(orderId, photos);
+  }, [draftReady, photos, orderId, finalKg]);
+
+  // 온라인 복귀 감지 — 직전 제출이 실패한 상태면 재시도를 유도한다(자동 재제출은 하지 않는다).
+  useEffect(() => {
+    const onOnline = () => {
+      if (lastSubmitFailedRef.current) {
+        showToast("네트워크가 연결됐어요 — 계량 제출을 다시 시도해 주세요", { variant: "success" });
+      }
+    };
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, []);
+
+  /** 복원 배너 [지우기] — 드래프트 파기 + 폼 초기화. */
+  async function discardDraft() {
+    await clearDraft(orderId);
+    uploadedUrlsRef.current = {};
+    setKg("");
+    setPayout(submittedPayoutMethod);
+    setDeliveredCans(purchaseRequestedCans ?? 0);
+    setBarcodes([]);
+    setGeo(null);
+    setPhotos([]);
+    setDraftRestoredAt(null);
+  }
+
   // [12 §4] 바코드 1건 추가(스캔/수동 공통). 중복·공백 무시. 첫 추가 시 디바이스 GPS를 1회 취득.
   async function addBarcode(raw: string) {
     const code = raw.trim();
@@ -764,8 +867,29 @@ function ArrivedPanel({
 
     setSubmitting(true);
     try {
+      // [16 L4] 낡은 드래프트 오제출 가드 ② — 제출 직전 서버 상태 재확인(복원↔제출 사이 중재
+      // 완료·종결 레이스 차단). 조회 실패(네트워크)는 통과 — 서버 RPC가 최종 방어선이다.
+      const { data: fresh, error: freshError } = await supabase
+        .from("pickup_orders")
+        .select("status, final_kg")
+        .eq("id", orderId)
+        .maybeSingle();
+      if (!freshError && (!fresh || fresh.status !== "ARRIVED" || fresh.final_kg != null)) {
+        await clearDraft(orderId);
+        setDraftRestoredAt(null);
+        showToast("주문 상태가 바뀌어 제출할 수 없어요 — 최신 상태를 확인해주세요", { variant: "error" });
+        return;
+      }
+
       const uploadedUrls: string[] = [];
       for (const [i, photo] of photos.entries()) {
+        // [16 L4] 업로드 체크포인트 — 직전 시도에서 성공한 사진은 서명 URL을 재사용(재업로드 스킵).
+        const fingerprint = photoFingerprint(photo.file);
+        const cached = uploadedUrlsRef.current[fingerprint];
+        if (cached) {
+          uploadedUrls.push(cached);
+          continue;
+        }
         // E8-③: 제출 버튼 문구로 몇 번째 사진을 올리는 중인지 노출.
         setUploadProgress({ current: i + 1, total: photos.length });
         const ext = photo.file instanceof File ? photo.file.name.split(".").pop() : "jpg";
@@ -783,6 +907,9 @@ function ArrivedPanel({
           .from("order-photos")
           .createSignedUrl(path, 60 * 60 * 24 * 365);
         if (signError) throw signError;
+        // 성공 즉시 체크포인트 기록 — 다음 사진에서 실패해도 이 장은 다시 올리지 않는다.
+        uploadedUrlsRef.current = { ...uploadedUrlsRef.current, [fingerprint]: signed.signedUrl };
+        recordUploadedUrl(orderId, fingerprint, signed.signedUrl);
         uploadedUrls.push(signed.signedUrl);
       }
       // 업로드 완료 → 전이 호출 동안은 기본 loading("처리 중...")으로 복귀.
@@ -815,10 +942,19 @@ function ArrivedPanel({
           { variant: "success" },
         );
         setResubmitting(false);
+        // [16 L4] 제출 성공 — 드래프트 파기.
+        lastSubmitFailedRef.current = false;
+        uploadedUrlsRef.current = {};
+        setDraftRestoredAt(null);
+        void clearDraft(orderId);
       } else {
+        lastSubmitFailedRef.current = true;
         showToast(result.message, { variant: "error" });
       }
     } catch (err) {
+      // [16 L4] 실패해도 입력은 드래프트에 있다 — 재입력 없이 재시도(성공분 업로드는 스킵됨).
+      lastSubmitFailedRef.current = true;
+      setError("입력 내용은 저장돼 있어요 — 신호가 잡히면 다시 제출해 주세요.");
       showToast(humanizeSupabaseError(err instanceof Error ? err : null, "사진 업로드 중 오류가 발생했어요."), {
         variant: "error",
       });
@@ -851,6 +987,46 @@ function ArrivedPanel({
 
   return (
     <form data-testid="run-arrived-panel" onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* [16 L4] 드래프트 복원 배너 — 저장 시각 표기(낡은 입력임을 인지시킨다) + 수동 파기. */}
+      {draftRestoredAt != null && (
+        <div
+          data-testid="measure-draft-restored"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 8,
+            padding: "10px 14px",
+            borderRadius: radius.button,
+            backgroundColor: colors.primary.light,
+            color: colors.primary.dark,
+            fontSize: 13,
+            fontWeight: 600,
+          }}
+        >
+          <span>
+            작성하던 내용을 불러왔어요 (
+            {new Date(draftRestoredAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 저장)
+          </span>
+          <button
+            type="button"
+            data-testid="measure-draft-discard"
+            onClick={() => void discardDraft()}
+            style={{
+              background: "none",
+              border: "none",
+              color: colors.primary.dark,
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: "pointer",
+              padding: "4px 2px",
+              textDecoration: "underline",
+            }}
+          >
+            지우기
+          </button>
+        </div>
+      )}
       <Card style={{ gap: 14 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <label htmlFor="measured-kg-input" style={{ fontSize: 14, fontWeight: 600, color: gray[800] }}>

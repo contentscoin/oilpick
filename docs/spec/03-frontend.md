@@ -221,6 +221,12 @@ Realtime: `pickup_orders` 자기 행 UPDATE 구독으로 상태 자동 갱신 (�
 > - **R12 마이(`/my`)**: "알림 받기"→**"콜 알림음"**(소리 한정 캡션). localStorage 단독 저장(미배선)을
 >   Zustand persist 스토어(`stores/notifyPref`)로 승격 — CallAlertListener가 구독해 `useCallAlert({mute})`
 >   실배선(mute=소리만, 배너·진동 유지). 레거시 키(`oilpick:notify-enabled`)는 최초 1회 이관.
+> - **R5 계량 제출 드래프트(L4, `lib/measureDraft`)**: orderId 키 자동 저장 — 텍스트 입력(kg·수단·통수·
+>   바코드·GPS)+업로드 체크포인트는 localStorage, 사진 Blob은 IndexedDB(미지원 환경은 텍스트만 강등).
+>   재진입 시 "작성하던 내용을 불러왔어요" 배너(저장 시각+[지우기]). 업로드는 사진 지문→서명 URL
+>   체크포인트로 성공분 스킵. 제출은 기존 SUBMIT_MEASURE 1회 그대로(멱등) — **오제출 이중 가드**:
+>   복원 시(중재 완료면 파기) + 제출 직전 서버 status·final_kg 재확인. 파기: 제출 성공·종결·7일 경과.
+>   제출 실패 시 "입력 내용은 저장돼 있어요" 안내 + 온라인 복귀 감지 재시도 유도(자동 재제출 없음).
 - 플러그인: @capacitor/push-notifications, geolocation, camera, app, splash-screen,
   @capacitor-community/barcode-scanner (rider만)
 - 딥링크: `oilpick-user://orders/:id`, `oilpick-user://ref/:code`(09 H3 추천 랜딩), `oilpick-rider://calls/:id` — 푸시 link 필드와 매핑

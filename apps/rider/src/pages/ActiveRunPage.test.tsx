@@ -28,7 +28,18 @@ vi.mock("../hooks/useGeolocation", () => ({ useGeolocation: mockUseGeolocation }
 vi.mock("../hooks/useDirections", () => ({ useDirections: mockUseDirections }));
 vi.mock("../lib/native/scanner", () => ({ isScannerAvailable: () => false, scanQrCode: vi.fn() }));
 vi.mock("../lib/edgeFunction", () => ({ invokeEdgeFunction: mockInvoke }));
-vi.mock("../lib/supabaseClient", () => ({ supabase: { storage: { from: mockStorageFrom } } }));
+// [16 L4] 제출 직전 서버 상태 재확인 가드가 supabase.from을 쓴다 — DB 체인 목 추가.
+const { mockDbFrom } = vi.hoisted(() => ({ mockDbFrom: vi.fn() }));
+vi.mock("../lib/supabaseClient", () => ({
+  supabase: { storage: { from: mockStorageFrom }, from: mockDbFrom },
+}));
+
+/** pickup_orders(select→eq→maybeSingle) 상태 재확인 목 — 기본은 제출 가능한 ARRIVED. */
+function mockFreshOrder(row: { status: string; final_kg: number | null } | null = { status: "ARRIVED", final_kg: null }) {
+  mockDbFrom.mockReturnValue({
+    select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: row, error: null }) }) }),
+  });
+}
 vi.mock("../lib/env", () => ({ MAP_STYLE_URL: undefined }));
 
 function makeRun(overrides: Partial<ActiveRun> = {}): ActiveRun {
@@ -82,6 +93,9 @@ beforeEach(() => {
   // clearAllMocks는 mockReturnValue를 지우지 않는다 — 테스트 간 위치 누수 방지로 매번 초기화.
   mockUseGeolocation.mockReturnValue(null);
   mockUseDirections.mockReturnValue({ data: undefined });
+  mockFreshOrder();
+  // [16 L4] 드래프트가 테스트 간 새지 않게 초기화(jsdom엔 indexedDB가 없어 텍스트 드래프트만 생긴다).
+  localStorage.clear();
   // jsdom에는 URL.createObjectURL이 없다 — PhotoUploader 미리보기용 스텁.
   URL.createObjectURL = vi.fn((file: File | Blob) => `blob:${file instanceof File ? file.name : "blob"}`);
 });
@@ -394,5 +408,84 @@ describe("ActiveRunPage — 사장님께 전화(06 E8-④)", () => {
       }),
     );
     expect(screen.queryByTestId("call-supplier-button")).not.toBeInTheDocument();
+  });
+});
+
+describe("ActiveRunPage — 계량 드래프트(16 L4 §3-2)", () => {
+  function seedDraft(orderId: string, overrides: Record<string, unknown> = {}) {
+    localStorage.setItem(
+      `oilpick:measure-draft:${orderId}`,
+      JSON.stringify({
+        kg: "33.5",
+        payout: "CASH",
+        deliveredCans: 0,
+        barcodes: ["880999"],
+        geo: null,
+        uploadedUrls: {},
+        savedAt: Date.now(),
+        ...overrides,
+      }),
+    );
+  }
+
+  it("저장된 드래프트가 있으면 복원 배너 + 입력값을 되살린다", async () => {
+    seedDraft("o1");
+    renderRun(makeRun({ status: "ARRIVED" }));
+    await waitFor(() => expect(screen.getByTestId("measure-draft-restored")).toBeInTheDocument());
+    expect(screen.getByTestId("measured-kg-input")).toHaveValue(33.5);
+    expect(screen.getByTestId("measure-draft-restored")).toHaveTextContent("작성하던 내용을 불러왔어요");
+  });
+
+  it("[지우기]를 누르면 드래프트를 파기하고 폼을 초기화한다", async () => {
+    seedDraft("o1");
+    renderRun(makeRun({ status: "ARRIVED" }));
+    await waitFor(() => expect(screen.getByTestId("measure-draft-restored")).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId("measure-draft-discard"));
+    await waitFor(() =>
+      expect(screen.queryByTestId("measure-draft-restored")).not.toBeInTheDocument(),
+    );
+    expect(screen.getByTestId("measured-kg-input")).toHaveValue(null);
+    expect(localStorage.getItem("oilpick:measure-draft:o1")).toBeNull();
+  });
+
+  it("입력하면 드래프트가 즉시 저장된다", async () => {
+    renderRun(makeRun({ status: "ARRIVED" }));
+    fireEvent.change(screen.getByTestId("measured-kg-input"), { target: { value: "12" } });
+    await waitFor(() => {
+      const raw = localStorage.getItem("oilpick:measure-draft:o1");
+      expect(raw).not.toBeNull();
+      expect(JSON.parse(raw!).kg).toBe("12");
+    });
+  });
+
+  it("제출 직전 서버 상태가 ARRIVED가 아니면 제출을 중단하고 드래프트를 파기한다(오제출 가드)", async () => {
+    seedDraft("o1");
+    mockFreshOrder({ status: "COMPLETED", final_kg: 40 });
+    mockStorageFrom.mockReturnValue({
+      upload: vi.fn(() => Promise.resolve({ error: null })),
+      createSignedUrl: vi.fn(() =>
+        Promise.resolve({ data: { signedUrl: "https://signed.example/p.jpg" }, error: null }),
+      ),
+    });
+    renderRun(makeRun({ status: "ARRIVED" }));
+    await waitFor(() => expect(screen.getByTestId("measure-draft-restored")).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId("payout-option-cash"));
+    fireEvent.change(screen.getByTestId("photo-uploader-input"), {
+      target: { files: [new File(["a"], "a.jpg", { type: "image/jpeg" })] },
+    });
+    fireEvent.click(screen.getByTestId("submit-measure-button"));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("toast")).toHaveTextContent("주문 상태가 바뀌어 제출할 수 없어요"),
+    );
+    expect(mockInvoke).not.toHaveBeenCalled();
+    expect(localStorage.getItem("oilpick:measure-draft:o1")).toBeNull();
+  });
+
+  it("중재 완료(finalKg) 주문은 드래프트를 복원하지 않고 파기한다", async () => {
+    seedDraft("o1");
+    renderRun(makeRun({ status: "ARRIVED", finalKg: 40, measuredKg: 42, payoutMethod: "CASH" }));
+    await waitFor(() => expect(localStorage.getItem("oilpick:measure-draft:o1")).toBeNull());
+    expect(screen.queryByTestId("measure-draft-restored")).not.toBeInTheDocument();
   });
 });
