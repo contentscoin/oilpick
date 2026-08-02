@@ -225,18 +225,38 @@ ARRIVED→COMPLETED는 supplier 전용이라 점주가 미루면 라이더는 �
 
 ## 8. 태스크 분해 (L) — 위에서부터 순서대로, 각 태스크 DoD 만족해야 종료
 
-| # | 내용 | 범위 |
-|---|---|---|
-| L1 | 스펙 확정 — 이 문서 + CLAUDE.md 문서 맵 등재 | 【docs】 |
-| L2 | 알림 계층 기반 — notifications.kind + idx + NOTIFY_KIND 상수 + sendPushDeduped(순수 판정 헬퍼 + 테스트) + 01 동기화 + pgTAP | 【DB】【EF】【core】 |
-| L3 | 라이더 현장 퀵윈 4종 — 경로·ETA(§3-1, 실 키 실측 선행 확인) · 방문 순서(§3-3) · 콜 정렬(§3-4) · 알림음 토글(§3-5) + 11 M9-b append + 03 동기화 | 【R】【core】【docs】 |
-| L4 | 계량 제출 드래프트(§3-2) — measureDraft 스토어 + 체크포인트 + 이중 재검증 가드 + fake-indexeddb 테스트 + 03 동기화 | 【R】 |
-| L5 | 확인 교착 해소(§4) — order-expire 단계 append + confirm-remind 신설 + 대기 배너 버튼 + 【U】 확인 카드 앵커 + 00 알림 매트릭스·02 §4 개정 | 【EF】【R】【U】【docs】 |
-| L6 | 좌상 관제(§5-1) — v_dealer_active_orders 마이그레이션 + pgTAP + DealerHomePage 섹션(지연 배지·tel CTA) + 01 동기화 | 【DB】【D】 |
-| L7 | 정산 명세 셀프서비스(§5-2) — 미정산 섹션 + CSV 공용화 + 테스트 | 【D】 |
-| L8 | 정산 워치(§5-3) — settlement-watch 신설 + dealer-claim 알림 append + 02 신설 절 + DEPLOY cron 배선·수동 호출 검증 절차 | 【EF】【A】【docs】 |
-| L9 | 라이더 관리 액션 완성(§6-1) + 내 정산 현황 카드(§6-2) — v_my_payout_daily 마이그레이션 + pgTAP + 화면 + referral-settle 푸시 | 【D】【DB】【R】【EF】 |
-| L10 | 마감 — qa-checklist 갱신 · 벤더 재확인 · 게이트(pnpm lint/test/build + pgTAP) · 적대적 리뷰 · PR | 【검증】 |
+| # | 내용 | 범위 | 상태 |
+|---|---|---|---|
+| L1 | 스펙 확정 — 이 문서 + CLAUDE.md 문서 맵 등재 | 【docs】 | ✅ (2026-08-02) |
+| L2 | 알림 계층 기반 — notifications.kind + idx + NOTIFY_KIND 상수 + sendPushDeduped(순수 판정 헬퍼 + 테스트) + 01 동기화 + pgTAP | 【DB】【EF】【core】 | ✅ (pgTAP 15 — 5, deno 7) |
+| L3 | 라이더 현장 퀵윈 4종 — 경로·ETA(§3-1, 실 키 실측 선행 확인) · 방문 순서(§3-3) · 콜 정렬(§3-4) · 알림음 토글(§3-5) + 11 M9-b append + 03 동기화 | 【R】【core】【docs】 | ✅ (rider +10 테스트. 🔴 실 키 실측은 배포 후) |
+| L4 | 계량 제출 드래프트(§3-2) — measureDraft 스토어 + 체크포인트 + 이중 재검증 가드 + fake-indexeddb 테스트 + 03 동기화 | 【R】 | ✅ (저장소 6 + 화면 5. effort M 재산정 반영) |
+| L5 | 확인 교착 해소(§4) — order-expire 단계 append + confirm-remind 신설 + 대기 배너 버튼 + 【U】 확인 카드 앵커 + 00 알림 매트릭스·02 §4 개정 | 【EF】【R】【U】【docs】 | ✅ (deno 사다리 5 + rider 3. 기산점=order_events, L-D4) |
+| L6 | 좌상 관제(§5-1) — v_dealer_active_orders 마이그레이션 + pgTAP + DealerHomePage 섹션(지연 배지·tel CTA) + 01 동기화 | 【DB】【D】 | ✅ (pgTAP 16 — 8, admin 4) |
+| L7 | 정산 명세 셀프서비스(§5-2) — 미정산 섹션 + CSV 공용화 + 테스트 | 【D】 | ✅ (admin 3+1, lib/csv 재사용) |
+| L8 | 정산 워치(§5-3) — settlement-watch 신설 + dealer-claim 알림 append + 02 신설 절 + DEPLOY cron 배선·수동 호출 검증 절차 | 【EF】【A】【docs】 | ✅ (deno 4, DEPLOY §1-4. 🔴 cron 실배선은 배포) |
+| L9 | 라이더 관리 액션 완성(§6-1) + 내 정산 현황 카드(§6-2) — v_my_payout_daily 마이그레이션 + pgTAP + 화면 + referral-settle 푸시 | 【D】【DB】【R】【EF】 | ✅ (pgTAP 17 — 6, admin 5·rider 2) |
+| L10 | 마감 — qa-checklist 갱신 · 벤더 재확인 · 게이트(pnpm lint/test/build + pgTAP) · 적대적 리뷰 · PR | 【검증】 | ✅ (게이트 전체 GREEN — pgTAP 17스위트 265, 아래 검증 기록) |
+
+> **적대적 리뷰 결과(L10, 2026-08-02)** — 전체 diff 검토, **확정 결함 5건 발견·전량 수정**:
+> ① [상] ArrivedPanel `key` 부재 — 다중 콜 ARRIVED↔ARRIVED in-place 전환(캐시 복귀·pickRun 폴백)
+> 시 이전 주문의 폼 state·드래프트가 새 주문 키로 저장·오염 → 오제출 가능. `key={run.id}` 리마운트로 수정.
+> ② [중] L8 알림 링크가 벨에서 전부 죽은 링크 — remapToAdminRoute 허용목록에 dealer 라우트
+> (13/14 추가분) 누락 + 쿼리스트링 원천 매치 불가. 허용목록 갱신 + pathname 판정·쿼리 보존으로 수정.
+> ③ [상] DEPLOY §1-4대로 cron 배선 시 매 주기 401 — requireAuth는 user JWT 전용이라 service_role
+> JWT(sub 없음)가 항상 거부됐다. `requireCronAuth`(service_role 키 직접 인정 + admin JWT 폴백) 신설,
+> order-expire·settlement-watch 적용. ④ [하] 알림음 레거시 이관이 재시작 1회에 유실(persist가 최초
+> set 전 미저장) — write-through로 수정. ⑤ [하] useMyPayout "이번 달" 경계가 UTC 변환으로 KST
+> 1일 00~09시에 전월로 밀림 — 로컬 달력 기준 조립으로 수정. 잠복 관찰 2건(에스컬레이션 다단계 확장 시
+> dedupe 카운트 방식·order_events 1000행 캡)은 현 설정 무해로 기록만.
+>
+> **구현 편차 기록(L10)**: ① 자동 리마인드(2h/12h)는 사다리 특성상 단일 윈도 dedupe(sendPushDeduped)
+> 대신 **발송 이력 개수 기반 판정**(`ladderShouldSend` 순수 함수)을 쓴다 — L-D2의 "단일 메커니즘"
+> 취지는 유지(notifications 이력만 사용, 저장소 신설 없음)하되 판정 함수만 다르다. ② L5 라이더측
+> [본사에 도움 요청] 버튼은 L-D4대로 제거(24h 자동 에스컬레이션과 중복) — 캡션 안내로 대체.
+> ③ EF 정적 검증 중 **기존 잠복 타입 이슈 발견(수정 안 함, 범위 밖)**: order-transition:58의
+> ACTION_ROLES 타입이 13에서 추가된 'dealer' role을 포함하지 않아 deno check 에러 — 런타임 무해
+> (dealer는 어떤 액션에도 매칭되지 않아 FORBIDDEN 경로)이나 후속 정리 대상으로 기록.
 
 DoD 공통: `pnpm lint && pnpm test && pnpm build` green, DB 태스크는 pgTAP green
 (`bash scripts/pgtap-local/run.sh`), 시크릿 grep, 스키마 변경 시 01 동기화(규칙 6).

@@ -23,8 +23,15 @@ function readLegacyInitial(): boolean {
   try {
     if (localStorage.getItem(NOTIFY_PREF_STORAGE_KEY) !== null) return true; // persist가 rehydrate
     const legacy = localStorage.getItem(LEGACY_KEY);
-    if (legacy !== null) localStorage.removeItem(LEGACY_KEY);
-    return legacy !== "0";
+    if (legacy !== null) {
+      const soundEnabled = legacy !== "0";
+      // [16 L10 리뷰 수정] 새 키에 즉시 기록(write-through) — persist는 최초 set(토글) 전에는
+      // 저장하지 않아서, 이관값을 지우기만 하면 재시작 한 번에 음소거 설정이 유실됐다(확정 결함).
+      localStorage.setItem(NOTIFY_PREF_STORAGE_KEY, JSON.stringify({ state: { soundEnabled }, version: 0 }));
+      localStorage.removeItem(LEGACY_KEY);
+      return soundEnabled;
+    }
+    return true;
   } catch {
     return true; // storage 접근 불가(프라이버시 모드 등) — 기본 켜짐
   }

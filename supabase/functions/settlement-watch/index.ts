@@ -11,7 +11,7 @@
 // cron 배선(pg_cron 등)은 배포 설정(16 §0-5) — DEPLOY.md 절차 + 미배선 시 curl 수동 검증.
 
 import { NOTIFY_KIND } from "@oilpick/core/index.ts";
-import { AuthError, requireAuth, requireRole } from "../_shared/auth.ts";
+import { AuthError, requireCronAuth } from "../_shared/auth.ts";
 import { dueCreditAlerts } from "../_shared/creditWatch.ts";
 import { errorResponse, okResponse, withErrorHandling } from "../_shared/response.ts";
 import { sendPushDeduped } from "../_shared/push.ts";
@@ -26,11 +26,10 @@ Deno.serve((req) =>
       return errorResponse("NOT_FOUND", 404, "지원하지 않는 메서드예요.");
     }
 
-    // cron(서버 간) 호출 전제 — order-expire와 동일하게 admin/service_role 인증.
+    // cron(서버 간) 호출 전제 — service_role 키 직접 인정 + admin JWT 폴백(requireCronAuth, 16 L10).
     let ctx;
     try {
-      ctx = await requireAuth(req);
-      requireRole(ctx, "admin");
+      ctx = await requireCronAuth(req);
     } catch (err) {
       if (err instanceof AuthError) return errorResponse(err.code, err.status, err.message);
       throw err;

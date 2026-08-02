@@ -135,7 +135,12 @@ export function ActiveRunPage() {
         />
       )}
       {run.status === "ARRIVED" && (
+        // [16 L10 리뷰 수정] key 필수 — 다중 콜에서 ARRIVED↔ARRIVED로 in-place 전환(캐시 복귀·
+        // pickRun 폴백)되면 언마운트 없이 orderId만 바뀌어, 이전 주문의 폼 state·드래프트가
+        // 새 주문 키로 저장/오염되고 그대로 오제출될 수 있었다(확정 결함). key로 주문마다
+        // 리마운트해 state·draftReady·체크포인트 ref가 항상 해당 주문에서 새로 시작한다.
         <ArrivedPanel
+          key={run.id}
           orderId={run.id}
           measuredKg={run.measuredKg}
           finalKg={run.finalKg}

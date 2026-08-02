@@ -15,6 +15,18 @@ describe("useNotifyPref — 레거시 키 이관", () => {
     expect(localStorage.getItem("oilpick:notify-enabled")).toBeNull();
   });
 
+  // [16 L10 리뷰 수정] persist는 최초 set 전에는 저장하지 않는다 — write-through가 없으면
+  // 이관 직후 앱을 재시작(토글 무접촉)하는 순간 음소거 설정이 기본값 true로 유실됐다.
+  it("이관값은 새 키에 즉시 기록된다(재시작 후에도 유지 — write-through)", async () => {
+    localStorage.setItem("oilpick:notify-enabled", "0");
+    const { NOTIFY_PREF_STORAGE_KEY } = await import("./notifyPref");
+    expect(localStorage.getItem(NOTIFY_PREF_STORAGE_KEY)).toContain('"soundEnabled":false');
+    // 재기동 시뮬레이션 — 모듈 재로드에서도 false 유지.
+    vi.resetModules();
+    const { useNotifyPref } = await import("./notifyPref");
+    expect(useNotifyPref.getState().soundEnabled).toBe(false);
+  });
+
   it("레거시 키가 없으면 기본 켜짐", async () => {
     const { useNotifyPref } = await import("./notifyPref");
     expect(useNotifyPref.getState().soundEnabled).toBe(true);

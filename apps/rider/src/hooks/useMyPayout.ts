@@ -27,9 +27,12 @@ export function useMyPayout(userId: string | undefined) {
     queryKey: ["my-payout", userId ?? ""],
     enabled: Boolean(userId),
     queryFn: async (): Promise<MyPayoutSummary> => {
-      const monthStart = new Date();
-      monthStart.setDate(1);
-      const from = monthStart.toISOString().slice(0, 10);
+      // [16 L10 리뷰 수정] "이번 달" 경계는 **로컬 달력** 기준으로 조립 — toISOString()은 UTC라
+      // KST 1일 00~09시에 from이 전월 말일이 되어 합계에 전월 행이 섞였다(확정 결함).
+      // (뷰의 day 자체는 completed_at::date=UTC 일자 — admin 뷰와 동일 규약. 라벨의 KST 편차는
+      // 기존 정산 뷰들과 일관성 유지 차원에서 그대로 두고 합계 경계만 로컬로 고정한다.)
+      const now = new Date();
+      const from = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
       const { data, error } = await supabase
         .from("v_my_payout_daily")
         .select("day, completed_count, total_kg, cash_amount, point_amount, point_spent_amount")
