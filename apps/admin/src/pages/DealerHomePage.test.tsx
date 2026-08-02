@@ -52,14 +52,75 @@ describe("DealerHomePage (13 I4)", () => {
     await waitFor(() => expect(mockVerifyRider).toHaveBeenCalledWith("r1", "APPROVED"));
   });
 
-  it("소속 해제 버튼이 dealer-assign(null)을 호출한다", async () => {
+  // [16 L9] 소속 해제는 파괴적 액션 — 확인 다이얼로그를 거쳐 dealer-assign(null)을 호출한다.
+  it("소속 해제: 확인 다이얼로그 승인 후 dealer-assign(null)을 호출한다", async () => {
     render(<DealerHomePage />);
     fireEvent.click(screen.getByTestId("unassign-r2"));
+    expect(mockUnassign).not.toHaveBeenCalled(); // 오탭 한 번으로는 실행되지 않는다
+    expect(screen.getByTestId("rider-action-dialog")).toHaveTextContent("이라이더");
+    fireEvent.click(screen.getByTestId("rider-action-confirm"));
     await waitFor(() => expect(mockUnassign).toHaveBeenCalledWith("r2"));
   });
 });
 
+describe("DealerHomePage — 4-decision 액션 완성(16 L9)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockUseMyRiders.mockReturnValue({ data: RIDERS, isLoading: false });
+    mockUseMyRiderStats.mockReturnValue({ data: STATS });
+    mockUseDealerActiveOrders.mockReturnValue({ data: [] });
+    mockVerifyRider.mockResolvedValue({ ok: true });
+    mockUnassign.mockResolvedValue({ ok: true });
+  });
+
+  it("PENDING: [반려]는 사유 없인 확정 불가, 사유 입력 후 REJECTED 호출", async () => {
+    render(<DealerHomePage />);
+    fireEvent.click(screen.getByTestId("reject-r1"));
+    const confirm = screen.getByTestId("rider-action-confirm");
+    expect(confirm).toBeDisabled(); // 사유 필수
+    fireEvent.change(screen.getByTestId("rider-action-reason"), { target: { value: "사업자등록증 만료" } });
+    fireEvent.click(confirm);
+    await waitFor(() => expect(mockVerifyRider).toHaveBeenCalledWith("r1", "REJECTED", "사업자등록증 만료"));
+  });
+
+  it("APPROVED: [정지]는 입력한 사유로 SUSPENDED 호출('좌상 정지' 하드코딩 제거)", async () => {
+    render(<DealerHomePage />);
+    fireEvent.click(screen.getByTestId("suspend-r2"));
+    fireEvent.change(screen.getByTestId("rider-action-reason"), { target: { value: "무단 미수거 반복" } });
+    fireEvent.click(screen.getByTestId("rider-action-confirm"));
+    await waitFor(() => expect(mockVerifyRider).toHaveBeenCalledWith("r2", "SUSPENDED", "무단 미수거 반복"));
+  });
+
+  it("SUSPENDED: [정지 해제]가 REINSTATED를 호출한다(예전엔 본사에 요청해야 했다)", async () => {
+    mockUseMyRiders.mockReturnValue({
+      data: [{ id: "r3", name: "박라이더", phone: "012", verifyStatus: "SUSPENDED", isOnline: false }],
+      isLoading: false,
+    });
+    render(<DealerHomePage />);
+    fireEvent.click(screen.getByTestId("reinstate-r3"));
+    await waitFor(() => expect(mockVerifyRider).toHaveBeenCalledWith("r3", "REINSTATED"));
+  });
+
+  it("다이얼로그 [취소]는 아무 액션도 실행하지 않는다", () => {
+    render(<DealerHomePage />);
+    fireEvent.click(screen.getByTestId("suspend-r2"));
+    fireEvent.click(screen.getByTestId("rider-action-cancel"));
+    expect(screen.queryByTestId("rider-action-dialog")).not.toBeInTheDocument();
+    expect(mockVerifyRider).not.toHaveBeenCalled();
+  });
+});
+
 describe("DealerHomePage — 진행중 운행 관제(16 L6)", () => {
+  // 첫 describe의 beforeEach는 그 스코프 전용 — 여기서도 기본 목을 다시 깐다.
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockUseMyRiders.mockReturnValue({ data: RIDERS, isLoading: false });
+    mockUseMyRiderStats.mockReturnValue({ data: STATS });
+    mockUseDealerActiveOrders.mockReturnValue({ data: [] });
+    mockVerifyRider.mockResolvedValue({ ok: true });
+    mockUnassign.mockResolvedValue({ ok: true });
+  });
+
   const BASE_ORDER = {
     orderId: "o1",
     status: "ARRIVED" as const,

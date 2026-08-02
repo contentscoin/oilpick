@@ -542,6 +542,10 @@ group by 1;
 
 -- [08 G2-④] 라이더별 지급 실적(admin 전용, 08 P5) — 포인트 지급분은 플랫폼이 점주에게 부담(EARN)하므로
 -- 라이더-플랫폼 오프라인 정산·청구의 대사 근거. 실 DDL: 20260715000001.
+-- ⚠️ 현행 정의는 20260724000011의 **net 기준 재정의본**이 단일 진실(아래는 구판 — 이력 참조).
+-- [16 L9] v_my_payout_daily(20260802000003): 위 뷰의 **라이더 본인 스코프** 미러(net 기준 재정의본
+-- 기준 — gross 구판 복제 금지). rider_id = auth.uid() 한정, security_invoker + grant authenticated.
+-- 라이더가 자기 정산 대기 금액(POINT EARN분)을 대사하는 조회 전용 — 지갑·출금 아님(08 P5 불변).
 create view v_rider_payout_daily
   with (security_invoker = true)
 as

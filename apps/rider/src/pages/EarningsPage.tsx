@@ -1,6 +1,7 @@
 import { NumberFlow, colors, elevation, gradient, gray, radius, surface } from "@oilpick/ui";
 import { formatKg, formatKrw, formatPoint } from "@oilpick/core";
 import { useSession } from "../hooks/useSession";
+import { useMyPayout } from "../hooks/useMyPayout";
 import { useMonthlyPickupStats } from "../hooks/useTodayStats";
 
 /**
@@ -14,6 +15,8 @@ export function EarningsPage() {
   const userId = session?.user.id;
 
   const { data: stats, isLoading: statsLoading } = useMonthlyPickupStats(userId);
+  // [16 L9] 플랫폼 정산 대사 — v_my_payout_daily(본인 스코프). 지갑·출금 아님(08 P5).
+  const { data: payout } = useMyPayout(userId);
 
   return (
     <main style={{ display: "flex", flexDirection: "column", gap: 20, padding: 20, maxWidth: 480, margin: "0 auto" }}>
@@ -88,6 +91,49 @@ export function EarningsPage() {
                 {formatKg(stats?.kg ?? 0)}
               </p>
             </div>
+          </section>
+
+          {/* [16 L9 §6-2] 플랫폼 정산 카드 — 포인트 지급분은 플랫폼이 점주에게 부담(EARN)했으므로
+              플랫폼이 라이더에게 정산할 금액의 대사 근거다. 지갑/출금 오해 차단 카피 필수(08 P5). */}
+          <section
+            data-testid="my-payout-card"
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+              padding: 16,
+              borderRadius: radius.card,
+              backgroundColor: surface.card,
+              border: `1px solid ${surface.border}`,
+              boxShadow: elevation.card,
+            }}
+          >
+            <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: colors.status.wait }}>플랫폼 정산 (이번 달 포인트 지급분)</p>
+            <p data-testid="my-payout-total" className="oilpick-tabular-nums" style={{ margin: 0, fontSize: 24, fontWeight: 800, letterSpacing: "-0.01em", color: colors.primary.dark }}>
+              {formatPoint(payout?.monthPointTotal ?? 0)}
+            </p>
+            <p style={{ margin: 0, fontSize: 12, color: colors.status.wait }}>
+              오프라인 정산 대상 금액 — 지급 일정은 본사 안내를 따라요.
+            </p>
+            {(payout?.days ?? []).length > 0 && (
+              <details data-testid="my-payout-days">
+                <summary style={{ fontSize: 13, fontWeight: 600, color: colors.primary.DEFAULT, cursor: "pointer", minHeight: 32 }}>
+                  일별 내역 보기
+                </summary>
+                <ul style={{ margin: "8px 0 0", padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 6 }}>
+                  {(payout?.days ?? []).map((d) => (
+                    <li
+                      key={d.day}
+                      className="oilpick-tabular-nums"
+                      style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 13, color: gray[800] }}
+                    >
+                      <span>{d.day} · {d.completedCount}건</span>
+                      <span style={{ fontWeight: 700 }}>{formatPoint(d.pointAmount)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
           </section>
         </>
       )}
