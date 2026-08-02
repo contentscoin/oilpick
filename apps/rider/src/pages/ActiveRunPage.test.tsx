@@ -19,6 +19,13 @@ vi.mock("../hooks/useActiveRun", () => ({
   useActiveRunSummaries: mockUseActiveRunSummaries,
 }));
 vi.mock("../hooks/useRiderLocationPusher", () => ({ useRiderLocationPusher: vi.fn() }));
+// [16 L3] 내 위치·경로 조회는 부가 기능 — 기본은 "없음"(칩·경로선 미표기 폴백 경로).
+const { mockUseGeolocation, mockUseDirections } = vi.hoisted(() => ({
+  mockUseGeolocation: vi.fn(() => null as { lat: number; lng: number } | null),
+  mockUseDirections: vi.fn(() => ({ data: undefined })),
+}));
+vi.mock("../hooks/useGeolocation", () => ({ useGeolocation: mockUseGeolocation }));
+vi.mock("../hooks/useDirections", () => ({ useDirections: mockUseDirections }));
 vi.mock("../lib/native/scanner", () => ({ isScannerAvailable: () => false, scanQrCode: vi.fn() }));
 vi.mock("../lib/edgeFunction", () => ({ invokeEdgeFunction: mockInvoke }));
 vi.mock("../lib/supabaseClient", () => ({ supabase: { storage: { from: mockStorageFrom } } }));
@@ -72,6 +79,9 @@ function renderRun(run: ActiveRun | null) {
 beforeEach(() => {
   vi.clearAllMocks();
   mockUseSession.mockReturnValue({ session: { user: { id: "rider-1" } }, loading: false });
+  // clearAllMocks는 mockReturnValue를 지우지 않는다 — 테스트 간 위치 누수 방지로 매번 초기화.
+  mockUseGeolocation.mockReturnValue(null);
+  mockUseDirections.mockReturnValue({ data: undefined });
   // jsdom에는 URL.createObjectURL이 없다 — PhotoUploader 미리보기용 스텁.
   URL.createObjectURL = vi.fn((file: File | Blob) => `blob:${file instanceof File ? file.name : "blob"}`);
 });
@@ -153,14 +163,14 @@ describe("ActiveRunPage — 레거시 PICKED_UP(07 F6-②)", () => {
 describe("ActiveRunPage — 다중 콜 전환기", () => {
   it("진행 중 2건 이상이면 전환기를 띄우고, 탭하면 해당 운행으로 전환한다", async () => {
     const runs = [
-      { id: "o-1", status: "ACCEPTED" as const, pickupAddress: "서울 강서구 화곡로 1", createdAt: "2026-07-26T00:00:00Z" },
-      { id: "o-2", status: "ARRIVED" as const, pickupAddress: "서울 성북구 장월로 120", createdAt: "2026-07-26T01:00:00Z" },
+      { id: "o-1", status: "ACCEPTED" as const, pickupAddress: "서울 강서구 화곡로 1", pickupLat: null, pickupLng: null, createdAt: "2026-07-26T00:00:00Z" },
+      { id: "o-2", status: "ARRIVED" as const, pickupAddress: "서울 성북구 장월로 120", pickupLat: null, pickupLng: null, createdAt: "2026-07-26T01:00:00Z" },
     ];
     mockUseActiveRunSummaries.mockReturnValue({ data: runs });
     renderRun(makeRun({ id: "o-1", status: "ACCEPTED" }));
 
     expect(screen.getByTestId("run-switcher")).toBeInTheDocument();
-    expect(screen.getByText("진행 중 2건 — 탭해서 전환")).toBeInTheDocument();
+    expect(screen.getByText("진행 중 2건 — 권장 순서로 정렬했어요")).toBeInTheDocument();
     // 현재 보고 있는 건이 표시된다.
     expect(screen.getByTestId("run-switch-o-1")).toHaveAttribute("aria-current", "true");
     expect(screen.getByTestId("run-switch-o-2")).not.toHaveAttribute("aria-current");
@@ -172,10 +182,45 @@ describe("ActiveRunPage — 다중 콜 전환기", () => {
 
   it("진행 중 1건이면 전환기를 렌더하지 않는다(기존 화면과 동일)", () => {
     mockUseActiveRunSummaries.mockReturnValue({
-      data: [{ id: "o-1", status: "ACCEPTED" as const, pickupAddress: "서울 강서구 화곡로 1", createdAt: "2026-07-26T00:00:00Z" }],
+      data: [{ id: "o-1", status: "ACCEPTED" as const, pickupAddress: "서울 강서구 화곡로 1", pickupLat: null, pickupLng: null, createdAt: "2026-07-26T00:00:00Z" }],
     });
     renderRun(makeRun({ id: "o-1", status: "ACCEPTED" }));
     expect(screen.queryByTestId("run-switcher")).not.toBeInTheDocument();
+  });
+
+  // [16 L3 §3-3] 방문 순서 보드 — ARRIVED 상단 고정 + 근거리순 + 좌표 없는 건 맨 뒤.
+  it("위치가 있으면 ARRIVED 고정 → 근거리순으로 뱃지·거리 칩을 붙인다(좌표 없는 건 맨 뒤)", () => {
+    mockUseGeolocation.mockReturnValue({ lat: 37.55, lng: 126.82 }); // 내 위치
+    mockUseActiveRunSummaries.mockReturnValue({
+      data: [
+        // 먼 ACCEPTED(≈13km), 가까운 ACCEPTED(≈0km), 좌표 없는 건, ARRIVED(멀어도 상단 고정)
+        { id: "far", status: "ACCEPTED" as const, pickupAddress: "먼 곳", pickupLat: 37.55, pickupLng: 126.97, createdAt: "2026-07-26T03:00:00Z" },
+        { id: "near", status: "ACCEPTED" as const, pickupAddress: "가까운 곳", pickupLat: 37.55, pickupLng: 126.82, createdAt: "2026-07-26T02:00:00Z" },
+        { id: "nogeo", status: "ACCEPTED" as const, pickupAddress: "좌표 없음", pickupLat: null, pickupLng: null, createdAt: "2026-07-26T01:00:00Z" },
+        { id: "arrived", status: "ARRIVED" as const, pickupAddress: "현장 진행 중", pickupLat: 37.6, pickupLng: 127.1, createdAt: "2026-07-26T00:00:00Z" },
+      ],
+    });
+    renderRun(makeRun({ id: "near", status: "ACCEPTED" }));
+
+    // 표시 순서: arrived(①) → near(②) → far(③) → nogeo(맨 뒤).
+    const badges = ["arrived", "near", "far"].map((id) => screen.getByTestId(`run-visit-badge-${id}`).textContent);
+    expect(badges).toEqual(["①", "②", "③"]);
+    // 거리 칩: 가까운 건 0.0km, 좌표 없는 건 미표기.
+    expect(screen.getByTestId("run-distance-near")).toHaveTextContent("0.0km");
+    expect(screen.queryByTestId("run-distance-nogeo")).not.toBeInTheDocument();
+  });
+
+  it("위치가 없으면(권한 거부) 순서 뱃지를 지어내지 않는다", () => {
+    mockUseGeolocation.mockReturnValue(null);
+    mockUseActiveRunSummaries.mockReturnValue({
+      data: [
+        { id: "o-1", status: "ACCEPTED" as const, pickupAddress: "A", pickupLat: 37.5, pickupLng: 127.0, createdAt: "2026-07-26T00:00:00Z" },
+        { id: "o-2", status: "ACCEPTED" as const, pickupAddress: "B", pickupLat: 37.6, pickupLng: 127.1, createdAt: "2026-07-26T01:00:00Z" },
+      ],
+    });
+    renderRun(makeRun({ id: "o-1", status: "ACCEPTED" }));
+    expect(screen.queryByTestId("run-visit-badge-o-1")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("run-distance-o-1")).not.toBeInTheDocument();
   });
 });
 

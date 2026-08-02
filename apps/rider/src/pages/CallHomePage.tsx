@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   CallCard,
@@ -18,6 +19,18 @@ import { useTodayStats } from "../hooks/useTodayStats";
 import { useGeolocation } from "../hooks/useGeolocation";
 import { distanceKm } from "../lib/geo";
 import { supabase } from "../lib/supabaseClient";
+
+/**
+ * [16 L3 §3-4] 콜 목록 정렬 기준. 기본 가까운순 유지(16 §10-3 권고 기본값) — 클라이언트 정렬
+ * 전용이라 배차 규칙(13 D7 전체 공개)은 불변이다.
+ */
+type CallSort = "distance" | "amount" | "recent";
+
+const CALL_SORT_LABEL: Record<CallSort, string> = {
+  distance: "가까운순",
+  amount: "지급액순",
+  recent: "최신순",
+};
 
 /**
  * R2 콜 홈. 03-frontend.md: "온라인 토글(rider_profiles.is_online) + 오늘 실적 + REQUESTED
@@ -42,21 +55,39 @@ export function CallHomePage() {
   // 초기 로드 실패만 에러 UI로 — 백그라운드 refetch 실패는 캐시된 화면을 유지한다.
   const callsLoadFailed = callsError && calls === undefined;
 
+  // [16 L3 §3-4] 정렬 토글 — 하루 수십 회 여는 최고빈도 표면의 탐색 효율. 세션 로컬 상태로 충분.
+  const [sort, setSort] = useState<CallSort>("distance");
+
   // 좌표가 없는(비정상 데이터) 콜은 거리를 계산할 수 없다 — 목록 맨 뒤로 보낸다.
   const callDistanceKm = (call: { pickupLat: number | null; pickupLng: number | null }): number | null =>
     position && call.pickupLat != null && call.pickupLng != null
       ? distanceKm(position, { lat: call.pickupLat, lng: call.pickupLng })
       : null;
 
-  const sortedCalls = position
-    ? [...(calls ?? [])].sort((a, b) => {
-        const da = callDistanceKm(a);
-        const db = callDistanceKm(b);
-        if (da == null) return db == null ? 0 : 1;
-        if (db == null) return -1;
-        return da - db;
-      })
-    : (calls ?? []);
+  const sortedCalls = (() => {
+    const list = [...(calls ?? [])];
+    switch (sort) {
+      case "amount":
+        // 예상 매입 지급액(스냅샷 시세×신청량 — CallCard와 동일 계산) 큰 순.
+        return list.sort(
+          (a, b) => estimateCash(b.requestedKg, b.snapshotPricePerKg) - estimateCash(a.requestedKg, a.snapshotPricePerKg),
+        );
+      case "recent":
+        // 서버 조회가 이미 created_at desc — 그대로.
+        return list;
+      case "distance":
+      default:
+        // 위치를 모르면(권한 거부 등) 서버 순서(최신순) 유지 — 거리를 지어내지 않는다.
+        if (!position) return list;
+        return list.sort((a, b) => {
+          const da = callDistanceKm(a);
+          const db = callDistanceKm(b);
+          if (da == null) return db == null ? 0 : 1;
+          if (db == null) return -1;
+          return da - db;
+        });
+    }
+  })();
 
   async function handleToggleOnline() {
     if (!userId || !rider) return;
@@ -196,7 +227,37 @@ export function CallHomePage() {
       )}
 
       <section style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <h2 style={{ fontSize: 16, margin: 0 }}>주변 콜</h2>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+          <h2 style={{ fontSize: 16, margin: 0 }}>주변 콜</h2>
+          {/* [16 L3 §3-4] 정렬 세그먼트 — 표시 순서만 바꾼다(배차 규칙 불변, 13 D7). */}
+          <div role="group" aria-label="콜 정렬" style={{ display: "flex", gap: 4 }}>
+            {(Object.keys(CALL_SORT_LABEL) as CallSort[]).map((key) => {
+              const active = sort === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  data-testid={`call-sort-${key}`}
+                  aria-pressed={active}
+                  onClick={() => setSort(key)}
+                  style={{
+                    minHeight: 32,
+                    padding: "4px 10px",
+                    borderRadius: 999,
+                    border: `1px solid ${active ? colors.primary.DEFAULT : surface.border}`,
+                    backgroundColor: active ? colors.primary.light : surface.card,
+                    color: active ? colors.primary.dark : colors.status.wait,
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  {CALL_SORT_LABEL[key]}
+                </button>
+              );
+            })}
+          </div>
+        </div>
         {isLoading && (
           <div data-testid="open-calls-skeleton" style={{ height: 80, borderRadius: radius.card, backgroundColor: gray[100] }} />
         )}

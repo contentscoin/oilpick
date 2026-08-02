@@ -1,11 +1,10 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { type CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
 import { colors, elevation, radius, surface } from "@oilpick/ui";
 import { useSession } from "../hooks/useSession";
 import { useRiderProfile } from "../hooks/useRiderProfile";
 import { supabase } from "../lib/supabaseClient";
-
-const NOTIFY_PREF_KEY = "oilpick:notify-enabled";
+import { useNotifyPref } from "../stores/notifyPref";
 
 /** 메뉴 카드 안 공통 행 스타일(터치 타깃 48px, 행 사이 구분선). */
 const menuRowStyle: CSSProperties = {
@@ -35,17 +34,10 @@ export function MyPage() {
   const userId = session?.user.id;
   const { data: profile } = useRiderProfile(userId);
 
-  const [notifyEnabled, setNotifyEnabled] = useState(true);
-
-  useEffect(() => {
-    setNotifyEnabled(localStorage.getItem(NOTIFY_PREF_KEY) !== "0");
-  }, []);
-
-  function toggleNotify() {
-    const next = !notifyEnabled;
-    setNotifyEnabled(next);
-    localStorage.setItem(NOTIFY_PREF_KEY, next ? "1" : "0");
-  }
+  // [16 L3 §3-5] 콜 알림음 토글 — Zustand persist 스토어. CallAlertListener가 같은 스토어를
+  // 구독해 useCallAlert({ mute })로 전달한다(예전엔 localStorage 저장만 되고 미배선이었다).
+  const notifyEnabled = useNotifyPref((s) => s.soundEnabled);
+  const toggleNotify = useNotifyPref((s) => s.toggleSound);
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -110,13 +102,18 @@ export function MyPage() {
           <span>내 추천</span>
           <span style={{ color: colors.status.wait }}>&gt;</span>
         </button>
+        {/* [16 L3 §3-5] 카피를 "콜 알림음"으로 한정 — mute 계약(소리만 끔, 배너·진동 유지)과
+            일치시키고, 서버 푸시(백그라운드)까지 끈다는 오해를 캡션으로 차단한다. */}
         <button
           type="button"
           data-testid="notify-toggle"
           onClick={toggleNotify}
           style={{ ...menuRowStyle, cursor: "pointer" }}
         >
-          <span>알림 받기</span>
+          <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2 }}>
+            <span>콜 알림음</span>
+            <span style={{ fontSize: 12, color: colors.status.wait }}>앱 사용 중 소리만 끕니다 · 배너·푸시는 유지</span>
+          </span>
           <span style={{ fontWeight: 700, color: notifyEnabled ? colors.primary.DEFAULT : colors.status.wait }}>
             {notifyEnabled ? "켜짐" : "꺼짐"}
           </span>

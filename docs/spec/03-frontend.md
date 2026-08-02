@@ -208,6 +208,19 @@ Realtime: `pickup_orders` 자기 행 UPDATE 구독으로 상태 자동 갱신 (�
 > - **rider 알림함(`/notifications`)**: 행 클릭 navigate가 raw link 대신 `normalizeDeepLink`를 경유하도록
 >   수정 — `/orders/:id`→`/calls/:id`, `/wallet`→`/earnings` 재매핑이 푸시 탭과 동일하게 적용된다(기존엔
 >   캐치올로 홈에 떨어지던 확정 결함).
+
+> **16 운영편의성 개정 — 라이더 현장(L3, 2026-08-02)**
+> - **R2 콜 홈(`/`)**: "주변 콜" 헤더 우측 **정렬 세그먼트**(가까운순[기본]·지급액순·최신순 — `call-sort-*`).
+>   클라이언트 정렬 전용, 배차 규칙(13 D7 전체 공개) 불변. 위치 없으면 가까운순=서버 순서 유지.
+> - **R3 콜 상세(`/calls/:id`)**: 주소 카드에 **"도로 기준" 거리·소요 칩**(`call-detail-road`) + 지도
+>   경로선·ETA — rider `useDirections`(user와 동일 절삭·캐시 계약). 위치 거부·키 미설정 시 칩 미표기.
+> - **R4 운행(`/active`)**: ① ACCEPTED 지도에 내 위치→수거지 **경로선+ETA 칩**(주 내비는 계속 외부 앱
+>   딥링크 — 11 M9-b 라이더측). ② RunSwitcher(다중 콜)에 **거리 칩+권장 방문 순서 뱃지 ①②③**
+>   (`run-visit-badge-*`/`run-distance-*`) — ARRIVED 상단 고정→근거리순, 좌표 없는 건 맨 뒤(12 §S1),
+>   위치 없으면 뱃지 미표기. useActiveRunSummaries가 pickup_location을 추가 조회(서버 변경 0).
+> - **R12 마이(`/my`)**: "알림 받기"→**"콜 알림음"**(소리 한정 캡션). localStorage 단독 저장(미배선)을
+>   Zustand persist 스토어(`stores/notifyPref`)로 승격 — CallAlertListener가 구독해 `useCallAlert({mute})`
+>   실배선(mute=소리만, 배너·진동 유지). 레거시 키(`oilpick:notify-enabled`)는 최초 1회 이관.
 - 플러그인: @capacitor/push-notifications, geolocation, camera, app, splash-screen,
   @capacitor-community/barcode-scanner (rider만)
 - 딥링크: `oilpick-user://orders/:id`, `oilpick-user://ref/:code`(09 H3 추천 랜딩), `oilpick-rider://calls/:id` — 푸시 link 필드와 매핑

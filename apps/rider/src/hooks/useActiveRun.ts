@@ -1,6 +1,13 @@
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { MAX_RIDER_ACTIVE_ORDERS, parseEwkbPoint, type OrderKind, type OrderStatus, type PayoutMethod } from "@oilpick/core";
+import {
+  MAX_RIDER_ACTIVE_ORDERS,
+  parseEwkbPoint,
+  parseGeographyPoint,
+  type OrderKind,
+  type OrderStatus,
+  type PayoutMethod,
+} from "@oilpick/core";
 import { supabase } from "../lib/supabaseClient";
 import { queryKeys } from "../lib/queryClient";
 
@@ -129,6 +136,9 @@ export interface ActiveRunSummary {
   id: string;
   status: OrderStatus;
   pickupAddress: string;
+  /** [16 L3 §3-3] 수거지 좌표 — 전환기 거리 칩·권장 방문 순서용. 파싱 실패 시 null(거리 미표기, 12 §S1 규약). */
+  pickupLat: number | null;
+  pickupLng: number | null;
   createdAt: string;
 }
 
@@ -144,18 +154,25 @@ export function useActiveRunSummaries(riderId: string | undefined) {
       if (!riderId) return [];
       const { data, error } = await supabase
         .from("pickup_orders")
-        .select("id, status, pickup_address, created_at")
+        // [16 L3 §3-3] pickup_location 추가 — 본인 배정 주문은 기존 RLS로 전 컬럼 조회 가능(서버 변경 0).
+        .select("id, status, pickup_address, pickup_location, created_at")
         .eq("rider_id", riderId)
         .in("status", ["ACCEPTED", "ARRIVED", "PICKED_UP", "DISPUTED"])
         .order("created_at", { ascending: false })
         .limit(MAX_RIDER_ACTIVE_ORDERS + 1);
       if (error) throw error;
-      return (data ?? []).map((r) => ({
-        id: r.id as string,
-        status: r.status as OrderStatus,
-        pickupAddress: (r.pickup_address as string) ?? "",
-        createdAt: r.created_at as string,
-      }));
+      return (data ?? []).map((r) => {
+        // S1 단일 파서(hex EWKB·GeoJSON 겸용, 실패 시 null 강등 — 12 §S1).
+        const point = parseGeographyPoint(r.pickup_location);
+        return {
+          id: r.id as string,
+          status: r.status as OrderStatus,
+          pickupAddress: (r.pickup_address as string) ?? "",
+          pickupLat: point?.lat ?? null,
+          pickupLng: point?.lng ?? null,
+          createdAt: r.created_at as string,
+        };
+      });
     },
   });
 }

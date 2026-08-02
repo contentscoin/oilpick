@@ -27,6 +27,7 @@ import {
   buildTmapRouteUrl,
   estimateCash,
   estimatePurchase,
+  formatEta,
   formatKg,
   formatKrw,
   formatPoint,
@@ -43,7 +44,10 @@ import { invokeEdgeFunction } from "../lib/edgeFunction";
 import { supabase } from "../lib/supabaseClient";
 import { useSession } from "../hooks/useSession";
 import { useActiveRun, useActiveRunSummaries, type ActiveRunSummary } from "../hooks/useActiveRun";
+import { useDirections } from "../hooks/useDirections";
+import { useGeolocation, type GeoPosition } from "../hooks/useGeolocation";
 import { useRiderLocationPusher } from "../hooks/useRiderLocationPusher";
+import { distanceKm } from "../lib/geo";
 import { isScannerAvailable, scanQrCode } from "../lib/native/scanner";
 
 /**
@@ -70,6 +74,9 @@ export function ActiveRunPage() {
   const [selectedOrderId, setSelectedOrderId] = useState<string | undefined>(undefined);
   const { data: run, isLoading } = useActiveRun(riderId, selectedOrderId);
   const { data: summaries } = useActiveRunSummaries(riderId);
+  // [16 L3] 내 위치 1회 조회 — 전환기 거리·권장 순서(§3-3)와 경로 미리보기 origin(§3-1) 공용.
+  // 권한 거부·실패 시 null: 거리 칩·경로선 미표기 폴백(운행 흐름은 그대로).
+  const position = useGeolocation(true);
 
   useRiderLocationPusher(Boolean(run));
 
@@ -101,7 +108,7 @@ export function ActiveRunPage() {
     <main style={{ display: "flex", flexDirection: "column", gap: 20, padding: 20, maxWidth: 480, margin: "0 auto" }}>
       {/* [다중 콜] 진행 중인 운행이 2건 이상일 때만 전환기를 띄운다. 단건이면 렌더되지 않아
           기존 화면과 동일하다. 이게 없으면 3건을 수락해도 한 건만 보여 나머지가 갇힌다. */}
-      <RunSwitcher runs={summaries ?? []} currentId={run.id} onSelect={setSelectedOrderId} />
+      <RunSwitcher runs={summaries ?? []} currentId={run.id} onSelect={setSelectedOrderId} position={position} />
 
       {/* 05-design-upgrade.md 상태 헤드라인 패턴을 라이더 관점 카피로. 주소는 헤드라인 카드 안에 묶어
           "어디로 가야 하는지"를 함께 안내한다. */}
@@ -115,6 +122,7 @@ export function ActiveRunPage() {
           orderId={run.id}
           pickupAddress={run.pickupAddress}
           pickupPoint={run.pickupLat != null && run.pickupLng != null ? { lat: run.pickupLat, lng: run.pickupLng } : null}
+          position={position}
         />
       )}
       {run.status === "ARRIVED" && (
@@ -195,27 +203,62 @@ const RIDER_HEADLINE: Partial<Record<OrderStatus, { title: string; hint: string 
   PICKED_UP: { title: "집하장으로 이동해주세요", hint: "QR로 배송을 완료하세요." },
 };
 
+/** 권장 방문 순서 뱃지 문자(①②③) — 다중 콜 상한 3건이라 3개면 충분. */
+const ORDER_BADGES = ["①", "②", "③"] as const;
+
+/**
+ * [16 L3 §3-3] 전환기 표시 순서: ARRIVED(이미 현장 진행 중)는 상단 고정 — 먼저 끝내는 게 순서다.
+ * 나머지는 내 위치 기준 근거리순, 좌표 없는 건은 거리 미표기+맨 뒤(12 §S1 nullable 규약).
+ * "권장"은 표시일 뿐 강제 아님 — 배차·상태머신에 관여하지 않는다(13 D7 전체 공개 불변).
+ */
+function orderRunsForVisit(
+  runs: ActiveRunSummary[],
+  position: GeoPosition | null,
+): (ActiveRunSummary & { distance: number | null })[] {
+  return runs
+    .map((r) => ({
+      ...r,
+      distance:
+        position && r.pickupLat != null && r.pickupLng != null
+          ? distanceKm(position, { lat: r.pickupLat, lng: r.pickupLng })
+          : null,
+    }))
+    .sort((a, b) => {
+      const aPinned = a.status === "ARRIVED" ? 0 : 1;
+      const bPinned = b.status === "ARRIVED" ? 0 : 1;
+      if (aPinned !== bPinned) return aPinned - bPinned;
+      if (a.distance == null) return b.distance == null ? 0 : 1;
+      if (b.distance == null) return -1;
+      return a.distance - b.distance;
+    });
+}
+
 /**
  * 진행 중 운행 전환기(다중 콜). 2건 이상일 때만 렌더한다.
  * 상태 라벨 + 주소 앞부분으로 어느 건인지 구분하고, 탭하면 해당 운행 화면으로 전환한다.
+ * [16 L3 §3-3] 내 위치 기준 거리 칩 + 권장 방문 순서 뱃지(①②③)로 묶음 수거의 동선 계산을 없앤다.
  */
 function RunSwitcher({
   runs,
   currentId,
   onSelect,
+  position,
 }: {
   runs: ActiveRunSummary[];
   currentId: string;
   onSelect: (id: string) => void;
+  /** 내 위치. null(권한 거부·실패)이면 거리·순서 뱃지 없이 기존 표시로 폴백. */
+  position: GeoPosition | null;
 }) {
   if (runs.length < 2) return null;
+  const ordered = orderRunsForVisit(runs, position);
   return (
     <section data-testid="run-switcher" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: colors.status.wait }}>
-        진행 중 {runs.length}건 — 탭해서 전환
+        진행 중 {runs.length}건 — 권장 순서로 정렬했어요
       </p>
       <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4 }}>
-        {runs.map((r) => {
+        {ordered.map((r, i) => {
           const active = r.id === currentId;
           return (
             <button
@@ -238,7 +281,24 @@ function RunSwitcher({
                 cursor: "pointer",
               }}
             >
-              <span style={{ display: "block", fontWeight: 700 }}>{ORDER_STATUS_LABEL[r.status]}</span>
+              <span style={{ display: "flex", alignItems: "baseline", gap: 6, fontWeight: 700 }}>
+                {/* 위치를 모르면 순서를 지어내지 않는다 — 뱃지는 position이 있을 때만. */}
+                {position && (
+                  <span data-testid={`run-visit-badge-${r.id}`} aria-label={`권장 방문 순서 ${i + 1}번`}>
+                    {ORDER_BADGES[i] ?? `${i + 1}`}
+                  </span>
+                )}
+                {ORDER_STATUS_LABEL[r.status]}
+                {r.distance != null && (
+                  <span
+                    data-testid={`run-distance-${r.id}`}
+                    className="oilpick-tabular-nums"
+                    style={{ fontWeight: 600, fontSize: 12, color: active ? colors.primary.dark : colors.status.wait }}
+                  >
+                    {r.distance.toFixed(1)}km
+                  </span>
+                )}
+              </span>
               <span style={{ display: "block", opacity: 0.8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {r.pickupAddress}
               </span>
@@ -329,15 +389,22 @@ function AcceptedPanel({
   orderId,
   pickupAddress,
   pickupPoint,
+  position,
 }: {
   orderId: string;
   pickupAddress: string;
   /** 수거지 실좌표(EWKB 파싱, 11 M9-a). null이면 지도는 프리뷰·내비는 주소 검색 폴백. */
   pickupPoint: LatLng | null;
+  /** [16 L3 §3-1] 내 위치 — 경로 미리보기 origin. null이면 경로선·ETA 미표기(기존 화면 그대로). */
+  position: GeoPosition | null;
 }) {
   const [arriving, setArriving] = useState(false);
   // 06 E6: 도착 성공/실패 피드백은 전역 토스트로 통일(인라인 에러 텍스트 대체).
   const { showToast } = useToast();
+  // [16 L3 §3-1] 내 위치→수거지 도로 경로·ETA(M9-b 라이더측 대칭). KAKAO_MOBILITY_KEY 미설정이면
+  // configured:false — 경로선·ETA만 조용히 생략(주 내비는 계속 외부 앱 딥링크, 16 L-D7).
+  const { data: directions } = useDirections(position, pickupPoint, Boolean(pickupPoint));
+  const routeActive = Boolean(directions?.configured && directions.path.length > 0);
   // 11 M9-a: 좌표가 있으면 카카오맵 앱 스킴에 목적지를 실어 턴바이턴이 바로 뜨게 한다.
   // 좌표가 없으면(레거시/파싱 실패) 주소 검색 웹 링크로 강등 — 죽은 딥링크 금지.
   const kakaoHref = pickupPoint
@@ -366,6 +433,8 @@ function AcceptedPanel({
         center={pickupPoint ?? { lat: 37.5509, lng: 126.8225 }}
         markers={pickupPoint ? [{ ...pickupPoint, label: pickupAddress }] : []}
         pickupLabel={pickupAddress}
+        routePath={routeActive ? directions?.path : []}
+        etaLabel={routeActive ? (formatEta(directions?.durationSeconds) ?? undefined) : undefined}
       />
       <a
         href={kakaoHref}

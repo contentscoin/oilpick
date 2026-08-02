@@ -135,6 +135,11 @@
       이후·좌표 stale이면 조회하지 않는다.
     - MapView에 `routePath`(GeoJSON LineString 레이어, 스타일 로드 후 추가·이후 setData만 교체) +
       실지도 ETA 칩을 추가. core `formatEta`(null 입력→null 반환으로 "가짜 시간" 원천 차단).
+  - **라이더측 수신 UI 완료(2026-08-02, 16 L3 §3-1)**: user 앱과 대칭 — rider `useDirections`/
+    `lib/directions`(동일한 좌표 3자리 절삭+staleTime 60초 계약, 타입은 core 공유)로
+    ① ActiveRunPage ACCEPTED 패널 지도에 내 위치→수거지 경로선+ETA 칩 ② CallDetailPage(수락 전)에
+    "도로 기준" 거리·소요 칩. origin은 내 위치 1회 조회(useGeolocation) — 권한 거부·실패 시 칩·경로선
+    미표기 폴백. 주 내비는 계속 M9-a 외부 앱 딥링크(턴바이턴 아님 — M9-c 비권장 유지).
   - 🔴 **남은 검증**: `directions` Edge의 카카오모빌리티 응답 파싱은 **실 키로 1회 실측 필요**
     (현재는 계약 기준 구현 + 키 미설정 경로만 테스트로 고정).
 - **M9-c 인앱 풀 턴바이턴(비권장 유지)**: 음성·재탐색까지 내장. 고비용, 한국 규제·국내 내비 SDK 라이선스,
