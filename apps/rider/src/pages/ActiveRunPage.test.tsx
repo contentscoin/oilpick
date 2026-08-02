@@ -489,3 +489,29 @@ describe("ActiveRunPage — 계량 드래프트(16 L4 §3-2)", () => {
     expect(screen.queryByTestId("measure-draft-restored")).not.toBeInTheDocument();
   });
 });
+
+describe("ActiveRunPage — 확인 요청 다시 보내기(16 L5)", () => {
+  it("대기 배너에서 버튼 클릭 → confirm-remind 호출, sent:true면 발송 토스트", async () => {
+    mockInvoke.mockResolvedValue({ ok: true, data: { sent: true } });
+    renderRun(makeRun({ status: "ARRIVED", measuredKg: 40, payoutMethod: "CASH" }));
+    fireEvent.click(screen.getByTestId("confirm-remind-button"));
+    await waitFor(() => expect(mockInvoke).toHaveBeenCalledWith("confirm-remind", { orderId: "o1" }));
+    await waitFor(() =>
+      expect(screen.getByTestId("toast")).toHaveTextContent("확인 요청을 다시 보냈어요"),
+    );
+  });
+
+  it("sent:false(서버 rate limit)면 '이미 요청' 안내 — 에러 아님", async () => {
+    mockInvoke.mockResolvedValue({ ok: true, data: { sent: false } });
+    renderRun(makeRun({ status: "ARRIVED", measuredKg: 40, payoutMethod: "POINT" }));
+    fireEvent.click(screen.getByTestId("confirm-remind-button"));
+    await waitFor(() =>
+      expect(screen.getByTestId("toast")).toHaveTextContent("2시간에 한 번"),
+    );
+  });
+
+  it("배너에 자동 에스컬레이션 안내 캡션이 있다", () => {
+    renderRun(makeRun({ status: "ARRIVED", measuredKg: 40 }));
+    expect(screen.getByText("24시간이 지나면 본사에 자동 접수돼요")).toBeInTheDocument();
+  });
+});

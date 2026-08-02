@@ -115,6 +115,12 @@ var riderLocationInputSchema = z.object({
   lat: latSchema,
   lng: lngSchema
 });
+var confirmRemindInputSchema = z.object({
+  orderId: uuidSchema
+});
+var confirmRemindOutputSchema = z.object({
+  sent: z.boolean()
+});
 var riderLocationOutputSchema = z.object({
   updatedAt: z.string()
 });
@@ -353,6 +359,8 @@ export {
   arrivePayloadSchema,
   cancelPayloadSchema,
   confirmMeasurePayloadSchema,
+  confirmRemindInputSchema,
+  confirmRemindOutputSchema,
   csCategorySchema,
   csReplyInputSchema,
   csReplyOutputSchema,

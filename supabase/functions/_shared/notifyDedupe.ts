@@ -25,3 +25,34 @@ export function shouldNotify(
     return Number.isFinite(t) && t >= cutoff;
   });
 }
+
+/**
+ * [16 L5] 사다리형 리마인드 판정 — 기산점(anchorMs)에서 stagesMs 경과 시점마다 정확히 1회씩.
+ * 반환: 지금까지 나갔어야 할 발송 수(0..stages.length). 매분 cron이 호출해도 발송 수가
+ * 계단으로만 늘어 중복 발화가 없다(order-expire broadcast_radius_km 사다리와 같은 원리를
+ * notifications 발송 이력으로 추적 — 스키마 변경 0).
+ */
+export function ladderDueCount(anchorMs: number, stagesMs: number[], now: Date): number {
+  const elapsed = now.getTime() - anchorMs;
+  return stagesMs.filter((stage) => elapsed >= stage).length;
+}
+
+/**
+ * [16 L5] 이번 틱에 실제로 보내야 하는가: 기산점 이후 발송분(recentRows, 같은 kind+link로 조회)
+ * 개수가 due보다 적으면 true. anchorMs 이전 행(이전 제출 사이클 잔여)은 세지 않는다 —
+ * 재제출(SUBMIT_MEASURE 멱등)로 기산점이 갱신되면 리마인드 사다리도 처음부터 다시 돈다.
+ */
+export function ladderShouldSend(
+  recentRows: RecentNotificationRow[],
+  anchorMs: number,
+  stagesMs: number[],
+  now: Date,
+): boolean {
+  const due = ladderDueCount(anchorMs, stagesMs, now);
+  if (due === 0) return false;
+  const sent = recentRows.filter((row) => {
+    const t = Date.parse(row.created_at);
+    return Number.isFinite(t) && t >= anchorMs;
+  }).length;
+  return sent < due;
+}

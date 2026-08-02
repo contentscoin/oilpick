@@ -616,6 +616,8 @@ function ArrivedPanel({
   const [barcodeInput, setBarcodeInput] = useState("");
   const [geo, setGeo] = useState<PickupGeo | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // [16 L5] [확인 요청 다시 보내기] 진행 상태 — rate limit 판정은 서버(confirm-remind)가 강제.
+  const [reminding, setReminding] = useState(false);
   // 08 P2: 재제출(수단 변경) 모드 — 대기 배너 대신 폼을 다시 연다(중재 확정 전까지 허용).
   const [resubmitting, setResubmitting] = useState(false);
   // 제출 전 검증(계량값/사진/수단 누락)은 인라인 에러 유지 — 서버/업로드 실패는 토스트(06 E6).
@@ -808,6 +810,43 @@ function ArrivedPanel({
           {submittedPoint
             ? `사장님이 확인하면 포인트 ${formatPoint(submittedAmount)}가 적립돼요 — 확인을 요청하세요.`
             : `사장님께 현금 ${formatKrw(submittedAmount)}을 지급하고 앱에서 수령 확인을 요청하세요.`}
+        </p>
+        {/* [16 L5] 확인 재요청 — 상태 무접촉(푸시만). rate limit(주문당 2h 1회)은 서버가 강제. */}
+        <button
+          type="button"
+          data-testid="confirm-remind-button"
+          disabled={reminding}
+          onClick={async () => {
+            setReminding(true);
+            const result = await invokeEdgeFunction<{ sent: boolean }>("confirm-remind", { orderId });
+            setReminding(false);
+            if (!result.ok) {
+              showToast(result.message, { variant: "error" });
+              return;
+            }
+            if (result.data.sent) {
+              showToast("사장님께 확인 요청을 다시 보냈어요", { variant: "success" });
+            } else {
+              showToast("잠시 전에 이미 요청했어요 — 2시간에 한 번 보낼 수 있어요");
+            }
+          }}
+          style={{
+            width: "100%",
+            minHeight: 48,
+            borderRadius: radius.button,
+            border: `1px solid ${colors.primary.DEFAULT}`,
+            backgroundColor: "#fff",
+            color: colors.primary.DEFAULT,
+            fontSize: 15,
+            fontWeight: 700,
+            cursor: reminding ? "default" : "pointer",
+            opacity: reminding ? 0.6 : 1,
+          }}
+        >
+          {reminding ? "보내는 중..." : "확인 요청 다시 보내기"}
+        </button>
+        <p style={{ margin: 0, fontSize: 12, color: colors.status.wait }}>
+          24시간이 지나면 본사에 자동 접수돼요
         </p>
         <button
           type="button"

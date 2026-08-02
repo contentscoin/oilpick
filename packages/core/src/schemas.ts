@@ -185,6 +185,19 @@ export const riderLocationInputSchema = z.object({
 });
 export type RiderLocationInput = z.infer<typeof riderLocationInputSchema>;
 
+// ===== [16 L5] confirm-remind (rider) — 점주 수령확인 수동 재요청 =====
+
+export const confirmRemindInputSchema = z.object({
+  orderId: uuidSchema,
+});
+export type ConfirmRemindInput = z.infer<typeof confirmRemindInputSchema>;
+
+/** sent=false는 rate limit(주문당 2시간 1회)에 걸려 발송을 스킵했다는 뜻 — 에러가 아니다. */
+export const confirmRemindOutputSchema = z.object({
+  sent: z.boolean(),
+});
+export type ConfirmRemindOutput = z.infer<typeof confirmRemindOutputSchema>;
+
 export const riderLocationOutputSchema = z.object({
   updatedAt: z.string(),
 });

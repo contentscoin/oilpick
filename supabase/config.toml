@@ -423,6 +423,11 @@ import_map = "./functions/import_map.json"
 verify_jwt = true
 import_map = "./functions/import_map.json"
 
+# [16 L5] 라이더 [확인 요청 다시 보내기] — 상태 무접촉 알림 EF(주문당 2h 1회 rate limit).
+[functions.confirm-remind]
+verify_jwt = true
+import_map = "./functions/import_map.json"
+
 # T5: price-set/rider-verify/rider-location.
 [functions.price-set]
 verify_jwt = true
