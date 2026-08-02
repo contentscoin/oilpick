@@ -99,6 +99,40 @@ supabase secrets set FCM_SERVICE_ACCOUNT="$(cat fcm-service-account.json)"
 ### 1-3. Auth Redirect / Site URL
 대시보드 → Authentication → URL Configuration에 Vercel 앱 도메인(들)을 Site URL / Redirect URLs로 추가.
 
+### 1-4. cron 배선 (scheduled functions) — [16 §0-5]
+cron EF는 **배선하지 않으면 조용히 죽는다**(기능이 코드에 있어도 발화 0). 배포 시 필수 배선 2건:
+
+| EF | 주기 | 담당 |
+|---|---|---|
+| `order-expire` | **1분** | 재브로드캐스트(5/10분)·30분 무수락 자동취소 + [16 L5] 확인 리마인드(2h/12h)·에스컬레이션(24h) |
+| `settlement-watch` | **15분**(권고, 16 §10-2) | [16 L8] 좌상 크레딧 80% 밴드·임계(over_threshold) 경보 |
+
+배선(pg_cron + pg_net — SQL Editor에서, `<PROJECT_REF>`·`<SERVICE_ROLE_KEY>` 치환):
+```sql
+select cron.schedule('order-expire-every-min', '* * * * *', $$
+  select net.http_post(
+    url := 'https://<PROJECT_REF>.supabase.co/functions/v1/order-expire',
+    headers := '{"Authorization": "Bearer <SERVICE_ROLE_KEY>", "Content-Type": "application/json"}'::jsonb,
+    body := '{}'::jsonb);
+$$);
+select cron.schedule('settlement-watch-15min', '*/15 * * * *', $$
+  select net.http_post(
+    url := 'https://<PROJECT_REF>.supabase.co/functions/v1/settlement-watch',
+    headers := '{"Authorization": "Bearer <SERVICE_ROLE_KEY>", "Content-Type": "application/json"}'::jsonb,
+    body := '{}'::jsonb);
+$$);
+```
+**배선 확인·수동 검증**(미배선 환경/로컬 공통 — 응답 카운트로 로직만 확인):
+```bash
+curl -sS -X POST "$SUPABASE_URL/functions/v1/order-expire" \
+  -H "Authorization: Bearer $SERVICE_ROLE_KEY" -H "Content-Type: application/json" -d '{}'
+# → {"ok":true,"data":{"rebroadcasted":N,"cancelled":N,"reminded":N,"escalated":N}}
+curl -sS -X POST "$SUPABASE_URL/functions/v1/settlement-watch" \
+  -H "Authorization: Bearer $SERVICE_ROLE_KEY" -H "Content-Type: application/json" -d '{}'
+# → {"ok":true,"data":{"band80Alerts":N,"thresholdAlerts":N}}
+```
+배선 여부 점검: `select jobname, schedule from cron.job;` 두 잡이 보여야 한다.
+
 ---
 
 ## 2. Vercel (앱 배포 — 하나의 repo, 서브도메인 접속포인트)

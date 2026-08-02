@@ -1,36 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { formatKrw, formatPoint, formatRelativeTime } from "@oilpick/core";
 import type { DealerStatement } from "@oilpick/core";
-import { supabase } from "../lib/supabaseClient";
 import {
   useDealers,
   useDealerSettlements,
   useDealerStatements,
   useDealerSettlementMutations,
 } from "../hooks/useDealersAdmin";
-
-/** [14 J3] 청구 상세 주문을 CSV로 내려받는다(v_dealer_settlement_orders). 회계 대사용. */
-async function downloadSettlementCsv(settlementId: string) {
-  const { data, error } = await supabase
-    .from("v_dealer_settlement_orders")
-    .select("order_id, payout_method, cash_paid_amount, purchase_amount, net_amount, completed_at")
-    .eq("dealer_settlement_id", settlementId)
-    .order("completed_at", { ascending: true });
-  if (error || !data) return;
-  const header = "order_id,payout_method,waste_amount,purchase_amount,net_amount,completed_at";
-  const rows = data.map(
-    (r) =>
-      `${r.order_id},${r.payout_method ?? ""},${r.cash_paid_amount ?? 0},${r.purchase_amount ?? 0},${r.net_amount ?? 0},${r.completed_at ?? ""}`,
-  );
-  const csv = [header, ...rows].join("\n");
-  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `dealer-settlement-${settlementId.slice(0, 8)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
+// [16 L7] 청구 상세 CSV는 좌상 셀프 다운로드(DealerStatementPage)와 공용 lib으로 추출.
+import { downloadSettlementCsv } from "../lib/settlementCsv";
 
 /**
  * [14 J3]【admin】 좌상 정산 — 좌상별 계정(보증금·한도·임계·요율) 설정 + 사용 명세 + 청구/정산/무효.

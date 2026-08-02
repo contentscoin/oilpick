@@ -135,3 +135,40 @@ describe("CallHomePage — 온·오프라인 토글 피드백(06 E6)", () => {
     );
   });
 });
+
+describe("CallHomePage — 콜 정렬 토글(16 L3 §3-4)", () => {
+  // CallCard는 data-testid="call-card" 고정(ui 컴포넌트) — 렌더 순서를 카드 주소 텍스트로 읽는다.
+  function renderedCallIds() {
+    return screen
+      .getAllByTestId("call-card")
+      .map((el) => ((el.textContent ?? "").includes("먼 곳") ? "big" : "small"));
+  }
+  const CALLS = [
+    // 최신순(서버 순서): big(고액·먼 곳) → small(소액·가까운 곳).
+    { id: "big", requestedKg: 100, pickupAddress: "먼 곳", pickupLat: 37.55, pickupLng: 126.97, snapshotPricePerKg: 1600, snapshotRiderFee: null, createdAt: "2026-08-02T02:00:00Z" },
+    { id: "small", requestedKg: 10, pickupAddress: "가까운 곳", pickupLat: 37.55, pickupLng: 126.82, snapshotPricePerKg: 1600, snapshotRiderFee: null, createdAt: "2026-08-02T01:00:00Z" },
+  ];
+
+  it("기본 가까운순 — 위치가 있으면 가까운 콜이 먼저다", () => {
+    mockUseGeolocation.mockReturnValue({ lat: 37.55, lng: 126.82 });
+    mockUseOpenCalls.mockReturnValue({ data: CALLS, isLoading: false });
+    renderHome();
+    expect(screen.getByTestId("call-sort-distance")).toHaveAttribute("aria-pressed", "true");
+    expect(renderedCallIds()).toEqual(["small", "big"]);
+  });
+
+  it("지급액순으로 바꾸면 예상 매입 지급액 큰 콜이 먼저다", () => {
+    mockUseGeolocation.mockReturnValue({ lat: 37.55, lng: 126.82 });
+    mockUseOpenCalls.mockReturnValue({ data: CALLS, isLoading: false });
+    renderHome();
+    fireEvent.click(screen.getByTestId("call-sort-amount"));
+    expect(renderedCallIds()).toEqual(["big", "small"]);
+  });
+
+  it("위치가 없으면 가까운순은 서버 순서(최신순)를 유지한다 — 거리를 지어내지 않는다", () => {
+    mockUseGeolocation.mockReturnValue(null);
+    mockUseOpenCalls.mockReturnValue({ data: CALLS, isLoading: false });
+    renderHome();
+    expect(renderedCallIds()).toEqual(["big", "small"]);
+  });
+});

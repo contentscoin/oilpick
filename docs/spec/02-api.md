@@ -70,6 +70,13 @@ ACCEPTED 이후 모든 전이 단일 엔드포인트.
 ## 4. `order-expire` (cron, 1분마다 — Supabase scheduled function)
 - REQUESTED이고 created_at 경과별 처리: 5분→반경 7km 재브로드캐스트, 10분→15km, 30분→CANCELLED(NO_RIDER)+푸시.
 - broadcast_radius_km 컬럼으로 현재 단계 추적 (중복 브로드캐스트 방지).
+- **[16 L5 개정] ARRIVED 확인 리마인드 단계 추가**: ARRIVED ∧ measured_kg not null(DISPUTED 제외) 주문에
+  대해 기산점(order_events 최근 SUBMIT_MEASURE — payload.measuredKg 보유 행) 기준
+  **2h/12h → supplier** 리마인드 푸시(kind=CONFIRM_REMIND_AUTO), **24h → admin** 에스컬레이션
+  (kind=CONFIRM_ESCALATION — 기존 OrdersPage 24h 하이라이트의 능동화). 중복 발화 방지는
+  notifications 발송 이력 사다리 판정(`ladderShouldSend` 순수 함수, deno test 고정) — 스키마 변경 0,
+  재제출로 기산점이 갱신되면 사다리도 리셋. **상태는 일절 바꾸지 않는다**(순수 알림). 응답에
+  `reminded`/`escalated` 카운트 추가.
 
 ## 5. `rider-location` (rider)
 - 입력: `{ lat, lng }` — 운행 중(ACCEPTED~PICKED_UP 보유) 15초 간격 호출.
@@ -172,6 +179,29 @@ ACCEPTED 이후 모든 전이 단일 엔드포인트.
 > **프로덕션 undeploy는 08 배포 체크리스트 ⓔ**(앱 배포 완료 후 — 가동 중 구버전 앱 파손 방지).
 > DB RPC(fn_charge_coupon/fn_consume_coupon/fn_confirm_purchase/fn_refund_purchase)·테이블·과거
 > 데이터는 회계 감사용 보존(삭제 금지). 구계약 전문은 git 이력과 07-pivot-plan.md F4/F14 참조.
+
+## 22. `confirm-remind` (rider) — 16 L5
+- 입력: `{ orderId }` (core `confirmRemindInputSchema`). 출력: `{ sent: boolean }` —
+  `sent:false`는 rate limit 스킵(에러 아님, 클라 카피 분기).
+- 처리: 본인 배정(rider_id=auth.uid()) + ARRIVED + measured_kg not null 검증 후 supplier에게
+  최초 SUBMIT_MEASURE와 **동일 카피**(`_shared/orderNotify.submitMeasureNotification` — 14 J4 순액
+  기준)를 재발송. rate limit **주문당 2시간 1회**는 `sendPushDeduped`(kind=CONFIRM_REMIND_MANUAL,
+  link=/orders/:id)가 서버 강제 — 클라 버튼 비활성은 보조.
+- **pickup_orders를 일절 update하지 않는다**(16 §0-1 — 순수 알림. 교착 해소는 여전히 supplier
+  CONFIRM_MEASURE / admin FORCE_COMPLETE 전용).
+- 에러: NOT_FOUND(주문 없음) / FORBIDDEN(타인 주문) / INVALID_TRANSITION(확인 대기 상태 아님).
+
+## 23. `settlement-watch` (cron, 15분 권고) — 16 L8
+- 입력 없음(POST, admin/service_role 인증 — order-expire와 동일). 출력: `{ band80Alerts, thresholdAlerts }`.
+- 처리: `v_dealer_statement` 전 좌상 스캔(service_role — invoker 뷰지만 RLS 우회) →
+  ① usage/credit_limit **≥ 80%** 밴드 ② **over_threshold** 진입 시 좌상 본인(link=/statement) +
+  admin 전원(link=/dealer-settlement?dealer=<id> — 좌상별 dedupe 키 분리)에게 푸시.
+  판정은 `_shared/creditWatch.dueCreditAlerts` 순수 함수(deno test), 재발화 억제는
+  `sendPushDeduped` kind별 **24h 윈도**. 한도 0(미설정)은 밴드 판정 제외.
+- **자동청구 없음**(14 §4 확정 불변) — 청구 생성·정산·무효는 계속 admin 수동. 상태·원장 무접촉.
+- cron 배선은 배포 설정(DEPLOY.md §1-4) — 미배선 시 curl 수동 검증 절차 동봉.
+- **dealer-claim 개정**: create/settle/void 성공 시 좌상에게 청구 라이프사이클 통지
+  (kind=CLAIM_CREATED/SETTLED/VOIDED, link=/statement) — 실패는 응답을 막지 않음(격리).
 
 ## 푸시 발송 헬퍼 `_shared/push.ts`
 - `sendPush(userIds[], title, body, link)`: profiles.fcm_token 조회 → FCM HTTP v1 멀티캐스트

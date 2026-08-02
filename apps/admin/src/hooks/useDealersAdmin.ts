@@ -118,6 +118,35 @@ export function useDealerStatements() {
   });
 }
 
+/**
+ * [16 L7]【dealer】 미정산 주문 라인 — v_dealer_settlement_orders에서 아직 청구에 스탬핑되지
+ * 않은(dealer_settlement_id is null) 본인 주문. /statement의 usage 카드 숫자가 어느 주문에서
+ * 왔는지 1:1 대사용(14 §5 【D】 "미정산 라인" 명세의 미구현분). RLS로 본인 귀속분만.
+ */
+export interface DealerUnsettledOrder {
+  order_id: string;
+  payout_method: "CASH" | "POINT" | null;
+  cash_paid_amount: number | null;
+  purchase_amount: number | null;
+  net_amount: number | null;
+  completed_at: string | null;
+}
+
+export function useDealerUnsettledOrders() {
+  return useQuery({
+    queryKey: ["admin", "dealerUnsettledOrders"],
+    queryFn: async (): Promise<DealerUnsettledOrder[]> => {
+      const { data, error } = await supabase
+        .from("v_dealer_settlement_orders")
+        .select("order_id, payout_method, cash_paid_amount, purchase_amount, net_amount, completed_at")
+        .is("dealer_settlement_id", null)
+        .order("completed_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as DealerUnsettledOrder[];
+    },
+  });
+}
+
 /** dealer_settlements — 청구 이력(최신순). admin 전체, dealer 본인(RLS). */
 export function useDealerSettlements() {
   return useQuery({

@@ -19,9 +19,27 @@ vi.mock("../hooks/useActiveRun", () => ({
   useActiveRunSummaries: mockUseActiveRunSummaries,
 }));
 vi.mock("../hooks/useRiderLocationPusher", () => ({ useRiderLocationPusher: vi.fn() }));
+// [16 L3] 내 위치·경로 조회는 부가 기능 — 기본은 "없음"(칩·경로선 미표기 폴백 경로).
+const { mockUseGeolocation, mockUseDirections } = vi.hoisted(() => ({
+  mockUseGeolocation: vi.fn(() => null as { lat: number; lng: number } | null),
+  mockUseDirections: vi.fn(() => ({ data: undefined })),
+}));
+vi.mock("../hooks/useGeolocation", () => ({ useGeolocation: mockUseGeolocation }));
+vi.mock("../hooks/useDirections", () => ({ useDirections: mockUseDirections }));
 vi.mock("../lib/native/scanner", () => ({ isScannerAvailable: () => false, scanQrCode: vi.fn() }));
 vi.mock("../lib/edgeFunction", () => ({ invokeEdgeFunction: mockInvoke }));
-vi.mock("../lib/supabaseClient", () => ({ supabase: { storage: { from: mockStorageFrom } } }));
+// [16 L4] 제출 직전 서버 상태 재확인 가드가 supabase.from을 쓴다 — DB 체인 목 추가.
+const { mockDbFrom } = vi.hoisted(() => ({ mockDbFrom: vi.fn() }));
+vi.mock("../lib/supabaseClient", () => ({
+  supabase: { storage: { from: mockStorageFrom }, from: mockDbFrom },
+}));
+
+/** pickup_orders(select→eq→maybeSingle) 상태 재확인 목 — 기본은 제출 가능한 ARRIVED. */
+function mockFreshOrder(row: { status: string; final_kg: number | null } | null = { status: "ARRIVED", final_kg: null }) {
+  mockDbFrom.mockReturnValue({
+    select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: row, error: null }) }) }),
+  });
+}
 vi.mock("../lib/env", () => ({ MAP_STYLE_URL: undefined }));
 
 function makeRun(overrides: Partial<ActiveRun> = {}): ActiveRun {
@@ -72,6 +90,12 @@ function renderRun(run: ActiveRun | null) {
 beforeEach(() => {
   vi.clearAllMocks();
   mockUseSession.mockReturnValue({ session: { user: { id: "rider-1" } }, loading: false });
+  // clearAllMocks는 mockReturnValue를 지우지 않는다 — 테스트 간 위치 누수 방지로 매번 초기화.
+  mockUseGeolocation.mockReturnValue(null);
+  mockUseDirections.mockReturnValue({ data: undefined });
+  mockFreshOrder();
+  // [16 L4] 드래프트가 테스트 간 새지 않게 초기화(jsdom엔 indexedDB가 없어 텍스트 드래프트만 생긴다).
+  localStorage.clear();
   // jsdom에는 URL.createObjectURL이 없다 — PhotoUploader 미리보기용 스텁.
   URL.createObjectURL = vi.fn((file: File | Blob) => `blob:${file instanceof File ? file.name : "blob"}`);
 });
@@ -153,14 +177,14 @@ describe("ActiveRunPage — 레거시 PICKED_UP(07 F6-②)", () => {
 describe("ActiveRunPage — 다중 콜 전환기", () => {
   it("진행 중 2건 이상이면 전환기를 띄우고, 탭하면 해당 운행으로 전환한다", async () => {
     const runs = [
-      { id: "o-1", status: "ACCEPTED" as const, pickupAddress: "서울 강서구 화곡로 1", createdAt: "2026-07-26T00:00:00Z" },
-      { id: "o-2", status: "ARRIVED" as const, pickupAddress: "서울 성북구 장월로 120", createdAt: "2026-07-26T01:00:00Z" },
+      { id: "o-1", status: "ACCEPTED" as const, pickupAddress: "서울 강서구 화곡로 1", pickupLat: null, pickupLng: null, createdAt: "2026-07-26T00:00:00Z" },
+      { id: "o-2", status: "ARRIVED" as const, pickupAddress: "서울 성북구 장월로 120", pickupLat: null, pickupLng: null, createdAt: "2026-07-26T01:00:00Z" },
     ];
     mockUseActiveRunSummaries.mockReturnValue({ data: runs });
     renderRun(makeRun({ id: "o-1", status: "ACCEPTED" }));
 
     expect(screen.getByTestId("run-switcher")).toBeInTheDocument();
-    expect(screen.getByText("진행 중 2건 — 탭해서 전환")).toBeInTheDocument();
+    expect(screen.getByText("진행 중 2건 — 권장 순서로 정렬했어요")).toBeInTheDocument();
     // 현재 보고 있는 건이 표시된다.
     expect(screen.getByTestId("run-switch-o-1")).toHaveAttribute("aria-current", "true");
     expect(screen.getByTestId("run-switch-o-2")).not.toHaveAttribute("aria-current");
@@ -172,10 +196,45 @@ describe("ActiveRunPage — 다중 콜 전환기", () => {
 
   it("진행 중 1건이면 전환기를 렌더하지 않는다(기존 화면과 동일)", () => {
     mockUseActiveRunSummaries.mockReturnValue({
-      data: [{ id: "o-1", status: "ACCEPTED" as const, pickupAddress: "서울 강서구 화곡로 1", createdAt: "2026-07-26T00:00:00Z" }],
+      data: [{ id: "o-1", status: "ACCEPTED" as const, pickupAddress: "서울 강서구 화곡로 1", pickupLat: null, pickupLng: null, createdAt: "2026-07-26T00:00:00Z" }],
     });
     renderRun(makeRun({ id: "o-1", status: "ACCEPTED" }));
     expect(screen.queryByTestId("run-switcher")).not.toBeInTheDocument();
+  });
+
+  // [16 L3 §3-3] 방문 순서 보드 — ARRIVED 상단 고정 + 근거리순 + 좌표 없는 건 맨 뒤.
+  it("위치가 있으면 ARRIVED 고정 → 근거리순으로 뱃지·거리 칩을 붙인다(좌표 없는 건 맨 뒤)", () => {
+    mockUseGeolocation.mockReturnValue({ lat: 37.55, lng: 126.82 }); // 내 위치
+    mockUseActiveRunSummaries.mockReturnValue({
+      data: [
+        // 먼 ACCEPTED(≈13km), 가까운 ACCEPTED(≈0km), 좌표 없는 건, ARRIVED(멀어도 상단 고정)
+        { id: "far", status: "ACCEPTED" as const, pickupAddress: "먼 곳", pickupLat: 37.55, pickupLng: 126.97, createdAt: "2026-07-26T03:00:00Z" },
+        { id: "near", status: "ACCEPTED" as const, pickupAddress: "가까운 곳", pickupLat: 37.55, pickupLng: 126.82, createdAt: "2026-07-26T02:00:00Z" },
+        { id: "nogeo", status: "ACCEPTED" as const, pickupAddress: "좌표 없음", pickupLat: null, pickupLng: null, createdAt: "2026-07-26T01:00:00Z" },
+        { id: "arrived", status: "ARRIVED" as const, pickupAddress: "현장 진행 중", pickupLat: 37.6, pickupLng: 127.1, createdAt: "2026-07-26T00:00:00Z" },
+      ],
+    });
+    renderRun(makeRun({ id: "near", status: "ACCEPTED" }));
+
+    // 표시 순서: arrived(①) → near(②) → far(③) → nogeo(맨 뒤).
+    const badges = ["arrived", "near", "far"].map((id) => screen.getByTestId(`run-visit-badge-${id}`).textContent);
+    expect(badges).toEqual(["①", "②", "③"]);
+    // 거리 칩: 가까운 건 0.0km, 좌표 없는 건 미표기.
+    expect(screen.getByTestId("run-distance-near")).toHaveTextContent("0.0km");
+    expect(screen.queryByTestId("run-distance-nogeo")).not.toBeInTheDocument();
+  });
+
+  it("위치가 없으면(권한 거부) 순서 뱃지를 지어내지 않는다", () => {
+    mockUseGeolocation.mockReturnValue(null);
+    mockUseActiveRunSummaries.mockReturnValue({
+      data: [
+        { id: "o-1", status: "ACCEPTED" as const, pickupAddress: "A", pickupLat: 37.5, pickupLng: 127.0, createdAt: "2026-07-26T00:00:00Z" },
+        { id: "o-2", status: "ACCEPTED" as const, pickupAddress: "B", pickupLat: 37.6, pickupLng: 127.1, createdAt: "2026-07-26T01:00:00Z" },
+      ],
+    });
+    renderRun(makeRun({ id: "o-1", status: "ACCEPTED" }));
+    expect(screen.queryByTestId("run-visit-badge-o-1")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("run-distance-o-1")).not.toBeInTheDocument();
   });
 });
 
@@ -349,5 +408,110 @@ describe("ActiveRunPage — 사장님께 전화(06 E8-④)", () => {
       }),
     );
     expect(screen.queryByTestId("call-supplier-button")).not.toBeInTheDocument();
+  });
+});
+
+describe("ActiveRunPage — 계량 드래프트(16 L4 §3-2)", () => {
+  function seedDraft(orderId: string, overrides: Record<string, unknown> = {}) {
+    localStorage.setItem(
+      `oilpick:measure-draft:${orderId}`,
+      JSON.stringify({
+        kg: "33.5",
+        payout: "CASH",
+        deliveredCans: 0,
+        barcodes: ["880999"],
+        geo: null,
+        uploadedUrls: {},
+        savedAt: Date.now(),
+        ...overrides,
+      }),
+    );
+  }
+
+  it("저장된 드래프트가 있으면 복원 배너 + 입력값을 되살린다", async () => {
+    seedDraft("o1");
+    renderRun(makeRun({ status: "ARRIVED" }));
+    await waitFor(() => expect(screen.getByTestId("measure-draft-restored")).toBeInTheDocument());
+    expect(screen.getByTestId("measured-kg-input")).toHaveValue(33.5);
+    expect(screen.getByTestId("measure-draft-restored")).toHaveTextContent("작성하던 내용을 불러왔어요");
+  });
+
+  it("[지우기]를 누르면 드래프트를 파기하고 폼을 초기화한다", async () => {
+    seedDraft("o1");
+    renderRun(makeRun({ status: "ARRIVED" }));
+    await waitFor(() => expect(screen.getByTestId("measure-draft-restored")).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId("measure-draft-discard"));
+    await waitFor(() =>
+      expect(screen.queryByTestId("measure-draft-restored")).not.toBeInTheDocument(),
+    );
+    expect(screen.getByTestId("measured-kg-input")).toHaveValue(null);
+    expect(localStorage.getItem("oilpick:measure-draft:o1")).toBeNull();
+  });
+
+  it("입력하면 드래프트가 즉시 저장된다", async () => {
+    renderRun(makeRun({ status: "ARRIVED" }));
+    fireEvent.change(screen.getByTestId("measured-kg-input"), { target: { value: "12" } });
+    await waitFor(() => {
+      const raw = localStorage.getItem("oilpick:measure-draft:o1");
+      expect(raw).not.toBeNull();
+      expect(JSON.parse(raw!).kg).toBe("12");
+    });
+  });
+
+  it("제출 직전 서버 상태가 ARRIVED가 아니면 제출을 중단하고 드래프트를 파기한다(오제출 가드)", async () => {
+    seedDraft("o1");
+    mockFreshOrder({ status: "COMPLETED", final_kg: 40 });
+    mockStorageFrom.mockReturnValue({
+      upload: vi.fn(() => Promise.resolve({ error: null })),
+      createSignedUrl: vi.fn(() =>
+        Promise.resolve({ data: { signedUrl: "https://signed.example/p.jpg" }, error: null }),
+      ),
+    });
+    renderRun(makeRun({ status: "ARRIVED" }));
+    await waitFor(() => expect(screen.getByTestId("measure-draft-restored")).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId("payout-option-cash"));
+    fireEvent.change(screen.getByTestId("photo-uploader-input"), {
+      target: { files: [new File(["a"], "a.jpg", { type: "image/jpeg" })] },
+    });
+    fireEvent.click(screen.getByTestId("submit-measure-button"));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("toast")).toHaveTextContent("주문 상태가 바뀌어 제출할 수 없어요"),
+    );
+    expect(mockInvoke).not.toHaveBeenCalled();
+    expect(localStorage.getItem("oilpick:measure-draft:o1")).toBeNull();
+  });
+
+  it("중재 완료(finalKg) 주문은 드래프트를 복원하지 않고 파기한다", async () => {
+    seedDraft("o1");
+    renderRun(makeRun({ status: "ARRIVED", finalKg: 40, measuredKg: 42, payoutMethod: "CASH" }));
+    await waitFor(() => expect(localStorage.getItem("oilpick:measure-draft:o1")).toBeNull());
+    expect(screen.queryByTestId("measure-draft-restored")).not.toBeInTheDocument();
+  });
+});
+
+describe("ActiveRunPage — 확인 요청 다시 보내기(16 L5)", () => {
+  it("대기 배너에서 버튼 클릭 → confirm-remind 호출, sent:true면 발송 토스트", async () => {
+    mockInvoke.mockResolvedValue({ ok: true, data: { sent: true } });
+    renderRun(makeRun({ status: "ARRIVED", measuredKg: 40, payoutMethod: "CASH" }));
+    fireEvent.click(screen.getByTestId("confirm-remind-button"));
+    await waitFor(() => expect(mockInvoke).toHaveBeenCalledWith("confirm-remind", { orderId: "o1" }));
+    await waitFor(() =>
+      expect(screen.getByTestId("toast")).toHaveTextContent("확인 요청을 다시 보냈어요"),
+    );
+  });
+
+  it("sent:false(서버 rate limit)면 '이미 요청' 안내 — 에러 아님", async () => {
+    mockInvoke.mockResolvedValue({ ok: true, data: { sent: false } });
+    renderRun(makeRun({ status: "ARRIVED", measuredKg: 40, payoutMethod: "POINT" }));
+    fireEvent.click(screen.getByTestId("confirm-remind-button"));
+    await waitFor(() =>
+      expect(screen.getByTestId("toast")).toHaveTextContent("2시간에 한 번"),
+    );
+  });
+
+  it("배너에 자동 에스컬레이션 안내 캡션이 있다", () => {
+    renderRun(makeRun({ status: "ARRIVED", measuredKg: 40 }));
+    expect(screen.getByText("24시간이 지나면 본사에 자동 접수돼요")).toBeInTheDocument();
   });
 });

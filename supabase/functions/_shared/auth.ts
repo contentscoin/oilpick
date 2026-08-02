@@ -78,3 +78,24 @@ export function requireRole(ctx: AuthContext, ...roles: UserRole[]): void {
     throw new AuthError("FORBIDDEN", 403, "권한이 없어요.");
   }
 }
+
+/**
+ * [16 L10 리뷰 수정] cron(서버 간) 호출 인증 — service_role 키 직접 인정 + admin JWT 폴백.
+ *
+ * requireAuth는 토큰을 GoTrue getUser로 검증하는 **user JWT 전용**이라, service_role JWT
+ * (sub 클레임 없음)를 넣으면 항상 401이 났다 — DEPLOY.md §1-4의 pg_net(Bearer SERVICE_ROLE_KEY)
+ * 배선대로 돌리면 order-expire·settlement-watch가 매 주기 401로 조용히 죽는 확정 결함.
+ * Authorization 토큰이 SUPABASE_SERVICE_ROLE_KEY와 정확히 일치하면(서버만 아는 값 — 자칭 불가)
+ * cron 컨텍스트로 인정하고, 아니면 기존 admin 사용자 JWT 경로로 폴백한다(로컬 curl 검증 겸용).
+ */
+export async function requireCronAuth(req: Request): Promise<{ admin: SupabaseClient }> {
+  const authHeader = req.headers.get("Authorization") ?? req.headers.get("authorization");
+  const token = authHeader?.match(/^Bearer\s+(.+)$/i)?.[1];
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (token && serviceRoleKey && token === serviceRoleKey) {
+    return { admin: getServiceRoleClient() };
+  }
+  const ctx = await requireAuth(req);
+  requireRole(ctx, "admin");
+  return { admin: ctx.admin };
+}

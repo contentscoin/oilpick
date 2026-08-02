@@ -13,6 +13,13 @@ const { mockUseSession, mockUseOpenCalls, mockInvoke } = vi.hoisted(() => ({
 vi.mock("../hooks/useSession", () => ({ useSession: mockUseSession }));
 vi.mock("../hooks/useOpenCalls", () => ({ useOpenCalls: mockUseOpenCalls }));
 vi.mock("../lib/edgeFunction", () => ({ invokeEdgeFunction: mockInvoke }));
+// [16 L3 §3-1] 위치·도로 경로는 부가 기능 — 기본은 "없음"(칩 미표기 폴백 경로).
+const { mockUseGeolocation, mockUseDirections } = vi.hoisted(() => ({
+  mockUseGeolocation: vi.fn(() => null as { lat: number; lng: number } | null),
+  mockUseDirections: vi.fn(() => ({ data: undefined as unknown })),
+}));
+vi.mock("../hooks/useGeolocation", () => ({ useGeolocation: mockUseGeolocation }));
+vi.mock("../hooks/useDirections", () => ({ useDirections: mockUseDirections }));
 
 function makeCall(overrides: Record<string, unknown> = {}) {
   return {
@@ -47,6 +54,29 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockUseSession.mockReturnValue({ session: { user: { id: "rider-1" } }, loading: false });
   mockUseOpenCalls.mockReturnValue({ data: [makeCall()], isLoading: false });
+  // clearAllMocks는 mockReturnValue를 지우지 않는다 — 테스트 간 누수 방지로 매번 초기화.
+  mockUseGeolocation.mockReturnValue(null);
+  mockUseDirections.mockReturnValue({ data: undefined });
+});
+
+describe("CallDetailPage — 도로 기준 거리·소요 칩(16 L3 §3-1)", () => {
+  it("directions가 활성(configured)이면 도로 km·소요를 표기한다", () => {
+    mockUseGeolocation.mockReturnValue({ lat: 37.5, lng: 127.0 });
+    mockUseDirections.mockReturnValue({
+      data: { configured: true, distanceMeters: 5230, durationSeconds: 1080, path: [{ lat: 37.5, lng: 127.0 }] },
+    });
+    renderDetail();
+    expect(screen.getByTestId("call-detail-road")).toHaveTextContent("5.2km");
+    expect(screen.getByTestId("call-detail-road")).toHaveTextContent("18분");
+  });
+
+  it("위치 권한 거부·키 미설정(configured:false)이면 칩 자체가 없다(폴백)", () => {
+    mockUseDirections.mockReturnValue({
+      data: { configured: false, distanceMeters: null, durationSeconds: null, path: [] },
+    });
+    renderDetail();
+    expect(screen.queryByTestId("call-detail-road")).not.toBeInTheDocument();
+  });
 });
 
 describe("CallDetailPage — 표기(08 G6-②)", () => {

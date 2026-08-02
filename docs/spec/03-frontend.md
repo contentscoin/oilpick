@@ -208,6 +208,41 @@ Realtime: `pickup_orders` 자기 행 UPDATE 구독으로 상태 자동 갱신 (�
 > - **rider 알림함(`/notifications`)**: 행 클릭 navigate가 raw link 대신 `normalizeDeepLink`를 경유하도록
 >   수정 — `/orders/:id`→`/calls/:id`, `/wallet`→`/earnings` 재매핑이 푸시 탭과 동일하게 적용된다(기존엔
 >   캐치올로 홈에 떨어지던 확정 결함).
+
+> **16 운영편의성 개정 — 라이더 현장(L3, 2026-08-02)**
+> - **R2 콜 홈(`/`)**: "주변 콜" 헤더 우측 **정렬 세그먼트**(가까운순[기본]·지급액순·최신순 — `call-sort-*`).
+>   클라이언트 정렬 전용, 배차 규칙(13 D7 전체 공개) 불변. 위치 없으면 가까운순=서버 순서 유지.
+> - **R3 콜 상세(`/calls/:id`)**: 주소 카드에 **"도로 기준" 거리·소요 칩**(`call-detail-road`) + 지도
+>   경로선·ETA — rider `useDirections`(user와 동일 절삭·캐시 계약). 위치 거부·키 미설정 시 칩 미표기.
+> - **R4 운행(`/active`)**: ① ACCEPTED 지도에 내 위치→수거지 **경로선+ETA 칩**(주 내비는 계속 외부 앱
+>   딥링크 — 11 M9-b 라이더측). ② RunSwitcher(다중 콜)에 **거리 칩+권장 방문 순서 뱃지 ①②③**
+>   (`run-visit-badge-*`/`run-distance-*`) — ARRIVED 상단 고정→근거리순, 좌표 없는 건 맨 뒤(12 §S1),
+>   위치 없으면 뱃지 미표기. useActiveRunSummaries가 pickup_location을 추가 조회(서버 변경 0).
+> - **R12 마이(`/my`)**: "알림 받기"→**"콜 알림음"**(소리 한정 캡션). localStorage 단독 저장(미배선)을
+>   Zustand persist 스토어(`stores/notifyPref`)로 승격 — CallAlertListener가 구독해 `useCallAlert({mute})`
+>   실배선(mute=소리만, 배너·진동 유지). 레거시 키(`oilpick:notify-enabled`)는 최초 1회 이관.
+> - **R5 계량 제출 드래프트(L4, `lib/measureDraft`)**: orderId 키 자동 저장 — 텍스트 입력(kg·수단·통수·
+>   바코드·GPS)+업로드 체크포인트는 localStorage, 사진 Blob은 IndexedDB(미지원 환경은 텍스트만 강등).
+>   재진입 시 "작성하던 내용을 불러왔어요" 배너(저장 시각+[지우기]). 업로드는 사진 지문→서명 URL
+>   체크포인트로 성공분 스킵. 제출은 기존 SUBMIT_MEASURE 1회 그대로(멱등) — **오제출 이중 가드**:
+>   복원 시(중재 완료면 파기) + 제출 직전 서버 status·final_kg 재확인. 파기: 제출 성공·종결·7일 경과.
+>   제출 실패 시 "입력 내용은 저장돼 있어요" 안내 + 온라인 복귀 감지 재시도 유도(자동 재제출 없음).
+> - **R5 대기 배너(L5)**: [확인 요청 다시 보내기](confirm-remind, 주문당 2h 1회 서버 강제) +
+>   "24시간이 지나면 본사에 자동 접수돼요" 캡션(자동 에스컬레이션 안내 — 수동 버튼 중복 제거).
+> - **R7 수거 실적(L9, `my-payout-card`)**: '플랫폼 정산' 카드 — v_my_payout_daily(본인 스코프)로
+>   이번 달 포인트 지급분 합계+일별 접이식. 카피 "오프라인 정산 대상 — 지급 일정은 본사 안내"
+>   (지갑/출금 오해 차단, 08 P5 불변). 추천 보상 정산 완료 시 푸시(referral-settle append).
+
+> **16 운영편의성 개정 — 좌상 화면(L6~L9, 2026-08-02)**
+> - **관할 대시보드(`/`)**: ① [L6] '진행중 운행' 관제 섹션 — v_dealer_active_orders(재무 컬럼 제외
+>   invoker 뷰, 14 §2-5 예약 실행) + 상태 pill + ARRIVED 24h '확인 지연' 배지 + 라이더 tel: CTA
+>   (현 소속만). 조회 전용 — 상태 액션 없음(13 D3). ② [L9] 라이더 액션 4-decision 완성 —
+>   PENDING→승인/반려(사유 필수 모달), APPROVED→정지(사유 모달), SUSPENDED→정지 해제.
+>   파괴적 액션(반려·정지·소속 해제)은 확인 다이얼로그. 서버·훅 변경 0(권한 확대 없음).
+> - **내 정산 명세(`/statement`) [L7]**: '미정산 내역' 섹션(POINT 순액 합계 = usage 카드 1:1 대사)
+>   + 청구 이력 행별 [CSV](admin과 공용 `lib/settlementCsv` — 뷰 실컬럼 그대로, gross/net 구분).
+> - **알림 [L8]**: settlement-watch(15분 cron)의 크레딧 80%·임계 경보 + dealer-claim 청구
+>   라이프사이클 통지를 기존 NotificationsBell로 수신(신설 표면 없음).
 - 플러그인: @capacitor/push-notifications, geolocation, camera, app, splash-screen,
   @capacitor-community/barcode-scanner (rider만)
 - 딥링크: `oilpick-user://orders/:id`, `oilpick-user://ref/:code`(09 H3 추천 랜딩), `oilpick-rider://calls/:id` — 푸시 link 필드와 매핑

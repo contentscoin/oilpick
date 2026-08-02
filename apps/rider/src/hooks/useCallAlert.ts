@@ -40,8 +40,10 @@ export function summarizeAddress(address: string): string {
 }
 
 export interface UseCallAlertOptions {
-  /** 알림음 끄기(테스트/설정용). 배너·진동은 그대로 발화한다. */
+  /** 알림음 끄기([16 L3 §3-5] 마이 "콜 알림음" 토글 배선). 배너·진동은 그대로 발화한다. */
   mute?: boolean;
+  /** 진동 끄기(기본 켜짐 — [16 L3 §3-5] 후속 설정 확장용 옵션. 현재 토글은 mute만 배선). */
+  vibrate?: boolean;
   /** 알림음 구현 주입(기본 playCallAlertSound — 테스트에서 spy로 대체). */
   playSound?: AlertSoundFn;
 }
@@ -50,7 +52,7 @@ export function useCallAlert(options: UseCallAlertOptions = {}): {
   alert: CallAlert | null;
   dismiss: () => void;
 } {
-  const { mute = false, playSound = playCallAlertSound } = options;
+  const { mute = false, vibrate = true, playSound = playCallAlertSound } = options;
   const { session } = useSession();
   const { data: rider } = useRiderProfile(session?.user.id);
   // E3 게이트: 로그인 세션 + 승인(APPROVED) 라이더 + 온라인일 때만 발화한다(CallHomePage.tsx:36 참고).
@@ -79,7 +81,7 @@ export function useCallAlert(options: UseCallAlertOptions = {}): {
       setAlert({ orderId, message });
       if (!mute) playSound();
       // 진동: 미지원 환경(navigator.vibrate 없음) 가드 호출.
-      navigator.vibrate?.(200);
+      if (vibrate) navigator.vibrate?.(200);
 
       if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
       dismissTimerRef.current = setTimeout(() => {
@@ -87,7 +89,7 @@ export function useCallAlert(options: UseCallAlertOptions = {}): {
         setAlert(null);
       }, CALL_ALERT_DISMISS_MS);
     },
-    [mute, playSound],
+    [mute, vibrate, playSound],
   );
 
   useEffect(() => {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { BigButton, ConfirmSheet, DriverCard, DynamicIsland, ErrorScreen, InfoStatCard, MapView, OrderTimeline, PageHeader, PayoutMethodChip, StatusHeadline, colors, elevation, gradient, gray, radius, surface, touchTarget, useToast } from "@oilpick/ui";
 import { estimateCash, formatEta, formatKg, formatKrw, formatPoint, formatTimeOfDay, type OrderStatus } from "@oilpick/core";
@@ -69,6 +69,23 @@ export function OrderDetailPage() {
   const [disputing, setDisputing] = useState(false);
   const [disputeReason, setDisputeReason] = useState("");
   const [showDisputeForm, setShowDisputeForm] = useState(false);
+
+  // [16 L5 L-D8] 확인 마찰 축소 — 리마인드 푸시 딥링크(/orders/:id)로 진입하면 확인 카드까지
+  // 스크롤을 내려야 했다. 확인 대기 상태로 화면이 뜨면 확인 카드로 1회 자동 스크롤한다
+  // (확인 흐름 자체는 불변 — 2자 확인 원칙 유지, 위치만 데려다 준다). reduced-motion은 즉시 점프.
+  const confirmPanelRef = useRef<HTMLElement | null>(null);
+  const confirmScrolledRef = useRef(false);
+  const pendingConfirm =
+    order?.status === "ARRIVED" && (order.measuredKg != null || order.finalKg != null);
+  useEffect(() => {
+    if (!pendingConfirm || confirmScrolledRef.current) return;
+    const el = confirmPanelRef.current;
+    if (!el || typeof el.scrollIntoView !== "function") return;
+    confirmScrolledRef.current = true;
+    const reduceMotion =
+      typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    el.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+  }, [pendingConfirm]);
 
   if (isLoading) {
     return (
@@ -432,7 +449,11 @@ export function OrderDetailPage() {
           showMapAndTimeline이 false인 REQUESTED/CANCELLED는 원래도 타임라인을 그리지 않았다. */}
 
       {showMeasureConfirmUi && !showDisputeForm && (
-        <section data-testid="measure-confirm-panel" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <section
+          ref={confirmPanelRef}
+          data-testid="measure-confirm-panel"
+          style={{ display: "flex", flexDirection: "column", gap: 16, scrollMarginTop: 12 }}
+        >
           <h2 style={{ fontSize: 16, margin: 0 }}>
             {isArbitrated ? "중재 결과를 확인해주세요" : "계량 결과를 확인해주세요"}
           </h2>

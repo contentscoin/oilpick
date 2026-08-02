@@ -68,9 +68,13 @@ describe("MyPage — 마이(06 E9 진입점 + E12 카드화)", () => {
     expect(placeholder).toHaveTextContent("준비 중");
   });
 
-  it("알림 받기 토글이 켜짐/꺼짐을 전환한다", () => {
+  // [16 L3 §3-5] 카피 "콜 알림음" + 소리 한정 캡션. 스토어(useNotifyPref) 기반 —
+  // CallAlertListener가 같은 스토어를 구독해 mute로 배선된다(CallAlertListener.tsx).
+  it("콜 알림음 토글이 켜짐/꺼짐을 전환하고, 소리 한정 캡션을 보여준다", () => {
     renderPage();
     const toggle = screen.getByTestId("notify-toggle");
+    expect(toggle).toHaveTextContent("콜 알림음");
+    expect(toggle).toHaveTextContent("소리만 끕니다");
     expect(toggle).toHaveTextContent("켜짐");
     fireEvent.click(toggle);
     expect(toggle).toHaveTextContent("꺼짐");

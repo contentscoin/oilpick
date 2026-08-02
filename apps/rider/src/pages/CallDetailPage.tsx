@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { BigButton, ErrorScreen, MapView, NumberFlow, PageHeader, colors, elevation, gradient, gray, radius, surface, surfaceDark, useToast } from "@oilpick/ui";
-import { estimateCash, formatKg, formatKrw } from "@oilpick/core";
+import { estimateCash, formatEta, formatKg, formatKrw } from "@oilpick/core";
 import { MAP_STYLE_URL } from "../lib/env";
 import { invokeEdgeFunction } from "../lib/edgeFunction";
+import { useDirections } from "../hooks/useDirections";
+import { useGeolocation } from "../hooks/useGeolocation";
 import { useOpenCalls } from "../hooks/useOpenCalls";
 
 /**
@@ -21,6 +23,19 @@ export function CallDetailPage() {
   const navigate = useNavigate();
   const { data: calls, isLoading } = useOpenCalls(true);
   const call = calls?.find((c) => c.id === id);
+
+  // [16 L3 §3-1] 수락 판단용 도로거리·소요 칩. 내 위치(권한 거부·실패 시 null → 칩 미표기 폴백)
+  // → 수거지 도로 경로. useDirections가 user 앱과 동일한 좌표 절삭+60초 캐시 계약으로 호출량을
+  // 억제한다(콜 상세 다건 연속 열람 대비 — 16 L-D7 심사 반영).
+  const position = useGeolocation(true);
+  const callPoint = call && call.pickupLat != null && call.pickupLng != null ? { lat: call.pickupLat, lng: call.pickupLng } : null;
+  const { data: directions } = useDirections(position, callPoint, Boolean(callPoint));
+  const routeActive = Boolean(directions?.configured && directions.path.length > 0);
+  const roadEta = directions?.configured ? formatEta(directions.durationSeconds) : null;
+  const roadKm =
+    directions?.configured && directions.distanceMeters != null
+      ? (directions.distanceMeters / 1000).toFixed(1)
+      : null;
 
   // 06 E6: mutation 성공/실패 피드백은 전역 토스트로 통일(원시 <Toast> 인라인 렌더 대체).
   const { showToast } = useToast();
@@ -90,6 +105,8 @@ export function CallDetailPage() {
             : []
         }
         pickupLabel={call.pickupAddress}
+        routePath={routeActive ? directions?.path : []}
+        etaLabel={routeActive ? (roadEta ?? undefined) : undefined}
       />
 
       {/* 주소 + 예상 수거량을 하나의 흰 카드로 묶어 배경 위에 띄운다. */}
@@ -115,6 +132,16 @@ export function CallDetailPage() {
           <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: colors.status.wait }}>예상 수거량</p>
           <p className="oilpick-tabular-nums" style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>{formatKg(call.requestedKg)}</p>
         </div>
+        {/* [16 L3 §3-1] 수락 판단 정보 — 실제 도로 기준 거리·소요. 위치 권한 거부·키 미설정이면
+            이 행 자체가 없다(직선거리는 콜 목록 카드가 이미 표기 — 여기서 지어내지 않는다). */}
+        {(roadKm || roadEta) && (
+          <div data-testid="call-detail-road" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: colors.status.wait }}>도로 기준</p>
+            <p className="oilpick-tabular-nums" style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>
+              {[roadKm ? `${roadKm}km` : null, roadEta].filter(Boolean).join(" · ")}
+            </p>
+          </div>
+        )}
       </section>
 
       {/* 08 G6-②: "예상 매입 지급액"(requestedKg×스냅샷 시세) 앰버 히어로 유지 — 지급 수단(현금/포인트)은

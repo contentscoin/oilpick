@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { colors, elevation, radius, frameFixedStyle, FRAME_MAX_WIDTH } from "@oilpick/ui";
 import { useCallAlert } from "../hooks/useCallAlert";
+import { useNotifyPref } from "../stores/notifyPref";
 
 /**
  * 06 E3 — 콜 도착 포그라운드 알림 전역 리스너. App 루트(ToastProvider 안, Router 안)에 마운트되어
@@ -20,7 +21,9 @@ const SLIDE_DOWN_CSS = `
 
 export function CallAlertListener() {
   const navigate = useNavigate();
-  const { alert, dismiss } = useCallAlert();
+  // [16 L3 §3-5] 마이의 "콜 알림음" 토글 실배선 — mute는 소리만 끄고 배너·진동은 유지(훅 계약).
+  const soundEnabled = useNotifyPref((s) => s.soundEnabled);
+  const { alert, dismiss } = useCallAlert({ mute: !soundEnabled });
 
   if (!alert) return null;
 

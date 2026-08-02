@@ -1,4 +1,4 @@
-import { type CSSProperties, type FormEvent, type ReactNode, useState } from "react";
+import { type CSSProperties, type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   BigButton,
@@ -27,6 +27,7 @@ import {
   buildTmapRouteUrl,
   estimateCash,
   estimatePurchase,
+  formatEta,
   formatKg,
   formatKrw,
   formatPoint,
@@ -43,7 +44,19 @@ import { invokeEdgeFunction } from "../lib/edgeFunction";
 import { supabase } from "../lib/supabaseClient";
 import { useSession } from "../hooks/useSession";
 import { useActiveRun, useActiveRunSummaries, type ActiveRunSummary } from "../hooks/useActiveRun";
+import { useDirections } from "../hooks/useDirections";
+import { useGeolocation, type GeoPosition } from "../hooks/useGeolocation";
 import { useRiderLocationPusher } from "../hooks/useRiderLocationPusher";
+import { distanceKm } from "../lib/geo";
+import {
+  clearDraft,
+  loadDraft,
+  photoFingerprint,
+  purgeExpiredDrafts,
+  recordUploadedUrl,
+  saveDraftPhotos,
+  saveDraftText,
+} from "../lib/measureDraft";
 import { isScannerAvailable, scanQrCode } from "../lib/native/scanner";
 
 /**
@@ -70,6 +83,9 @@ export function ActiveRunPage() {
   const [selectedOrderId, setSelectedOrderId] = useState<string | undefined>(undefined);
   const { data: run, isLoading } = useActiveRun(riderId, selectedOrderId);
   const { data: summaries } = useActiveRunSummaries(riderId);
+  // [16 L3] 내 위치 1회 조회 — 전환기 거리·권장 순서(§3-3)와 경로 미리보기 origin(§3-1) 공용.
+  // 권한 거부·실패 시 null: 거리 칩·경로선 미표기 폴백(운행 흐름은 그대로).
+  const position = useGeolocation(true);
 
   useRiderLocationPusher(Boolean(run));
 
@@ -101,7 +117,7 @@ export function ActiveRunPage() {
     <main style={{ display: "flex", flexDirection: "column", gap: 20, padding: 20, maxWidth: 480, margin: "0 auto" }}>
       {/* [다중 콜] 진행 중인 운행이 2건 이상일 때만 전환기를 띄운다. 단건이면 렌더되지 않아
           기존 화면과 동일하다. 이게 없으면 3건을 수락해도 한 건만 보여 나머지가 갇힌다. */}
-      <RunSwitcher runs={summaries ?? []} currentId={run.id} onSelect={setSelectedOrderId} />
+      <RunSwitcher runs={summaries ?? []} currentId={run.id} onSelect={setSelectedOrderId} position={position} />
 
       {/* 05-design-upgrade.md 상태 헤드라인 패턴을 라이더 관점 카피로. 주소는 헤드라인 카드 안에 묶어
           "어디로 가야 하는지"를 함께 안내한다. */}
@@ -115,10 +131,16 @@ export function ActiveRunPage() {
           orderId={run.id}
           pickupAddress={run.pickupAddress}
           pickupPoint={run.pickupLat != null && run.pickupLng != null ? { lat: run.pickupLat, lng: run.pickupLng } : null}
+          position={position}
         />
       )}
       {run.status === "ARRIVED" && (
+        // [16 L10 리뷰 수정] key 필수 — 다중 콜에서 ARRIVED↔ARRIVED로 in-place 전환(캐시 복귀·
+        // pickRun 폴백)되면 언마운트 없이 orderId만 바뀌어, 이전 주문의 폼 state·드래프트가
+        // 새 주문 키로 저장/오염되고 그대로 오제출될 수 있었다(확정 결함). key로 주문마다
+        // 리마운트해 state·draftReady·체크포인트 ref가 항상 해당 주문에서 새로 시작한다.
         <ArrivedPanel
+          key={run.id}
           orderId={run.id}
           measuredKg={run.measuredKg}
           finalKg={run.finalKg}
@@ -195,27 +217,62 @@ const RIDER_HEADLINE: Partial<Record<OrderStatus, { title: string; hint: string 
   PICKED_UP: { title: "집하장으로 이동해주세요", hint: "QR로 배송을 완료하세요." },
 };
 
+/** 권장 방문 순서 뱃지 문자(①②③) — 다중 콜 상한 3건이라 3개면 충분. */
+const ORDER_BADGES = ["①", "②", "③"] as const;
+
+/**
+ * [16 L3 §3-3] 전환기 표시 순서: ARRIVED(이미 현장 진행 중)는 상단 고정 — 먼저 끝내는 게 순서다.
+ * 나머지는 내 위치 기준 근거리순, 좌표 없는 건은 거리 미표기+맨 뒤(12 §S1 nullable 규약).
+ * "권장"은 표시일 뿐 강제 아님 — 배차·상태머신에 관여하지 않는다(13 D7 전체 공개 불변).
+ */
+function orderRunsForVisit(
+  runs: ActiveRunSummary[],
+  position: GeoPosition | null,
+): (ActiveRunSummary & { distance: number | null })[] {
+  return runs
+    .map((r) => ({
+      ...r,
+      distance:
+        position && r.pickupLat != null && r.pickupLng != null
+          ? distanceKm(position, { lat: r.pickupLat, lng: r.pickupLng })
+          : null,
+    }))
+    .sort((a, b) => {
+      const aPinned = a.status === "ARRIVED" ? 0 : 1;
+      const bPinned = b.status === "ARRIVED" ? 0 : 1;
+      if (aPinned !== bPinned) return aPinned - bPinned;
+      if (a.distance == null) return b.distance == null ? 0 : 1;
+      if (b.distance == null) return -1;
+      return a.distance - b.distance;
+    });
+}
+
 /**
  * 진행 중 운행 전환기(다중 콜). 2건 이상일 때만 렌더한다.
  * 상태 라벨 + 주소 앞부분으로 어느 건인지 구분하고, 탭하면 해당 운행 화면으로 전환한다.
+ * [16 L3 §3-3] 내 위치 기준 거리 칩 + 권장 방문 순서 뱃지(①②③)로 묶음 수거의 동선 계산을 없앤다.
  */
 function RunSwitcher({
   runs,
   currentId,
   onSelect,
+  position,
 }: {
   runs: ActiveRunSummary[];
   currentId: string;
   onSelect: (id: string) => void;
+  /** 내 위치. null(권한 거부·실패)이면 거리·순서 뱃지 없이 기존 표시로 폴백. */
+  position: GeoPosition | null;
 }) {
   if (runs.length < 2) return null;
+  const ordered = orderRunsForVisit(runs, position);
   return (
     <section data-testid="run-switcher" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: colors.status.wait }}>
-        진행 중 {runs.length}건 — 탭해서 전환
+        진행 중 {runs.length}건 — 권장 순서로 정렬했어요
       </p>
       <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4 }}>
-        {runs.map((r) => {
+        {ordered.map((r, i) => {
           const active = r.id === currentId;
           return (
             <button
@@ -238,7 +295,24 @@ function RunSwitcher({
                 cursor: "pointer",
               }}
             >
-              <span style={{ display: "block", fontWeight: 700 }}>{ORDER_STATUS_LABEL[r.status]}</span>
+              <span style={{ display: "flex", alignItems: "baseline", gap: 6, fontWeight: 700 }}>
+                {/* 위치를 모르면 순서를 지어내지 않는다 — 뱃지는 position이 있을 때만. */}
+                {position && (
+                  <span data-testid={`run-visit-badge-${r.id}`} aria-label={`권장 방문 순서 ${i + 1}번`}>
+                    {ORDER_BADGES[i] ?? `${i + 1}`}
+                  </span>
+                )}
+                {ORDER_STATUS_LABEL[r.status]}
+                {r.distance != null && (
+                  <span
+                    data-testid={`run-distance-${r.id}`}
+                    className="oilpick-tabular-nums"
+                    style={{ fontWeight: 600, fontSize: 12, color: active ? colors.primary.dark : colors.status.wait }}
+                  >
+                    {r.distance.toFixed(1)}km
+                  </span>
+                )}
+              </span>
               <span style={{ display: "block", opacity: 0.8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {r.pickupAddress}
               </span>
@@ -329,15 +403,22 @@ function AcceptedPanel({
   orderId,
   pickupAddress,
   pickupPoint,
+  position,
 }: {
   orderId: string;
   pickupAddress: string;
   /** 수거지 실좌표(EWKB 파싱, 11 M9-a). null이면 지도는 프리뷰·내비는 주소 검색 폴백. */
   pickupPoint: LatLng | null;
+  /** [16 L3 §3-1] 내 위치 — 경로 미리보기 origin. null이면 경로선·ETA 미표기(기존 화면 그대로). */
+  position: GeoPosition | null;
 }) {
   const [arriving, setArriving] = useState(false);
   // 06 E6: 도착 성공/실패 피드백은 전역 토스트로 통일(인라인 에러 텍스트 대체).
   const { showToast } = useToast();
+  // [16 L3 §3-1] 내 위치→수거지 도로 경로·ETA(M9-b 라이더측 대칭). KAKAO_MOBILITY_KEY 미설정이면
+  // configured:false — 경로선·ETA만 조용히 생략(주 내비는 계속 외부 앱 딥링크, 16 L-D7).
+  const { data: directions } = useDirections(position, pickupPoint, Boolean(pickupPoint));
+  const routeActive = Boolean(directions?.configured && directions.path.length > 0);
   // 11 M9-a: 좌표가 있으면 카카오맵 앱 스킴에 목적지를 실어 턴바이턴이 바로 뜨게 한다.
   // 좌표가 없으면(레거시/파싱 실패) 주소 검색 웹 링크로 강등 — 죽은 딥링크 금지.
   const kakaoHref = pickupPoint
@@ -366,6 +447,8 @@ function AcceptedPanel({
         center={pickupPoint ?? { lat: 37.5509, lng: 126.8225 }}
         markers={pickupPoint ? [{ ...pickupPoint, label: pickupAddress }] : []}
         pickupLabel={pickupAddress}
+        routePath={routeActive ? directions?.path : []}
+        etaLabel={routeActive ? (formatEta(directions?.durationSeconds) ?? undefined) : undefined}
       />
       <a
         href={kakaoHref}
@@ -538,6 +621,8 @@ function ArrivedPanel({
   const [barcodeInput, setBarcodeInput] = useState("");
   const [geo, setGeo] = useState<PickupGeo | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // [16 L5] [확인 요청 다시 보내기] 진행 상태 — rate limit 판정은 서버(confirm-remind)가 강제.
+  const [reminding, setReminding] = useState(false);
   // 08 P2: 재제출(수단 변경) 모드 — 대기 배너 대신 폼을 다시 연다(중재 확정 전까지 허용).
   const [resubmitting, setResubmitting] = useState(false);
   // 제출 전 검증(계량값/사진/수단 누락)은 인라인 에러 유지 — 서버/업로드 실패는 토스트(06 E6).
@@ -545,6 +630,100 @@ function ArrivedPanel({
   // 06 E8-③: 순차 업로드 진행 카운트("사진 N/M 업로드 중"). 업로드 중이 아니면 null.
   const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null);
   const { showToast } = useToast();
+
+  // ── [16 L4 §3-2] 드래프트: 입력 즉시 저장 + 재진입 복원 + 업로드 체크포인트 ──
+  // 복원이 끝나기 전의 초기 상태 저장(빈 값으로 덮어쓰기)을 막는 준비 플래그.
+  // state여야 한다 — 복원 완료 시 저장 이펙트를 한 번 재실행시켜, 복원 전에 들어온 입력도 저장된다.
+  const [draftReady, setDraftReady] = useState(false);
+  // 업로드 체크포인트(사진 지문→서명 URL) — 재시도 시 성공분 재업로드 스킵.
+  const uploadedUrlsRef = useRef<Record<string, string>>({});
+  // 마지막 제출 실패 여부 — 온라인 복귀 시 재시도 유도 토스트 조건.
+  const lastSubmitFailedRef = useRef(false);
+  const [draftRestoredAt, setDraftRestoredAt] = useState<number | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    // 중재 완료(final_kg) 주문은 재제출이 서버에서 거부된다 — 낡은 드래프트를 파기(오제출 가드 ①).
+    if (finalKg != null) {
+      void clearDraft(orderId);
+      setDraftReady(true);
+      return;
+    }
+    void purgeExpiredDrafts();
+    void loadDraft(orderId).then((draft) => {
+      if (cancelled) return;
+      if (draft) {
+        setKg(draft.text.kg);
+        setPayout(draft.text.payout ?? submittedPayoutMethod);
+        setDeliveredCans(draft.text.deliveredCans);
+        setBarcodes(draft.text.barcodes);
+        setGeo(draft.text.geo);
+        uploadedUrlsRef.current = draft.text.uploadedUrls;
+        if (draft.photos.length > 0) setPhotos(draft.photos);
+        setDraftRestoredAt(draft.text.savedAt);
+      }
+      setDraftReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // orderId 전환(다중 콜) 시 해당 주문의 드래프트로 다시 복원한다.
+  }, [orderId, finalKg]);
+
+  // 텍스트 입력은 변경 즉시 저장. 전부 초기값(빈 폼)이면 드래프트를 지운다(빈 배너 방지).
+  useEffect(() => {
+    if (!draftReady || finalKg != null) return;
+    const pristine =
+      kg === "" &&
+      barcodes.length === 0 &&
+      photos.length === 0 &&
+      geo == null &&
+      payout === submittedPayoutMethod &&
+      deliveredCans === (purchaseRequestedCans ?? 0);
+    if (pristine) {
+      void clearDraft(orderId);
+      setDraftRestoredAt(null);
+      return;
+    }
+    saveDraftText(orderId, {
+      kg,
+      payout,
+      deliveredCans,
+      barcodes,
+      geo,
+      uploadedUrls: uploadedUrlsRef.current,
+    });
+  }, [draftReady, kg, payout, deliveredCans, barcodes, geo, photos.length, orderId, finalKg]);
+
+  // 사진 Blob은 IndexedDB에 별도 저장(용량) — 실패해도 텍스트 드래프트는 유지(강등).
+  useEffect(() => {
+    if (!draftReady || finalKg != null) return;
+    void saveDraftPhotos(orderId, photos);
+  }, [draftReady, photos, orderId, finalKg]);
+
+  // 온라인 복귀 감지 — 직전 제출이 실패한 상태면 재시도를 유도한다(자동 재제출은 하지 않는다).
+  useEffect(() => {
+    const onOnline = () => {
+      if (lastSubmitFailedRef.current) {
+        showToast("네트워크가 연결됐어요 — 계량 제출을 다시 시도해 주세요", { variant: "success" });
+      }
+    };
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, []);
+
+  /** 복원 배너 [지우기] — 드래프트 파기 + 폼 초기화. */
+  async function discardDraft() {
+    await clearDraft(orderId);
+    uploadedUrlsRef.current = {};
+    setKg("");
+    setPayout(submittedPayoutMethod);
+    setDeliveredCans(purchaseRequestedCans ?? 0);
+    setBarcodes([]);
+    setGeo(null);
+    setPhotos([]);
+    setDraftRestoredAt(null);
+  }
 
   // [12 §4] 바코드 1건 추가(스캔/수동 공통). 중복·공백 무시. 첫 추가 시 디바이스 GPS를 1회 취득.
   async function addBarcode(raw: string) {
@@ -637,6 +816,43 @@ function ArrivedPanel({
             ? `사장님이 확인하면 포인트 ${formatPoint(submittedAmount)}가 적립돼요 — 확인을 요청하세요.`
             : `사장님께 현금 ${formatKrw(submittedAmount)}을 지급하고 앱에서 수령 확인을 요청하세요.`}
         </p>
+        {/* [16 L5] 확인 재요청 — 상태 무접촉(푸시만). rate limit(주문당 2h 1회)은 서버가 강제. */}
+        <button
+          type="button"
+          data-testid="confirm-remind-button"
+          disabled={reminding}
+          onClick={async () => {
+            setReminding(true);
+            const result = await invokeEdgeFunction<{ sent: boolean }>("confirm-remind", { orderId });
+            setReminding(false);
+            if (!result.ok) {
+              showToast(result.message, { variant: "error" });
+              return;
+            }
+            if (result.data.sent) {
+              showToast("사장님께 확인 요청을 다시 보냈어요", { variant: "success" });
+            } else {
+              showToast("잠시 전에 이미 요청했어요 — 2시간에 한 번 보낼 수 있어요");
+            }
+          }}
+          style={{
+            width: "100%",
+            minHeight: 48,
+            borderRadius: radius.button,
+            border: `1px solid ${colors.primary.DEFAULT}`,
+            backgroundColor: "#fff",
+            color: colors.primary.DEFAULT,
+            fontSize: 15,
+            fontWeight: 700,
+            cursor: reminding ? "default" : "pointer",
+            opacity: reminding ? 0.6 : 1,
+          }}
+        >
+          {reminding ? "보내는 중..." : "확인 요청 다시 보내기"}
+        </button>
+        <p style={{ margin: 0, fontSize: 12, color: colors.status.wait }}>
+          24시간이 지나면 본사에 자동 접수돼요
+        </p>
         <button
           type="button"
           data-testid="measure-resubmit-button"
@@ -695,8 +911,29 @@ function ArrivedPanel({
 
     setSubmitting(true);
     try {
+      // [16 L4] 낡은 드래프트 오제출 가드 ② — 제출 직전 서버 상태 재확인(복원↔제출 사이 중재
+      // 완료·종결 레이스 차단). 조회 실패(네트워크)는 통과 — 서버 RPC가 최종 방어선이다.
+      const { data: fresh, error: freshError } = await supabase
+        .from("pickup_orders")
+        .select("status, final_kg")
+        .eq("id", orderId)
+        .maybeSingle();
+      if (!freshError && (!fresh || fresh.status !== "ARRIVED" || fresh.final_kg != null)) {
+        await clearDraft(orderId);
+        setDraftRestoredAt(null);
+        showToast("주문 상태가 바뀌어 제출할 수 없어요 — 최신 상태를 확인해주세요", { variant: "error" });
+        return;
+      }
+
       const uploadedUrls: string[] = [];
       for (const [i, photo] of photos.entries()) {
+        // [16 L4] 업로드 체크포인트 — 직전 시도에서 성공한 사진은 서명 URL을 재사용(재업로드 스킵).
+        const fingerprint = photoFingerprint(photo.file);
+        const cached = uploadedUrlsRef.current[fingerprint];
+        if (cached) {
+          uploadedUrls.push(cached);
+          continue;
+        }
         // E8-③: 제출 버튼 문구로 몇 번째 사진을 올리는 중인지 노출.
         setUploadProgress({ current: i + 1, total: photos.length });
         const ext = photo.file instanceof File ? photo.file.name.split(".").pop() : "jpg";
@@ -714,6 +951,9 @@ function ArrivedPanel({
           .from("order-photos")
           .createSignedUrl(path, 60 * 60 * 24 * 365);
         if (signError) throw signError;
+        // 성공 즉시 체크포인트 기록 — 다음 사진에서 실패해도 이 장은 다시 올리지 않는다.
+        uploadedUrlsRef.current = { ...uploadedUrlsRef.current, [fingerprint]: signed.signedUrl };
+        recordUploadedUrl(orderId, fingerprint, signed.signedUrl);
         uploadedUrls.push(signed.signedUrl);
       }
       // 업로드 완료 → 전이 호출 동안은 기본 loading("처리 중...")으로 복귀.
@@ -746,10 +986,19 @@ function ArrivedPanel({
           { variant: "success" },
         );
         setResubmitting(false);
+        // [16 L4] 제출 성공 — 드래프트 파기.
+        lastSubmitFailedRef.current = false;
+        uploadedUrlsRef.current = {};
+        setDraftRestoredAt(null);
+        void clearDraft(orderId);
       } else {
+        lastSubmitFailedRef.current = true;
         showToast(result.message, { variant: "error" });
       }
     } catch (err) {
+      // [16 L4] 실패해도 입력은 드래프트에 있다 — 재입력 없이 재시도(성공분 업로드는 스킵됨).
+      lastSubmitFailedRef.current = true;
+      setError("입력 내용은 저장돼 있어요 — 신호가 잡히면 다시 제출해 주세요.");
       showToast(humanizeSupabaseError(err instanceof Error ? err : null, "사진 업로드 중 오류가 발생했어요."), {
         variant: "error",
       });
@@ -782,6 +1031,46 @@ function ArrivedPanel({
 
   return (
     <form data-testid="run-arrived-panel" onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* [16 L4] 드래프트 복원 배너 — 저장 시각 표기(낡은 입력임을 인지시킨다) + 수동 파기. */}
+      {draftRestoredAt != null && (
+        <div
+          data-testid="measure-draft-restored"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 8,
+            padding: "10px 14px",
+            borderRadius: radius.button,
+            backgroundColor: colors.primary.light,
+            color: colors.primary.dark,
+            fontSize: 13,
+            fontWeight: 600,
+          }}
+        >
+          <span>
+            작성하던 내용을 불러왔어요 (
+            {new Date(draftRestoredAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 저장)
+          </span>
+          <button
+            type="button"
+            data-testid="measure-draft-discard"
+            onClick={() => void discardDraft()}
+            style={{
+              background: "none",
+              border: "none",
+              color: colors.primary.dark,
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: "pointer",
+              padding: "4px 2px",
+              textDecoration: "underline",
+            }}
+          >
+            지우기
+          </button>
+        </div>
+      )}
       <Card style={{ gap: 14 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <label htmlFor="measured-kg-input" style={{ fontSize: 14, fontWeight: 600, color: gray[800] }}>

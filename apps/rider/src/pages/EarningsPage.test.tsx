@@ -3,12 +3,14 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { EarningsPage } from "./EarningsPage";
 
-const { mockUseSession, mockUseMonthlyPickupStats } = vi.hoisted(() => ({
+const { mockUseSession, mockUseMonthlyPickupStats, mockUseMyPayout } = vi.hoisted(() => ({
   mockUseSession: vi.fn(),
   mockUseMonthlyPickupStats: vi.fn(),
+  mockUseMyPayout: vi.fn(),
 }));
 vi.mock("../hooks/useSession", () => ({ useSession: mockUseSession }));
 vi.mock("../hooks/useTodayStats", () => ({ useMonthlyPickupStats: mockUseMonthlyPickupStats }));
+vi.mock("../hooks/useMyPayout", () => ({ useMyPayout: mockUseMyPayout }));
 
 function renderPage() {
   return render(
@@ -26,6 +28,33 @@ beforeEach(() => {
   mockUseMonthlyPickupStats.mockReturnValue({
     data: { count: 4, kg: 105, cash: 64000, point: 10500, cashCount: 3, pointCount: 1 },
     isLoading: false,
+  });
+  mockUseMyPayout.mockReturnValue({ data: { days: [], monthPointTotal: 0 } });
+});
+
+describe("EarningsPage — 플랫폼 정산 카드(16 L9 §6-2)", () => {
+  it("이번 달 포인트 지급분 합계 + 오프라인 정산 캡션(지갑 오해 차단)", () => {
+    mockUseMyPayout.mockReturnValue({
+      data: {
+        days: [
+          { day: "2026-08-01", completedCount: 1, totalKg: 40, cashAmount: 0, pointAmount: 28000, pointSpentAmount: 0 },
+        ],
+        monthPointTotal: 28000,
+      },
+    });
+    renderPage();
+    const card = screen.getByTestId("my-payout-card");
+    expect(screen.getByTestId("my-payout-total")).toHaveTextContent("28,000P");
+    expect(card).toHaveTextContent("오프라인 정산 대상 금액");
+    expect(card).toHaveTextContent("지급 일정은 본사 안내");
+    // 일별 내역 접이식.
+    expect(screen.getByTestId("my-payout-days")).toHaveTextContent("2026-08-01");
+  });
+
+  it("실적이 없으면 0P + 내역 접이식 미노출", () => {
+    renderPage();
+    expect(screen.getByTestId("my-payout-total")).toHaveTextContent("0P");
+    expect(screen.queryByTestId("my-payout-days")).not.toBeInTheDocument();
   });
 });
 

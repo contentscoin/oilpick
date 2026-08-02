@@ -4,9 +4,10 @@
 //   (아니면 INVALID_TRANSITION), 재정산 멱등, 원장 발행 없음(라이더 지갑 없음, 08 P5).
 //   referrals 쓰기는 RPC에만 존재(절대 규칙 1 확장).
 
-import { referralSettleInputSchema } from "@oilpick/core/index.ts";
+import { NOTIFY_KIND, formatKrw, referralSettleInputSchema } from "@oilpick/core/index.ts";
 import { AuthError, requireAuth, requireRole } from "../_shared/auth.ts";
 import { errorResponse, okResponse, withErrorHandling } from "../_shared/response.ts";
+import { sendPush } from "../_shared/push.ts";
 
 Deno.serve((req) =>
   withErrorHandling(req, async (req) => {
@@ -46,6 +47,21 @@ Deno.serve((req) =>
     }
     if (!referral) {
       return errorResponse("NOT_FOUND", 404);
+    }
+
+    // [16 L9] 정산 완료 마킹 통지(라이더 대상) — 예전엔 라이더가 /referrals를 새로고침해야
+    // '정산 완료' 표기를 발견했다(09 H8). 해제(오기록 정정)는 통지하지 않는다.
+    // sendPush는 실패를 내부에서 삼킨다 — 푸시 실패가 정산 마킹 응답을 롤백·차단하지 않음(격리).
+    if (settle && referral.reward_settled_at != null) {
+      await sendPush(
+        admin,
+        [referral.referrer_rider_id],
+        "추천 보상 정산 완료",
+        `추천 보상 ${formatKrw(referral.rider_reward)}이 정산 완료 처리됐어요.`,
+        "/referrals",
+        undefined,
+        NOTIFY_KIND.PAYOUT_REFERRAL_SETTLED,
+      );
     }
 
     return okResponse({
