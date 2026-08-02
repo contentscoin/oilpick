@@ -110,3 +110,33 @@ export const REFERRAL_STATUS_LABEL: Record<ReferralStatus, string> = {
   ACTIVATED: "활성화",
   CANCELLED: "취소",
 };
+
+// ===== 알림 분류(kind) — 16 L2 =====
+
+/**
+ * notifications.kind 값 집합의 단일 진실(16 §2 — DB에 체크 제약 없음, 여기서만 관리).
+ * dedupe 판정 키는 (user_id, kind, link) — _shared/push.ts sendPushDeduped가 유일한 판정 지점.
+ * 새 알림 계열을 추가할 때는 여기에 상수를 먼저 등재한다(앱별 문자열 하드코딩 금지 — 규칙 7).
+ */
+export const NOTIFY_KIND = {
+  /** [16 L5] cron 자동 확인 리마인드(supplier 대상, 제출 후 2h/12h) */
+  CONFIRM_REMIND_AUTO: "CONFIRM_REMIND_AUTO",
+  /** [16 L5] 라이더 수동 [확인 요청 다시 보내기](supplier 대상, 주문당 2h 1회) */
+  CONFIRM_REMIND_MANUAL: "CONFIRM_REMIND_MANUAL",
+  /** [16 L5] 확인 지연 에스컬레이션(admin 대상, 제출 후 24h) */
+  CONFIRM_ESCALATION: "CONFIRM_ESCALATION",
+  /** [16 L8] 좌상 크레딧 사용액 80% 밴드 진입(좌상+admin 대상) */
+  CREDIT_BAND_80: "CREDIT_BAND_80",
+  /** [16 L8] 좌상 미정산 사용액 임계(over_threshold) 진입(좌상+admin 대상) */
+  CREDIT_OVER_THRESHOLD: "CREDIT_OVER_THRESHOLD",
+  /** [16 L8] 좌상 정산 청구 생성(좌상 대상) */
+  CLAIM_CREATED: "CLAIM_CREATED",
+  /** [16 L8] 좌상 정산 청구 정산 완료(좌상 대상) */
+  CLAIM_SETTLED: "CLAIM_SETTLED",
+  /** [16 L8] 좌상 정산 청구 무효(좌상 대상) */
+  CLAIM_VOIDED: "CLAIM_VOIDED",
+  /** [16 L9] 추천 보상 오프라인 정산 완료 마킹 통지(라이더 대상, 09 H8) */
+  PAYOUT_REFERRAL_SETTLED: "PAYOUT_REFERRAL_SETTLED",
+} as const;
+
+export type NotifyKind = (typeof NOTIFY_KIND)[keyof typeof NOTIFY_KIND];

@@ -8,6 +8,7 @@
 // 남기고 넘어간다 — docs/spec/04-tasks.md "질문 목록"에 임시 동작으로 기록됨.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { shouldNotify } from "./notifyDedupe.ts";
 
 interface FcmServiceAccount {
   project_id: string;
@@ -119,12 +120,20 @@ export async function sendPush(
   body: string,
   link?: string,
   type?: string,
+  kind?: string,
 ): Promise<void> {
   if (userIds.length === 0) return;
 
   // notifications 테이블 기록은 FCM 발송 성패와 무관하게 항상 남긴다(알림함 표시용).
+  // kind는 [16 L2] 알림 분류(core NOTIFY_KIND) — sendPushDeduped의 dedupe 판정 키. 미지정=null(비분류).
   try {
-    const rows = userIds.map((userId) => ({ user_id: userId, title, body, link: link ?? null }));
+    const rows = userIds.map((userId) => ({
+      user_id: userId,
+      title,
+      body,
+      link: link ?? null,
+      kind: kind ?? null,
+    }));
     const { error } = await admin.from("notifications").insert(rows);
     if (error) {
       console.error("notifications insert 실패", error);
@@ -189,4 +198,50 @@ export async function sendPush(
     // FCM 서비스 계정 자격증명이 이 개발 환경에 없다 — 실패는 로그만 남기고 핵심 로직을 막지 않는다.
     console.error("푸시 발송 중 예외 발생 (핵심 로직에는 영향 없음)", err);
   }
+}
+
+/**
+ * [16 L2] dedupe 게이트를 거치는 단일 수신자 발송. 알림 계층의 유일한 dedupe 판정 지점 —
+ * 리마인드(L5)·정산 워치(L8) 등 반복 발화 가능성이 있는 알림은 전부 이 함수를 쓴다
+ * (EF마다 "최근 발송 조회"를 재발명하지 말 것, 16 §2 L-D2).
+ *
+ * 판정 키는 (user_id, kind, link) — 같은 키의 알림이 windowMs 안에 이미 있으면 발송·기록 모두
+ * 스킵하고 false를 반환한다. 판정 실패(조회 에러)는 발송 허용으로 폴백 — dedupe는 스팸 방지
+ * 장치일 뿐, 조회 장애가 알림 자체를 막아서는 안 된다(sendPush의 "핵심 로직을 막지 않는다"와
+ * 같은 원칙). 반환값은 "이번 호출이 발송을 시도했는가"이며 FCM 성패와는 무관.
+ */
+export async function sendPushDeduped(
+  admin: SupabaseClient,
+  opts: {
+    userId: string;
+    kind: string;
+    title: string;
+    body: string;
+    link?: string;
+    type?: string;
+    windowMs: number;
+  },
+): Promise<boolean> {
+  const { userId, kind, title, body, link, type, windowMs } = opts;
+  try {
+    let query = admin
+      .from("notifications")
+      .select("created_at")
+      .eq("user_id", userId)
+      .eq("kind", kind)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    query = link === undefined ? query.is("link", null) : query.eq("link", link);
+    const { data, error } = await query;
+    if (error) {
+      console.error("sendPushDeduped: 최근 발송 조회 실패 — 발송 허용으로 폴백", error);
+    } else if (!shouldNotify(data ?? [], windowMs, new Date())) {
+      return false;
+    }
+  } catch (err) {
+    console.error("sendPushDeduped: 판정 중 예외 — 발송 허용으로 폴백", err);
+  }
+
+  await sendPush(admin, [userId], title, body, link, type, kind);
+  return true;
 }

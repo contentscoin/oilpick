@@ -426,10 +426,14 @@ create table notifications (
   title text not null,
   body text not null,
   link text,                                -- 앱 내 딥링크 경로
+  kind text,                                -- [16 L2] 알림 분류(core NOTIFY_KIND). null=분류 이전 레거시.
+                                            -- dedupe 판정 키(user_id, kind, link) — _shared sendPushDeduped 전용
   read_at timestamptz,
   created_at timestamptz not null default now()
 );
 create index idx_notifications_user on notifications (user_id, created_at desc);
+-- [16 L2] sendPushDeduped 판정 쿼리(user_id+kind+윈도) 전용
+create index idx_notifications_dedupe on notifications (user_id, kind, created_at desc);
 
 -- ===== [09 H2] 라이더 추천(레퍼럴) — 실 DDL: 20260715000004_referrals.sql =====
 -- 라이더(referrer)가 점주(referred)에게 앱 설치를 영업. 추천으로 가입한 점주가 첫 수거를 완료(활성화)하면
