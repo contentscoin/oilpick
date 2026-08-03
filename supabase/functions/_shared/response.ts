@@ -3,9 +3,10 @@
 // 에러 코드 문자열은 packages/core/src/errorCodes.ts를 그대로 재사용한다(공유 단일 진실).
 
 import { ERROR_MESSAGE_KO } from "@oilpick/core/errorCodes.ts";
-// 타입 전용 import는 packages/core/src를 직접 참조(값 import는 반드시 vendor 경로 사용 —
-// supabase/functions/_shared/vendor/build.sh 상단 주석 참고).
-import type { ErrorCode } from "../../../packages/core/src/errorCodes.ts";
+// [배포 호환] 함수 루트(supabase/functions) 밖 파일을 참조하면 Docker 없는
+// `functions deploy --use-api` 업로드를 서버가 거부한다(DecodeError) — 타입 전용이라도 예외 없음.
+// vendor 산출물은 esbuild가 타입을 지우므로, 동일 유니온을 값(키 집합)에서 파생한다.
+type ErrorCode = keyof typeof ERROR_MESSAGE_KO;
 
 const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
