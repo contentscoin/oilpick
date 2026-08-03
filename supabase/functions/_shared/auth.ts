@@ -5,10 +5,11 @@
 // 재조회한다 (JWT의 커스텀 클레임이나 클라이언트가 보낸 값을 신뢰하지 않는다).
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-// 타입 전용 import이므로 packages/core/src를 직접 참조해도 Deno 런타임에 로드되지 않는다
-// (esbuild가 타입 전용 export를 지워버려 vendor 산출물에는 타입이 남지 않음 — 값 import는
-// 반드시 @oilpick/core/* vendor 경로를 통해야 한다. supabase/functions/_shared/vendor/build.sh 참고).
-import type { UserRole } from "../../../packages/core/src/orderMachine.ts";
+// [배포 호환] 함수 루트(supabase/functions) 밖 파일을 참조하면 Docker 없는
+// `functions deploy --use-api` 업로드를 서버가 거부한다(DecodeError) — 타입 전용 import도 예외 없음.
+// vendor 산출물은 esbuild가 타입 export를 지워 UserRole을 노출하지 못하므로 리터럴 유니온을
+// 미러한다. packages/core/src/orderMachine.ts의 UserRole 변경 시 여기도 함께 갱신할 것.
+type UserRole = "supplier" | "rider" | "admin" | "dealer";
 
 export interface AuthContext {
   uid: string;

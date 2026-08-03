@@ -107,6 +107,12 @@ cron EF는 **배선하지 않으면 조용히 죽는다**(기능이 코드에 �
 | `order-expire` | **1분** | 재브로드캐스트(5/10분)·30분 무수락 자동취소 + [16 L5] 확인 리마인드(2h/12h)·에스컬레이션(24h) |
 | `settlement-watch` | **15분**(권고, 16 §10-2) | [16 L8] 좌상 크레딧 80% 밴드·임계(over_threshold) 경보 |
 
+> **⚠️ 키 주의(호스팅 프로젝트 실측, 2026-08):** `<SERVICE_ROLE_KEY>` 자리에는 대시보드
+> API Keys의 **신형 secret key(`sb_secret_…`)** 를 쓴다. 호스팅 Edge 런타임은
+> `SUPABASE_SERVICE_ROLE_KEY` env에 신형 secret key를 주입하므로, legacy JWT
+> (`eyJ…` service_role)로 호출하면 `requireCronAuth`의 env 대조가 어긋나
+> 401(`로그인이 필요해요`)이 난다. 로컬(`supabase start`)은 legacy JWT 그대로.
+
 배선(pg_cron + pg_net — SQL Editor에서, `<PROJECT_REF>`·`<SERVICE_ROLE_KEY>` 치환):
 ```sql
 select cron.schedule('order-expire-every-min', '* * * * *', $$
