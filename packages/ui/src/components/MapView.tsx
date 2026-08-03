@@ -254,7 +254,10 @@ export function MapView({
       return;
     }
     if (!riderMarkerRef.current) {
+      // maplibre Marker는 lngLat이 설정된 뒤에만 addTo할 수 있다 — 순서가 뒤집히면
+      // 내부 _update가 미설정 좌표를 읽어 throw(실지도 모드에서 컴포넌트 크래시).
       riderMarkerRef.current = new maplibre.Marker({ color: colors.accent.DEFAULT });
+      riderMarkerRef.current.setLngLat([riderMarker.lng, riderMarker.lat]);
       riderMarkerRef.current.addTo(map as never);
     }
     riderMarkerRef.current.setLngLat([riderMarker.lng, riderMarker.lat]);
