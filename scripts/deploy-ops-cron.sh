@@ -4,7 +4,11 @@
 # deploy-cutover.sh와 동일하게 CEO 로컬 터미널에서 실행한다:
 #
 #   supabase login                                # 최초 1회(브라우저 인증)
-#   SERVICE_ROLE_KEY=<service_role 키> bash scripts/deploy-ops-cron.sh
+#   SERVICE_ROLE_KEY=<sb_secret_… 키> bash scripts/deploy-ops-cron.sh
+#
+# ⚠️ SERVICE_ROLE_KEY에는 대시보드 API Keys의 **신형 secret key(sb_secret_…)**를 쓴다.
+#    호스팅 Edge 런타임이 SUPABASE_SERVICE_ROLE_KEY env에 신형 키를 주입하므로 legacy JWT
+#    (eyJ… service_role)로는 requireCronAuth 대조가 어긋나 401이 난다(DEPLOY.md §1-4).
 #
 # 선택 env:
 #   PROJECT_REF      — 기본 dbvgxuevhmyoprafarnh
