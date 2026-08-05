@@ -655,6 +655,8 @@ export const dealerRiderStatsSchema = z.object({
   point_paid: z.number().int().nonnegative(),
   referral_signed_up: z.number().int().nonnegative(),
   referral_activated: z.number().int().nonnegative(),
+  /** [17 Q5] 완료 주문 coupon_cost 합(뷰 append, null→0). 조회 전용 — 정산 무관(17 C5). */
+  coupon_used_qty: z.number().int().nonnegative(),
 });
 export type DealerRiderStats = z.infer<typeof dealerRiderStatsSchema>;
 

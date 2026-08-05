@@ -150,6 +150,7 @@ Realtime: `pickup_orders` 자기 행 UPDATE 구독으로 상태 자동 갱신 (�
 | `/earnings` | R7/R8 | PointBalanceCard(held 강조: "배송완료 시 확정") + 일/주 합계 + 출금 |
 | `/badge` | R9 인증 카드 | 풀스크린: 사진/이름/차량번호 + QR(JWT는 Phase 2, 지금은 rider_id QR) |
 | `/history`, `/my`, `/notifications` | R10–R12 | |
+| `/coupons`, `/coupons/purchase` | R13 쿠폰 [17 Q3] | 쿠폰 내역(LedgerList `variant="coupon"` + 잔액 히어로) / 충전(수량 프리셋 10·30·50+직접 입력, 코엠 결제창·demo·토스 분기, PENDING orphan 재시도). 탭바에 없음 — 콜 홈 쿠폰 잔액 카드로 진입 |
 
 > **07 피벗 개정 (상세는 07-pivot-plan.md 참조)**
 > - **R2 콜 홈 / R3 콜 상세** [F5]: 상단 쿠폰 잔액 카드(v_coupon_balance + Realtime)+[충전하기]. CallCard/상세 "수거비"→"쿠폰 N장 소진"(coupon_cost)+"예상 매입 지급액"(requested_kg×시세). 잔액 부족 수락 시 INSUFFICIENT_COUPON→[충전하러 가기] CTA. 쿠폰 내역 화면(LedgerList 재사용).
@@ -173,14 +174,29 @@ Realtime: `pickup_orders` 자기 행 UPDATE 구독으로 상태 자동 갱신 (�
 >   (복사/공유, referral-code Edge) + 실적(가입/활성화/전환율/누적 보상, v_referral_stats + referrals Realtime).
 >   라이더 보상은 오프라인 정산 근거로만 표기(08 P5 — 라이더 지갑 없음). **마이(`/my`)**에 진입점 추가.
 
-### apps/admin (사이드바 내비, shadcn/ui + TanStack Table)
+> **[17 Q3] 수거쿠폰 복권 개정 (2026-08-05 — 상세는 17-coupon-revival.md. 08 블록의 쿠폰 삭제
+> 항목(G6-①②)을 명시적으로 역전한다. 08의 지급 표기(예상 매입 지급액·수단 분리 실적)는 불변, 17 C7)**
+> - **R2 콜 홈**: 상단 쿠폰 잔액 카드 복원(v_coupon_balance + coupon_ledger Realtime,
+>   PointBalanceCard 일반화 — label="보유 수거쿠폰"·N장) + [충전하기]→`/coupons/purchase`,
+>   카드 탭→`/coupons`. CallCard에 "쿠폰 N장" 칩 병기(coupon_cost — useOpenCalls select 재개,
+>   전환기 무쿠폰 주문 null은 미렌더).
+> - **R3 콜 상세**: "소진 쿠폰" 행(coupon_cost) + 수락 게이트(잔액<coupon_cost 사전 fail-fast +
+>   409 INSUFFICIENT_COUPON 토스트, 양쪽 다 [충전하러 가기] CTA — 화면에 머문다). 무쿠폰 주문은
+>   게이트 없이 수락(레거시 규약).
+> - **R13 쿠폰 내역(`/coupons`)**: 잔액 히어로 + [충전하기] + LedgerList `variant="coupon"`
+>   (CHARGE 충전/CONSUME 콜 배정/REFUND 환급/ADJUST 조정, 장 단위·최근 50).
+> - **R13 쿠폰 충전(`/coupons/purchase`)**: 수량 프리셋 10/30/50+직접 입력(1~200), 예상 금액=
+>   최신 tick 단가×수량(단가 미설정 시 안내+결제 비활성). [결제하기]→coupon-purchase-intent →
+>   분기: 코엠(결제창 파라미터 hidden form POST — 확정은 서버 rUrl 콜백, 재진입 시 "결제 상태
+>   새로고침") / demo(즉시 confirm — 데모 배너 명시) / 토스 레거시(위젯→successUrl confirm 콜백,
+>   키 미발급 시 수동 충전 안내). PENDING orphan 목록 + 재시도(멱등). 성공 화면 잔액 NumberFlow.
 | 경로 | 뷰 | 구현 요점 |
 |---|---|---|
 | `/` | 대시보드 | 카카오맵 전체 지도(진행중 주문 핀 + 온라인 라이더 핀, Realtime) + 오늘 KPI 카드 4개(주문수/수거kg/발행P/활성 라이더) |
-| `/price` | 시세 관리 | 현재값 + price-set 폼 + tick 이력 테이블 + 미니 차트 |
+| `/price` | 시세 관리 | 현재값 + price-set 폼 + tick 이력 테이블 + 미니 차트. [17 Q4] 수거쿠폰 단가 섹션(coupon-price-set + 이력 + 미설정 안내) 복원 |
 | `/orders` | 주문 관리 | 테이블(상태 필터) → 상세 드로어(이벤트 타임라인, 사진). DISPUTED 건: RESOLVE_DISPUTE 폼(finalKg 입력). CANCEL 버튼 |
-| `/users` | 회원 관리 | supplier/rider 탭. rider PENDING 큐: 서류 이미지 뷰어 + 승인/반려(rider-verify) |
-| `/settlement` | 정산 | withdrawals 큐(승인/반려/이체완료 처리) + point_ledger 감사 테이블 + 일별 합계 |
+| `/users` | 회원 관리 | supplier/rider 탭. rider PENDING 큐: 서류 이미지 뷰어 + 승인/반려(rider-verify). [17 Q4] 라이더 카드 쿠폰 패널(잔액·조정·구매 환불) 복원 |
+| `/settlement` | 정산 | withdrawals 큐(승인/반려/이체완료 처리) + point_ledger 감사 테이블 + 일별 합계. [17 Q4] 쿠폰 판매 통계(v_coupon_sales_daily + CSV) 복원 |
 | `/depots` | 집하장 | CRUD + QR 인쇄 뷰(qr_secret을 QR 이미지로) |
 | `/dealers` | 좌상 관리 [13 I3] | 좌상 계정 생성(dealer-create) + 라이더 소속 배정(dealer-assign). admin 전용 |
 | `/notify` | 공지 | 전체/역할별 푸시 발송 폼 |
@@ -288,6 +304,23 @@ Realtime: `pickup_orders` 자기 행 UPDATE 구독으로 상태 자동 갱신 (�
 >   + 청구 이력 행별 [CSV](admin과 공용 `lib/settlementCsv` — 뷰 실컬럼 그대로, gross/net 구분).
 > - **알림 [L8]**: settlement-watch(15분 cron)의 크레딧 80%·임계 경보 + dealer-claim 청구
 >   라이프사이클 통지를 기존 NotificationsBell로 수신(신설 표면 없음).
+
+> **[17 Q4] 수거쿠폰 복권 — admin 화면 개정 (2026-08-05, 상세는 17-coupon-revival.md. 08 P1 역전 —
+> 08 G7-④/⑤의 "쿠폰 UI 제거"는 본 블록으로 되돌린다. 지급 모델(08)·정산 체인(14)은 불변, 17 C7)**
+> - **`/price`**: 수거쿠폰 단가 섹션 복원(07 F10-① 원형) — 현재 단가 카드(coupon_price_ticks 최신)
+>   + coupon-price-set 폼 + tick 이력 + 정정 배너(`tick-correction-notice-coupon`). **미설정 안내**
+>   (`coupon-price-unset-notice`) — 첫 tick 등록 전엔 라이더 구매가 409 COUPON_PRICE_NOT_SET로
+>   막힌다(DEPLOY 필수 초기 데이터). 구매 시점 단가 스냅샷 원칙(17 C2) 카피 병기.
+> - **`/users` 라이더탭**: RiderCouponPanel 복원(카드 footer) — 쿠폰 잔액(v_coupon_balance —
+>   잔액은 뷰로만, 17 C4) + 충전/조정 이력(coupon_ledger 최근 50건, entry_type 라벨) +
+>   [쿠폰 조정](coupon-adjust — qty ±·사유 필수, 음수 초과는 INSUFFICIENT_COUPON 409 표면화) +
+>   [구매 환불](coupon-refund — **PAID 구매 목록에서 선택**·수량(비우면 전액)·사유 필수, 건당 1회).
+>   **조정·환불 모두 실행 전 확인 다이얼로그 필수**(16 L9 파괴적 액션 관례 — append-only 원장).
+>   원장 insert는 Edge Function만 경유(절대 규칙 1).
+> - **`/settlement`**: '쿠폰 판매' 섹션 추가(07 F10-③ⓐ 원형. 07의 결제 목록·환불 UI는 /users
+>   라이더 패널로 재배치) — v_coupon_sales_daily 일별(충전 장수/판매액/귀책 환급/PG 환불/수동 조정)
+>   + 합계 카드 4종 + CSV(BOM, `lib/csv` 재사용, `lib/couponSales`가 뷰 집계의 TS 미러·합계 담당).
+>   출금 큐·수거 추이·지급 실적·포인트 감사 등 08 G7 구성은 불변(쿠폰 판매 = 플랫폼 수익, 17 §0).
 - 플러그인: @capacitor/push-notifications, geolocation, camera, app, splash-screen,
   @capacitor-community/barcode-scanner (rider만)
 - 딥링크: `oilpick-user://orders/:id`, `oilpick-user://ref/:code`(09 H3 추천 랜딩), `oilpick-rider://calls/:id` — 푸시 link 필드와 매핑

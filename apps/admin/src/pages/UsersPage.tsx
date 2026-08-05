@@ -1,17 +1,19 @@
 import { useState } from "react";
 import { formatPoint, type PointAdjustOutput } from "@oilpick/core";
-import { useAdminRiders, useAdminSuppliers, type AdminSupplierRow } from "../hooks/useUsersAdmin";
+import { useAdminRiders, useAdminSuppliers, useCouponBalances, type AdminSupplierRow } from "../hooks/useUsersAdmin";
 import { RiderVerifyCard } from "../components/RiderVerifyCard";
+import { RiderCouponPanel } from "../components/RiderCouponPanel";
 import { QueryError } from "../components/QueryError";
 import { invokeEdgeFunction } from "../lib/edgeFunction";
 
 type Tab = "supplier" | "rider";
 
 /**
- * 03-frontend.md apps/admin "/users" + 08 G7-⑤ 개정:
- * - 라이더탭: RiderCouponPanel(쿠폰 잔액/수동 조정) 제거 — 쿠폰 모델 폐기(08 P1).
- *   라이더별 지급 실적은 /settlement "라이더별 지급 실적" 표에서 본다(정산 근거 단일화, 08 P5).
- * - 공급업체탭: [포인트 조정](point-adjust — amount ± 정수, memo 필수) 모달 추가.
+ * 03-frontend.md apps/admin "/users" + 08 G7-⑤ + [17 Q4] 개정:
+ * - 라이더탭: RiderCouponPanel 복원(수거쿠폰 복권 — 08 P1 역전) — 쿠폰 잔액(v_coupon_balance) +
+ *   충전/조정 이력 + [쿠폰 조정](coupon-adjust)·[구매 환불](coupon-refund, PAID 건). 카드 footer 접합.
+ *   라이더별 지급 실적은 /settlement "라이더별 지급 실적" 표 유지(08 P5 불변 — 쿠폰과 독립 축, 17 C7).
+ * - 공급업체탭: [포인트 조정](point-adjust — amount ± 정수, memo 필수) 모달.
  *   CS 보정용 수동 조정 — 원장 기록(ADJUST)은 서버 RPC(fn_post_ledger)가 담당(절대 규칙 1).
  */
 export function UsersPage() {
@@ -254,6 +256,7 @@ function RiderList({ statusFilter }: { statusFilter: "PENDING" | "ALL" }) {
   const { data: riders, isLoading, isError, refetch } = useAdminRiders(statusFilter);
   // 초기 로드 실패만 에러 UI로 — 백그라운드 refetch 실패는 캐시된 화면을 유지한다(TanStack v5는 error에도 data 보존).
   const loadFailed = isError && riders === undefined;
+  const { data: balances, refetch: refetchBalances } = useCouponBalances();
 
   // 빈 상태 분기보다 먼저 — 쿼리 실패가 "0건"으로 위장되지 않게 한다.
   if (loadFailed) {
@@ -272,11 +275,26 @@ function RiderList({ statusFilter }: { statusFilter: "PENDING" | "ALL" }) {
     );
   }
 
-  // 08 G7-⑤: 쿠폰 패널(footer) 제거 — 라이더별 지급 실적은 /settlement에서 확인.
+  // [17 Q4] 쿠폰 패널(footer) 복원 — 잔액·조정·환불은 라이더 카드 안에서 닫는다.
   return (
     <div className="flex flex-col gap-4" data-testid="rider-list">
       {riders.map((rider) => (
-        <RiderVerifyCard key={rider.id} rider={rider} onProcessed={refetch} />
+        <RiderVerifyCard
+          key={rider.id}
+          rider={rider}
+          onProcessed={refetch}
+          footer={
+            <RiderCouponPanel
+              riderId={rider.id}
+              riderName={rider.displayName}
+              // 원장 행이 없는 라이더는 뷰에 행이 없음 = 잔액 0 (17 C4 — 잔액은 뷰로만).
+              balance={balances ? (balances.get(rider.id) ?? 0) : undefined}
+              onChanged={() => {
+                refetchBalances();
+              }}
+            />
+          }
+        />
       ))}
     </div>
   );

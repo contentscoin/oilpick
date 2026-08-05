@@ -43,6 +43,8 @@
 4. 뷰 `v_dealer_rider_stats`(security_invoker): 라이더별 완료 건수·수거 kg·지급 합계(현금/포인트)·
    레퍼럴 실적(v_referral_stats 조인). dealer는 RLS로 자기 소속만, admin은 전체. **금액은 통계
    표시용일 뿐 — 정산 로직 없음(D5)**.
+   [17 Q5] `coupon_used_qty`(완료 주문 coupon_cost 합) append — 쿠폰 실적도 조회 전용(정산 무관).
+   경로 제약 포함 단일 진실은 17-coupon-revival.md C5.
 5. pgTAP: 권한가드(비인가 dealer 승격 차단)·dealer가 남의 소속을 못 보/못 승인하는 것·미배정
    라이더 자기배정 가능·타좌상 소속 재배정 불가·뷰 집계 asserts.
 

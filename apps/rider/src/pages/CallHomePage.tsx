@@ -4,6 +4,8 @@ import {
   CallCard,
   DynamicIsland,
   EmptyState,
+  PointBalanceCard,
+  PointHeroAction,
   colors,
   elevation,
   gray,
@@ -15,6 +17,7 @@ import { estimateCash, formatKg, formatKrw, formatPoint } from "@oilpick/core";
 import { useSession } from "../hooks/useSession";
 import { useRiderProfile } from "../hooks/useRiderProfile";
 import { useOpenCalls } from "../hooks/useOpenCalls";
+import { useCouponBalance } from "../hooks/useCoupons";
 import { useTodayStats } from "../hooks/useTodayStats";
 import { useGeolocation } from "../hooks/useGeolocation";
 import { distanceKm } from "../lib/geo";
@@ -45,6 +48,8 @@ export function CallHomePage() {
 
   const { data: rider } = useRiderProfile(userId);
   const { data: stats, isLoading: statsLoading } = useTodayStats(userId);
+  // [17 Q3] 쿠폰 잔액(v_coupon_balance + coupon_ledger Realtime) — 콜 홈 잔액 카드(07 F5-①).
+  const { data: couponBalance, isLoading: couponLoading } = useCouponBalance(userId);
   const position = useGeolocation(true);
   const {
     data: calls,
@@ -161,8 +166,32 @@ export function CallHomePage() {
         </div>
       )}
 
-      {/* 08 G6-④ "오늘 실적": 수거 kg + 지급 수단 분리(현금/포인트, completed_at 기준).
-          쿠폰 잔액 히어로·소진 집계는 쿠폰 모델 폐기(08 P1)로 제거. */}
+      {/* [17 Q3] 쿠폰 잔액 히어로(07 F5-① 복권): v_coupon_balance + Realtime.
+          [충전하기]→충전 화면, 카드 탭→쿠폰 내역. 콜 수락 권리(쿠폰)와 지급(현금/포인트, 08)은 별개 축. */}
+      {couponLoading ? (
+        // 로딩 중 잔액 0장이 먼저 떴다가 실제 값으로 교체되는 플래시 방지 스켈레톤.
+        <div data-testid="coupon-balance-skeleton" style={{ height: 160, borderRadius: radius.hero, backgroundColor: gray[100] }} />
+      ) : (
+        <PointBalanceCard
+          available={couponBalance ?? 0}
+          label="보유 수거쿠폰"
+          formatValue={(n) => `${n}장`}
+          onClick={() => navigate("/coupons")}
+          action={
+            <PointHeroAction
+              data-testid="coupon-charge-button"
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate("/coupons/purchase");
+              }}
+            >
+              충전하기
+            </PointHeroAction>
+          }
+        />
+      )}
+
+      {/* 08 G6-④ "오늘 실적": 수거 kg + 지급 수단 분리(현금/포인트, completed_at 기준). */}
       <section data-testid="today-stats" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {statsLoading ? (
           // 로딩 중 0kg/0원이 먼저 떴다가 실제 값으로 교체되는 플래시 방지 스켈레톤.
@@ -307,6 +336,7 @@ export function CallHomePage() {
                 distanceKm={callDistanceKm(call)}
                 estimatedKg={call.requestedKg}
                 estimatedCash={estimateCash(call.requestedKg, call.snapshotPricePerKg)}
+                couponCost={call.couponCost}
                 address={call.pickupAddress}
                 preferredTime={call.preferredTime}
                 onClick={() => navigate(`/calls/${call.id}`)}

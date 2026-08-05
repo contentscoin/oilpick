@@ -2,9 +2,10 @@ import { formatKg, formatKrw } from "@oilpick/core";
 import { colors, elevation, gray, radius, surface } from "../tokens";
 
 /**
- * 03-frontend.md "packages/ui 컴포넌트" — CallCard(거리/수량/매입액).
- * [08 G6-②] "쿠폰 N장 소진" 칩 제거(쿠폰 모델 폐기) — 우측은 "예상 매입 지급액 ₩M"
- * (requested_kg×시세, 라이더가 점주에게 현금 또는 포인트로 지급할 금액)만 남는다.
+ * 03-frontend.md "packages/ui 컴포넌트" — CallCard(거리/수량/쿠폰·매입액).
+ * [17 Q3] "쿠폰 N장" 칩 복권(07 F5 원형, 08 G6-②의 역연산) — 우측 "예상 매입 지급액 ₩M"
+ * (requested_kg×시세, 라이더가 점주에게 현금 또는 포인트로 지급할 금액)은 불변(17 C7),
+ * 그 아래 소진 쿠폰 칩만 병기한다. couponCost 미지정/null(전환기 무쿠폰 주문)이면 미렌더.
  *
  * [15] beUI 목업 "01 콜 홈 — Toast Stack" 행 구조로 재구성한다.
  * `[36px 원형 아이콘] [수거지 / 거리·수량] [금액 pill]` 3열 그리드.
@@ -22,6 +23,8 @@ export interface CallCardProps {
   estimatedKg: number;
   /** 예상 매입 지급액(원) = requested_kg × snapshot_price_per_kg. 현장에서 현금/포인트로 지급. */
   estimatedCash: number;
+  /** [17 Q3] 소진 쿠폰 장수(coupon_cost). null/미지정=전환기 무쿠폰 주문 → 칩 생략(17 C1). */
+  couponCost?: number | null;
   /** 수거 주소(선택). 지정 시 제목 줄에 한 줄 truncate로 표시. */
   address?: string;
   /**
@@ -53,6 +56,7 @@ export function CallCard({
   distanceKm,
   estimatedKg,
   estimatedCash,
+  couponCost,
   address,
   preferredTime,
   onClick,
@@ -176,6 +180,28 @@ export function CallCard({
           >
             {formatKrw(estimatedCash)}
           </span>
+          {/* [17 Q3] 소진 쿠폰 칩 — 지급액 pill 아래 보조 칩(그린 soft). 수락에 드는 비용이라
+              지급액과 시각 위계를 다르게 둔다. flexWrap 행에서 pill 열과 함께 통째로 접힌다. */}
+          {couponCost != null && (
+            <span
+              className="oilpick-tabular-nums"
+              data-testid="call-card-coupon"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                minHeight: 20,
+                padding: "1px 8px",
+                borderRadius: radius.pill,
+                backgroundColor: colors.primary.light,
+                color: colors.primary.dark,
+                fontSize: 11,
+                fontWeight: 700,
+                // 칩도 금액과 같은 규약 — ellipsis·nowrap 금지(극단 확대 시 줄바꿈으로 흐른다).
+              }}
+            >
+              쿠폰 {couponCost}장
+            </span>
+          )}
         </span>
       </span>
     </Tag>

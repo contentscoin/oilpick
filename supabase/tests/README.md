@@ -41,6 +41,11 @@ PGPASSWORD=postgres psql -h 127.0.0.1 -p 54322 -U postgres -d postgres \
 - **09_referral_test.sql** — 레퍼럴(09): 오코드/미승인 라이더 거부, attach 정규화·스냅샷·멱등,
   다른 코드 재-attach ALREADY_REFERRED, 활성화 REFERRAL 발행·재활성화 no-op, v_referral_stats/
   v_referral_daily(교차일 버킷) 집계. (22)
+- 10~17 스위트(좌상 조직·추적·상계·좌상 정산·다중 콜·알림 kind·좌상 관제·my-payout)는 각 파일
+  상단 주석이 단일 진실.
+- **18_dealer_coupon_stats_test.sql** — [17 Q5] v_dealer_rider_stats.coupon_used_qty: 완료 주문
+  coupon_cost 합·미완료 제외·레거시 null=0·타 좌상 0행·coupon_ledger 좌상 RLS 0행(조인 금지
+  경로 제약의 근거 고정)·컬럼 append-only(columns_are). (10)
 
 이 시나리오들은 개발 중 실제 psql/curl로 수동 검증된 것을 pgTAP로 영구 자산화한 것이다.
 어서션 수가 바뀌면 이 목록도 함께 갱신할 것(각 파일 상단 `select plan(N)`이 단일 진실).

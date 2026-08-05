@@ -29,8 +29,12 @@ export const queryKeys = {
   orderEvents: (orderId: string) => ["admin", "orders", "events", orderId] as const,
   suppliers: () => ["admin", "users", "suppliers"] as const,
   riders: (statusFilter: string) => ["admin", "users", "riders", statusFilter] as const,
-  // [08 G7] 쿠폰 키(couponPriceHistory/couponBalances/riderCouponLedger/couponSalesDaily/
-  // couponLedgerAudit/couponPurchases) 제거 — 쿠폰 모델 폐기(08 P1).
+  // [17 Q4] 수거쿠폰 복권 — 08 G7이 제거했던 쿠폰 키를 복원(단가 이력·잔액·라이더별 원장/구매·판매 통계).
+  couponPriceHistory: (limit: number) => ["admin", "price", "coupon", "history", limit] as const,
+  couponBalances: () => ["admin", "users", "couponBalances"] as const,
+  riderCouponLedger: (riderId: string) => ["admin", "users", "couponLedger", riderId] as const,
+  riderCouponPurchases: (riderId: string) => ["admin", "users", "couponPurchases", riderId] as const,
+  couponSalesDaily: (days: number) => ["admin", "settlement", "couponSales", days] as const,
   // 출금 큐·포인트 원장 감사 키 부활(07 F13이 제거했던 축 — 08 P4).
   withdrawals: (statusFilter: string) => ["admin", "settlement", "withdrawals", statusFilter] as const,
   pointLedgerAudit: (limit: number) => ["admin", "settlement", "pointLedger", limit] as const,

@@ -60,6 +60,9 @@ export function DealerHomePage() {
   // [16 L6] 라이더 전화 CTA — 현 소속 라이더의 연락처(useMyRiders — p_profiles_read_own_riders).
   // 전 소속(재배정) 라이더는 맵에 없어 CTA 미렌더(PII 최소화, 뷰 표시명 폴백과 동일 원칙).
   const riderPhones = new Map((riders ?? []).map((r) => [r.id, r.phone]));
+  // [17 Q5] 쿠폰 실적 — v_dealer_rider_stats.coupon_used_qty(완료 주문 coupon_cost 합).
+  // 조회 전용(정산 무관, 17 C5) — 통계 행이 아직 없으면 0장.
+  const couponUsed = new Map((stats ?? []).map((s) => [s.rider_id, s.coupon_used_qty]));
 
   // [16 L9] 파괴적 액션(반려·정지·해제) 확인 다이얼로그 + 사유 입력.
   const [action, setAction] = useState<RiderActionState | null>(null);
@@ -117,7 +120,9 @@ export function DealerHomePage() {
       </div>
 
       <div className="rounded-card bg-white p-6 shadow-card">
-        <h2 className="mb-4 text-lg font-semibold text-gray-900">소속 라이더</h2>
+        <h2 className="mb-1 text-lg font-semibold text-gray-900">소속 라이더</h2>
+        {/* [17 Q5] 쿠폰 사용은 조회 전용 실적 — 정산 무관 카피(17 C5, 좌상 오해 방지). */}
+        <p className="mb-4 text-xs text-gray-500">쿠폰 사용은 플랫폼 실적 확인용이에요 — 정산과는 무관해요.</p>
         {isLoading ? (
           <p className="text-sm text-gray-500">불러오는 중...</p>
         ) : riders && riders.length > 0 ? (
@@ -134,7 +139,8 @@ export function DealerHomePage() {
                     {r.isOnline && <span className="ml-2 rounded-pill bg-primary-light px-2 py-0.5 text-xs text-primary">온라인</span>}
                   </p>
                   <p className="text-xs text-gray-500">
-                    {r.verifyStatus} · {r.phone ?? "연락처 없음"}
+                    {r.verifyStatus} · {r.phone ?? "연락처 없음"} ·{" "}
+                    <span data-testid={`coupon-used-${r.id}`}>쿠폰 사용 {couponUsed.get(r.id) ?? 0}장</span>
                   </p>
                 </div>
                 {/* [16 L9] verify_status별 4-decision 액션 — 서버(rider-verify)가 이미 허용하는

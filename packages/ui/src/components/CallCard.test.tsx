@@ -14,10 +14,20 @@ describe("CallCard", () => {
     expect(screen.getByLabelText("예상 매입 지급액 72,000원")).toBeInTheDocument();
   });
 
-  it("[08 G6-②] 쿠폰 칩 없음 — 쿠폰 모델 폐기", () => {
-    render(<CallCard distanceKm={1} estimatedKg={30} estimatedCash={48000} />);
+  // [17 Q3] 쿠폰 칩 복권(07 F5 원형) — 지급액 pill은 불변(17 C7), 소진 쿠폰 칩만 병기.
+  it("[17 Q3] couponCost가 있으면 '쿠폰 N장' 칩을 지급액과 병기한다", () => {
+    render(<CallCard distanceKm={1} estimatedKg={30} estimatedCash={48000} couponCost={2} />);
+    expect(screen.getByTestId("call-card-coupon")).toHaveTextContent("쿠폰 2장");
+    // 지급액 pill 표기는 그대로다.
+    expect(screen.getByTestId("call-card-cash")).toHaveTextContent("48,000원");
+  });
+
+  it("[17 Q3] couponCost 미지정/null(전환기 무쿠폰 주문)은 칩을 렌더하지 않는다", () => {
+    const { rerender } = render(<CallCard distanceKm={1} estimatedKg={30} estimatedCash={48000} />);
     expect(screen.queryByTestId("call-card-coupon")).not.toBeInTheDocument();
     expect(screen.getByTestId("call-card")).not.toHaveTextContent("쿠폰");
+    rerender(<CallCard distanceKm={1} estimatedKg={30} estimatedCash={48000} couponCost={null} />);
+    expect(screen.queryByTestId("call-card-coupon")).not.toBeInTheDocument();
     expect(screen.getByTestId("call-card-cash")).toHaveTextContent("48,000원");
   });
 

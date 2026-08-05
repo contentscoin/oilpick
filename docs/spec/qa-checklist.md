@@ -68,6 +68,9 @@
 | **레퍼럴(/referrals, 09)** | KPI(가입/활성화/전환율/보너스) + 퍼널 테이블 + 일별 추이 + CSV 2종 | 실적 없음 안내, referrals Realtime 갱신 | ✅ [단위: 화면 4 + 훅 2] |
 | **알림 벨(신설)** | 미읽음 배지 + 패널, 행 클릭 → 읽음 + /orders?order=<id> 드로어 딥링크 | 미지 경로 no-op(캐치올 방지), 빈 안내 | ✅ [단위: 벨 6 + 재매퍼 3 — 교차 이음새 감사 수정] |
 | 공지 | 전체/역할별 푸시 발송 폼 | notify-broadcast(FCM 없으면 로그+notifications만) | ⚠️ 실 발송 🔴 |
+| **쿠폰 단가(/price, 17 Q4)** | 현재 단가 카드 + coupon-price-set 폼 + tick 이력 | 미설정 안내(첫 tick 필수 — DEPLOY 초기 데이터), 0 이하/비정수 검증(호출 없음), 서버 에러 표면화 | ✅ [단위 5] / Edge 실호출 🔴 |
+| **라이더 쿠폰 운영(/users, 17 Q4)** | 잔액(v_coupon_balance)+충전/조정 이력+[쿠폰 조정](coupon-adjust)+[구매 환불](coupon-refund, PAID 목록 선택) — **둘 다 확인 다이얼로그 경유** | 사유 필수·qty≠0/범위 검증(호출 없음), 확인 전 무호출·[돌아가기] 무실행, INSUFFICIENT_COUPON 표면화, PAID 없음·이력 없음 빈 상태 | ✅ [단위 16] / Edge 실호출 🔴 |
+| **쿠폰 판매 통계(/settlement, 17 Q4)** | v_coupon_sales_daily 일별(충전/판매액/귀책·PG 환불/수동 조정) + 합계 카드 + CSV(BOM) | 빈 상태(합계 0 표기), 원장→뷰 집계 정합(couponSales TS 미러) | ✅ [단위 3 + 집계 정합 3] |
 
 ## 4. 크로스 역할 시나리오 (08/09 — 검증 수단 명시)
 
@@ -132,7 +135,8 @@ T13에서 로컬 스택 advisor lint를 점검·수정했다(상세는 이력 �
 
 ### 레거시(현행 모델에서 소멸 — 신규 검증 불필요)
 - ~~카메라 QR 스캔·집하장 배송~~ (07 F13 소멸. 잔존분 완결 코드만 보존 — pgTAP 04_legacy_flow가 회귀 커버)
-- ~~쿠폰 구매/충전/환불 UI~~ (08 P1 폐기. DB 레거시 보존은 pgTAP 05가 회귀 커버)
+- ~~쿠폰 구매/충전/환불 UI~~ (08 P1 폐기 → **[17 Q4] 복권으로 레거시 해제** — admin 쿠폰 단가·라이더
+  쿠폰 운영·판매 통계는 §3 현역 행으로 복귀. rider 구매 플로우는 17 Q3 행 참조)
 - ~~구모델 라이더 포인트 지갑(R7/R8 출금)~~ (07 F6 재정의 — 라이더 지갑 없음, 08 P5)
 
 ---
@@ -147,9 +151,9 @@ T13에서 로컬 스택 advisor lint를 점검·수정했다(상세는 이력 �
 | @oilpick/ui | 165 |
 | @oilpick/user | 172 |
 | @oilpick/rider | 153 |
-| @oilpick/admin | 125 |
+| @oilpick/admin | 151 |
 
-DB 계층: pgTAP **17스위트 265 asserts**(`bash scripts/pgtap-local/run.sh` 전체 GREEN — 마이그레이션 50건).
+DB 계층: pgTAP **18스위트 271 asserts**(`bash scripts/pgtap-local/run.sh` 전체 GREEN — 마이그레이션 51건).
 Deno: `_shared` 순수 헬퍼 테스트(std-assert·notifyDedupe 12·creditWatch 4).
 숫자가 바뀌면 이 표와 supabase/tests/README.md를 함께 갱신할 것.
 
@@ -180,3 +184,14 @@ Deno: `_shared` 순수 헬퍼 테스트(std-assert·notifyDedupe 12·creditWatch
 | 희망시간 표시(U6~U9, N2) | 주문상세 "희망 시간" 행 — 저장 문자열 그대로 | 레거시 "지금" 그대로 표시, 값 null이면 행 미렌더 | ✅ [단위] |
 | 요청정보 라이더 노출(R2/R3/R4, N5) | 콜 카드 "🕐" 줄 + 콜 상세 "희망 시간" 행 + 운행 헤드라인 "🕐 희망" 줄 | 값 null이면 각각 미렌더(레이아웃 불변) | ✅ [단위] |
 | 계량 프리필(R5, N5) | kg 초기값 = requested_kg + "요청 기준 예상값" 캡션(프리필 그대로일 때만) | 드래프트 복원·재제출 값이 프리필보다 우선, 신유 단독(0)은 빈 값, 프리필만으론 드래프트 미저장 | ✅ [단위] |
+
+## 11. 17 수거쿠폰 복권(Q) 점검 (2026-08-05)
+
+| 플로우 | 정상 | 예외 케이스 | 상태 |
+|---|---|---|---|
+| 쿠폰 잔액 카드(R2, Q3) | 콜 홈 상단 "보유 수거쿠폰 N장" 히어로(v_coupon_balance + coupon_ledger Realtime invalidate) + [충전하기]→충전, 카드 탭→내역 | 잔액 행 없음=0장, 로딩 스켈레톤(0장 플래시 방지) | ✅ [단위: 화면 3 + 훅 4(Realtime invalidate 목)] / Realtime 실구동 🔴 |
+| 콜 카드·상세 쿠폰 표기(R2/R3, Q3) | CallCard "쿠폰 N장" 칩 + 상세 "소진 쿠폰" 행(coupon_cost — 지급액 표기는 08 불변, 17 C7) | 전환기 무쿠폰 주문(null) 칩·행 미렌더 | ✅ [단위: ui 2 + 화면 2] |
+| 수락 게이트(R3, Q3) | 잔액<coupon_cost 사전 fail-fast(수락 버튼 대신 부족 안내+[충전하러 가기]) / 409 INSUFFICIENT_COUPON 토스트+동일 CTA(화면에 머묾) | 무쿠폰 주문은 잔액 0이어도 게이트 없이 수락(레거시 규약), 동시성 진실은 RPC(pgTAP Q6 소관) | ✅ [단위 4] |
+| 쿠폰 충전(R13, Q3) | 프리셋 10/30/50+직접 입력(1~200 클램프)→예상 금액=단가×수량→intent→코엠 form POST/데모 즉시 confirm/토스 위젯 분기, 성공 화면 잔액 NumberFlow | 단가 미설정 안내+결제 비활성, 서버·클라 PG 불일치 "준비 중" 폴백, 토스 키 미발급 수동 충전 게이트, PENDING orphan 재시도(멱등 demo 키)/코엠 새로고침, confirm 실패 재시도 | ✅ [단위 15] / 코엠 결제창 실 E2E 🔴(키 발급 대기 — 17 리스크) |
+| 쿠폰 내역(R13, Q3) | 잔액 히어로+[충전하기] + LedgerList coupon(4 entry_type 라벨·장 단위·memo) | 내역 없음 EmptyState, 쿼리 실패 에러 표면화(+재시도) | ✅ [단위 5] |
+| 좌상 쿠폰 실적(Q5) | 관할 대시보드 라이더 행 "쿠폰 사용 N장" = 완료 주문 coupon_cost 합(조회 전용 — 정산 무관 카피) | 미완료 주문 미집계·레거시(null)=0장·타 좌상 라이더 0행·경로 제약 근거(coupon_ledger 좌상 RLS 0행 — 조인 금지, 17 C5)·뷰 컬럼 append-only 고정 | ✅ [단위 1 + pgTAP 10] |

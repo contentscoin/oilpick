@@ -23,7 +23,8 @@ const RIDERS = [
 ];
 const STATS = [
   { rider_id: "r2", dealer_id: "d1", rider_name: "이라이더", verify_status: "APPROVED", is_online: true,
-    completed_count: 3, collected_kg: 90, cash_paid: 60000, point_paid: 0, referral_signed_up: 1, referral_activated: 1 },
+    completed_count: 3, collected_kg: 90, cash_paid: 60000, point_paid: 0, referral_signed_up: 1, referral_activated: 1,
+    coupon_used_qty: 3 }, // [17 Q5] 완료 주문 coupon_cost 합
 ];
 
 describe("DealerHomePage (13 I4)", () => {
@@ -50,6 +51,14 @@ describe("DealerHomePage (13 I4)", () => {
     expect(screen.queryByTestId("approve-r2")).not.toBeInTheDocument();
     fireEvent.click(screen.getByTestId("approve-r1"));
     await waitFor(() => expect(mockVerifyRider).toHaveBeenCalledWith("r1", "APPROVED"));
+  });
+
+  // [17 Q5] 쿠폰 실적은 조회 전용 — 라이더 행 표기 + 정산 무관 카피(17 C5).
+  it("라이더 행에 '쿠폰 사용 N장'을 표기한다 — 통계 없는 라이더는 0장, 정산 무관 카피 동반", () => {
+    render(<DealerHomePage />);
+    expect(screen.getByTestId("coupon-used-r2").textContent).toBe("쿠폰 사용 3장");
+    expect(screen.getByTestId("coupon-used-r1").textContent).toBe("쿠폰 사용 0장"); // 통계 행 없음 → 0
+    expect(screen.getByText(/정산과는 무관해요/)).toBeInTheDocument();
   });
 
   // [16 L9] 소속 해제는 파괴적 액션 — 확인 다이얼로그를 거쳐 dealer-assign(null)을 호출한다.
