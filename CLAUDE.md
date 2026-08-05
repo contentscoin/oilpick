@@ -45,6 +45,10 @@ OilPick을 유지한다(`docs/spec/10-brand.md` B4가 단일 진실). 모든 설
 6. DB 마이그레이션은 supabase/migrations/에 순번 파일로. 스키마 변경 시 01-db-schema.sql도 동기화.
 7. UI 텍스트는 한국어. packages/core의 상수/타입을 공유하고 앱별 중복 정의 금지.
 8. 테스트: 포인트 원장, 상태머신, 매칭 로직은 단위 테스트 필수 (vitest). UI 테스트는 선택.
+9. UI 레이아웃은 글자 확대(텍스트 줌 1.3~2배)에 강건해야 한다 — `docs/spec/03-frontend.md`
+   '레이아웃 강건성' 절 준수: 텍스트 컨테이너 고정 height/width 금지(minHeight/minWidth+padding),
+   nowrap은 ellipsis+overflow hidden+minWidth:0 3종 세트로만, 정보 행 flexWrap 기본,
+   페이지 가로 스크롤 금지.
 
 ## 명령
 - `pnpm dev:user` / `dev:rider` / `dev:admin` — 개발 서버

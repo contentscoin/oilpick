@@ -266,6 +266,36 @@ Realtime: `pickup_orders` 자기 행 UPDATE 구독으로 상태 자동 갱신 (�
 - 로딩: 스켈레톤 (스피너 금지, 시세/잔액 카드는 스켈레톤 형태 유지).
 - 날짜: date-fns + ko locale.
 
+## 레이아웃 강건성 — 글자 확대·브라우저 폭 대응 (M-태스크, 2026-08-05 CEO 지시)
+
+배경: 폰 OS의 글자 크기 확대(Android WebView textZoom·브라우저 글꼴 설정)는 **px로 지정한
+텍스트도 1.3~2배로 키운다.** 고정 크기 박스·무단 nowrap 행은 이때 잘리고 겹치고 페이지
+가로 스크롤을 만든다. 아래 규칙은 3앱 + packages/ui의 **신규·수정 코드 전부에 적용**하며,
+리뷰·QA는 이 절을 기준으로 본다. (결정: px 단위는 유지 — WebView textZoom이 px도 확대하므로
+rem 전환은 불필요, 스코프 밖.)
+
+원칙: **텍스트는 흐르고, 컨테이너는 내용에 맞춰 늘어나며, 페이지는 세로로만 스크롤한다.**
+
+1. **페이지 가로 스크롤 금지.** 어떤 글자 배율·폭(최소 320px)에서도 body가 가로로 스크롤되면
+   결함이다. 넓을 수밖에 없는 콘텐츠(테이블·차트)는 자체 `overflow-x:auto` 컨테이너에 가둔다.
+2. **텍스트 컨테이너에 고정 height 금지 — minHeight만.** 버튼·칩·행·카드 높이는
+   padding+minHeight로 확보한다. 고정 height는 비텍스트 요소(스켈레톤·이미지·지도)만 허용.
+3. **텍스트 컨테이너에 고정 width 금지.** flex/grid 비율 + maxWidth로. 글자가 들어가는
+   원형/사각 뱃지도 width 대신 minWidth+padding(+aspectRatio 필요 시).
+4. **nowrap은 '한 줄 요약' 텍스트에만, 반드시 3종 세트로**: `whiteSpace:"nowrap"` +
+   `overflow:"hidden"` + `textOverflow:"ellipsis"`, 그리고 flex 자식이면 그 자식(혹은 경로상
+   부모)에 `minWidth:0`. 하나라도 빠지면 행이 컨테이너를 밀어내 페이지가 넘친다.
+   금액·수치·날짜는 nowrap 대신 줄바꿈 허용이 기본이다.
+5. **정보 행(라벨+값, space-between)은 `flexWrap:"wrap"` 기본.** 확대 시 자연스럽게 두 줄로
+   떨어지는 것이 정상 동작이다. 한 줄 유지가 꼭 필요한 쪽만 4번 규칙으로 자른다.
+6. **absolute 오버레이 텍스트는 겹침 안전장치 필수** — 자체 배경+radius를 갖고, 아래 콘텐츠에
+   여백(paddingTop 등)으로 자리를 비워준다(지도 위 칩, DynamicIsland 등).
+7. **고정 px grid 컬럼·`100vw`·음수 margin으로 폭 확장 금지** — `fr`/`minmax()`/`auto`와
+   부모 폭 100% 안에서 해결한다.
+8. **QA 절차**: Firefox '텍스트만 확대' 150~200%(px 텍스트도 확대되는 유일한 데스크톱 프록시)
+   또는 실기기(안드로이드 글자 크기 최대)에서 320px·480px 폭으로 주요 화면을 훑는다 —
+   qa-checklist에 항목 고정.
+
 ## 14 신유·정산 화면 (J-태스크, 14-fresh-oil-settlement.md 단일 진실)
 
 - **user**: RequestPage 신유 구매 스텝(고시가·상계 미리보기, `?mode=purchase` 단독 진입, 폐유 0 허용) +
