@@ -30,6 +30,8 @@ export const queryKeys = {
   // [08 G5] 포인트 지갑 부활 — v_point_balance / point_ledger(useWallet.ts).
   balance: (userId: string) => ["balance", userId] as const,
   ledger: (userId: string) => ["ledger", userId] as const,
+  // [08 P4] 본인 출금 신청 목록(useWithdrawals) — U11 "출금 진행" 섹션.
+  withdrawals: (userId: string) => ["withdrawals", userId] as const,
   bankAccount: (userId: string) => ["bankAccount", userId] as const,
   notifications: (userId: string) => ["notifications", userId] as const,
   // [07 F8→08 G5] 수령(확정 지급액) 요약·이력 — payout_method로 현금/포인트 분리.

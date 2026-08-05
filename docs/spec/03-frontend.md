@@ -95,8 +95,20 @@ spacing: 4px 그리드. 터치 타깃 최소 48px. radius: 카드 16px, 버튼 1
 > - **U11 지갑(`/wallet`)** [G5-①]: **포인트 지갑 부활** — 잔액 히어로(v_point_balance available/held) +
 >   [출금 신청] + 포인트 내역(LedgerList point 변형: EARN/WITHDRAW_*/ADJUST) + 수령 이력(주문별,
 >   PayoutMethodChip 현금/포인트 구분). 탭바 "수령액"→**"지갑"** 개명.
+>   **지갑 개선(2026-08-05)**: ① **출금 진행 섹션**(잔액 히어로 아래) — withdrawals 본인 행 최근
+>   20건(useWithdrawals, RLS 본인 read). 행 = 신청일 · 금액 · 상태 뱃지(REQUESTED "확정 대기" /
+>   APPROVED "지급 준비중" / PAID "지급 완료" / REJECTED "반려 — 포인트 복구됨"). 진행중
+>   (REQUESTED/APPROVED)은 카드 톤 강조, 완결은 회색 톤. 이력 0건이면 섹션 미노출, 진행중이 있으면
+>   헤더에 "진행중 N건 · 합계 X P" 병기. 승인/지급 전이는 원장 무기록(08 P4)이라 point_ledger
+>   Realtime이 못 잡는다 — 60초 refetchInterval + 포커스/마운트 재조회(staleTime 0)로 갱신.
+>   ② **스탯 교정** — held 스탯("지급 확정 대기" 오표기: held는 레거시 HOLD 전용, 00-domain.md)을
+>   **"출금 진행중"(REQUESTED+APPROVED 합)**으로 교체. held>0(레거시 잔존)일 때만 "보류(레거시)"
+>   보조 스탯 + "지급 예정 금액 아님" 카피 노출(히어로 held pill 라벨도 "보류(레거시)"로 교정).
+>   ③ **포인트 내역 [더 보기]** — useLedger limit 파라미터화(기본 50, 캐시 키에 limit 포함,
+>   50씩 증가·반환 행수<limit이면 숨김)로 잔액(전체 집계)과 내역 대사 가능.
 > - **U12 출금(`/wallet/withdraw`)** [G5-②]: 부활 — 계좌 등록/표시(useBankAccount) + 금액 입력(최소
 >   10,000P·잔액 검증) → withdraw-request → 성공 시트. 반려 시 WITHDRAW_CANCEL 복구가 내역에 표시.
+>   신청 후 승인→지급 상태 추적은 U11 "출금 진행" 섹션(위 ①)이 담당한다.
 > - **U7 주문상세(`/orders/:id`)** [G5-③]: 계량 제출 후 지급수단 표시(PayoutMethodChip). CONFIRM 카피
 >   분기 — CASH "무게 OO.Okg 확인 · 현금 ₩N 받았어요" / POINT "무게 OO.Okg 확인 · 포인트 N P 적립받기".
 >   COMPLETED 히어로 수단별(현금 수령/포인트 적립+지갑 링크).
@@ -112,6 +124,16 @@ spacing: 4px 그리드. 터치 타깃 최소 48px. radius: 카드 16px, 버튼 1
 >   딥링크 `oilpick-user://ref/<code>`가 deeplink.ts로 이 경로에 정규화. 스토어 링크는 env 플레이스홀더.
 > - **가입(`/auth`)** [H4]: supplier_profiles insert 성공 직후 저장된 코드로 `referral-attach` 호출(best-effort, 비차단).
 > - **U11 지갑(`/wallet`)** [H4]: LedgerList에 `REFERRAL`("추천 보너스") 라벨 추가 — 추천 보너스 적립이 내역에 표시.
+
+> **N2 희망시간 개편 [개정 2026-08-05, CEO 지시]**
+> - **U5 요청(`/request`)**: step2 희망시간 **퀵칩 4종(지금/오늘 오후 14:00/내일 오전 09:00/직접) 폐기**
+>   → `datetime-local` 상시 노출(라벨 "희망 날짜·시간", 기본값 = 현재 시각 15분 단위 올림) +
+>   [지금 바로] 퀵 버튼 1개(입력값을 현재 시각으로 세팅). 저장 포맷은 기존과 동일 `'YYYY-MM-DD HH:mm'`
+>   (datetime-local의 T→공백) — **"지금" 리터럴은 신규 저장에서 폐기**(레거시 표시 전용). 검증: 필수 +
+>   과거(현재−30분 이전) 거부(step next·제출 게이트 양쪽). DB 스키마(`preferred_time text`)·order-create
+>   계약(payload `preferredTime` string) 무변경.
+> - **U6~U9 주문상세(`/orders/:id`)**: 상태 헤드라인 아래 "희망 시간" 행(`order-preferred-time`) 추가 —
+>   저장 문자열 그대로 표시(레거시 "지금"도 그대로, 가공 금지). 값 없으면 행 미렌더.
 
 Realtime: `pickup_orders` 자기 행 UPDATE 구독으로 상태 자동 갱신 (폴링 금지).
 
@@ -242,7 +264,18 @@ Realtime: `pickup_orders` 자기 행 UPDATE 구독으로 상태 자동 갱신 (�
 >   **UTC 일자**(completed_at 앞 10자) — 일별 행과 합·소속이 항상 일치. 지급 없던 완료 주문은
 >   "지급 없음"(null≠0). snapshot_rider_fee 표시 금지(07 D1)는 계속 준수.
 
-> **16 운영편의성 개정 — 좌상 화면(L6~L9, 2026-08-02)**
+> **N5 요청 정보 라이더 노출·계량 프리필 [개정 2026-08-05, CEO 지시]**
+> - **R2 콜 홈(`/`)**: useOpenCalls select에 `preferred_time` 추가 → CallCard 옵셔널 prop
+>   `preferredTime`으로 보조행(거리·수량) **아래 줄**에 "🕐 {값}"(`call-card-preferred`) 표시.
+>   값 없으면 미렌더(flexWrap·minWidth:0 준수).
+> - **R3 콜 상세(`/calls/:id`)**: 주소 카드에 "희망 시간" 행(`call-detail-preferred`) — 저장 문자열
+>   그대로(레거시 "지금" 포함), 값 없으면 미렌더.
+> - **R4 운행(`/active`)**: ① useActiveRun select에 `preferred_time` 추가 → 헤드라인 주소 아래
+>   "🕐 희망 {값}" 한 줄(`active-run-preferred-time`, 모든 run 상태 공통, 값 없으면 미렌더).
+>   ② **계량 프리필** — ArrivedPanel `requestedKg` prop 신설, kg 입력 초기값 = 요청 kg(0=신유 단독은
+>   빈 값 유지) + 캡션 "요청 기준 예상값이에요 — 현장 계량으로 확정돼요"(값이 프리필 그대로일 때만).
+>   드래프트 복원(16 L4)·재제출 프리필(measuredKg)이 요청 기준 프리필보다 **우선**하고,
+>   key={run.id} 리마운트 규약(16 L10 리뷰 ①)은 그대로다. 서버·상태머신·원장 변경 0.
 > - **관할 대시보드(`/`)**: ① [L6] '진행중 운행' 관제 섹션 — v_dealer_active_orders(재무 컬럼 제외
 >   invoker 뷰, 14 §2-5 예약 실행) + 상태 pill + ARRIVED 24h '확인 지연' 배지 + 라이더 tel: CTA
 >   (현 소속만). 조회 전용 — 상태 액션 없음(13 D3). ② [L9] 라이더 액션 4-decision 완성 —
