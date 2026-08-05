@@ -236,6 +236,11 @@ Realtime: `pickup_orders` 자기 행 UPDATE 구독으로 상태 자동 갱신 (�
 >   (`daily-payout-card`)로 분리·승격** — 일별 건수/kg에 **현금·포인트 지급액 병기**(현금은 뷰 규약대로
 >   부호 보존 — 음수=상계 차액을 점주에게 지급). 캡션 "현금은 현장에서 지급받은 금액 /
 >   포인트 지급분은 플랫폼 정산으로 수령"으로 08 P5 오해 차단 카피 유지.
+>   [개정 2026-08-05 ②] 날짜 행 펼침(`details`)으로 **건별 내역**(`daily-payout-orders-<day>`) —
+>   완료 시각(로컬 HH:MM)·주소·kg·수단별 지급액(useMyPayoutOrders, pickup_orders 본인 스코프).
+>   금액은 뷰와 동일 net 규약 `coalesce(net_amount, cash_paid_amount)`, 일자 묶음도 뷰와 동일
+>   **UTC 일자**(completed_at 앞 10자) — 일별 행과 합·소속이 항상 일치. 지급 없던 완료 주문은
+>   "지급 없음"(null≠0). snapshot_rider_fee 표시 금지(07 D1)는 계속 준수.
 
 > **16 운영편의성 개정 — 좌상 화면(L6~L9, 2026-08-02)**
 > - **관할 대시보드(`/`)**: ① [L6] '진행중 운행' 관제 섹션 — v_dealer_active_orders(재무 컬럼 제외

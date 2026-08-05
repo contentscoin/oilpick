@@ -3,14 +3,15 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { EarningsPage } from "./EarningsPage";
 
-const { mockUseSession, mockUseMonthlyPickupStats, mockUseMyPayout } = vi.hoisted(() => ({
+const { mockUseSession, mockUseMonthlyPickupStats, mockUseMyPayout, mockUseMyPayoutOrders } = vi.hoisted(() => ({
   mockUseSession: vi.fn(),
   mockUseMonthlyPickupStats: vi.fn(),
   mockUseMyPayout: vi.fn(),
+  mockUseMyPayoutOrders: vi.fn(),
 }));
 vi.mock("../hooks/useSession", () => ({ useSession: mockUseSession }));
 vi.mock("../hooks/useTodayStats", () => ({ useMonthlyPickupStats: mockUseMonthlyPickupStats }));
-vi.mock("../hooks/useMyPayout", () => ({ useMyPayout: mockUseMyPayout }));
+vi.mock("../hooks/useMyPayout", () => ({ useMyPayout: mockUseMyPayout, useMyPayoutOrders: mockUseMyPayoutOrders }));
 
 function renderPage() {
   return render(
@@ -30,6 +31,7 @@ beforeEach(() => {
     isLoading: false,
   });
   mockUseMyPayout.mockReturnValue({ data: { days: [], monthPointTotal: 0 } });
+  mockUseMyPayoutOrders.mockReturnValue({ data: undefined });
 });
 
 describe("EarningsPage — 플랫폼 정산 카드(16 L9 §6-2)", () => {
@@ -92,6 +94,53 @@ describe("EarningsPage — 일별 지급 내역(현금·포인트 병기)", () =
   it("실적이 없으면 일별 내역 카드 미노출", () => {
     renderPage();
     expect(screen.queryByTestId("daily-payout-card")).not.toBeInTheDocument();
+  });
+
+  it("날짜 행을 펼치면 건별 내역(주소·kg·지급액)이 보인다 — net 규약·수단별 표기", () => {
+    mockUseMyPayout.mockReturnValue({
+      data: {
+        days: [
+          { day: "2026-08-03", completedCount: 2, totalKg: 60, cashAmount: -3000, pointAmount: 28000, pointSpentAmount: 0 },
+        ],
+        monthPointTotal: 28000,
+      },
+    });
+    mockUseMyPayoutOrders.mockReturnValue({
+      data: {
+        "2026-08-03": [
+          // 상계 주문 — net 음수(점주에게 지급)가 부호 그대로 보인다.
+          { id: "a", completedAt: "2026-08-03T05:00:00+00:00", pickupAddress: "서울 중구 세종대로 110", finalKg: 40, payoutMethod: "CASH", amount: -3000 },
+          { id: "b", completedAt: "2026-08-03T07:00:00+00:00", pickupAddress: "서울 마포구 양화로 45", finalKg: 20, payoutMethod: "POINT", amount: 28000 },
+        ],
+      },
+    });
+    renderPage();
+    const orders = screen.getByTestId("daily-payout-orders-2026-08-03");
+    expect(orders).toHaveTextContent("서울 중구 세종대로 110");
+    expect(orders).toHaveTextContent("40.0kg");
+    expect(orders).toHaveTextContent("💵 -3,000원");
+    expect(orders).toHaveTextContent("서울 마포구 양화로 45");
+    expect(orders).toHaveTextContent("🪙 28,000P");
+    // 완료 시각(HH:MM 로컬) 표기 — TZ 무관하게 형식만 확인.
+    expect(orders).toHaveTextContent(/\d{2}:\d{2}/);
+  });
+
+  it("지급이 없던 완료 주문(레거시)은 '지급 없음'으로 표기한다", () => {
+    mockUseMyPayout.mockReturnValue({
+      data: {
+        days: [{ day: "2026-08-02", completedCount: 1, totalKg: 10, cashAmount: 0, pointAmount: 0, pointSpentAmount: 0 }],
+        monthPointTotal: 0,
+      },
+    });
+    mockUseMyPayoutOrders.mockReturnValue({
+      data: {
+        "2026-08-02": [
+          { id: "c", completedAt: "2026-08-02T07:00:00+00:00", pickupAddress: "매장 C", finalKg: null, payoutMethod: "CASH", amount: null },
+        ],
+      },
+    });
+    renderPage();
+    expect(screen.getByTestId("daily-payout-orders-2026-08-02")).toHaveTextContent("지급 없음");
   });
 });
 
