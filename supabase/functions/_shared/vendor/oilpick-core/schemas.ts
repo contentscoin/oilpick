@@ -121,6 +121,12 @@ var confirmRemindInputSchema = z.object({
 var confirmRemindOutputSchema = z.object({
   sent: z.boolean()
 });
+var payoutChangeRequestInputSchema = z.object({
+  orderId: uuidSchema
+});
+var payoutChangeRequestOutputSchema = z.object({
+  sent: z.boolean()
+});
 var riderLocationOutputSchema = z.object({
   updatedAt: z.string()
 });
@@ -400,6 +406,8 @@ export {
   orderKindSchema,
   orderTransitionInputSchema,
   orderTransitionOutputSchema,
+  payoutChangeRequestInputSchema,
+  payoutChangeRequestOutputSchema,
   payoutMethodSchema,
   pickupGeoSchema,
   pointAdjustInputSchema,

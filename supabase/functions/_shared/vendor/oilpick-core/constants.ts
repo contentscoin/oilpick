@@ -62,7 +62,9 @@ var NOTIFY_KIND = {
   /** [16 L8] 좌상 정산 청구 무효(좌상 대상) */
   CLAIM_VOIDED: "CLAIM_VOIDED",
   /** [16 L9] 추천 보상 오프라인 정산 완료 마킹 통지(라이더 대상, 09 H8) */
-  PAYOUT_REFERRAL_SETTLED: "PAYOUT_REFERRAL_SETTLED"
+  PAYOUT_REFERRAL_SETTLED: "PAYOUT_REFERRAL_SETTLED",
+  /** [N3, 08 P2 확장] 점주 [현금 지급으로 변경 요청](rider 대상, 주문당 2h 1회 — 상태 무접촉) */
+  PAYOUT_CHANGE_REQUEST: "PAYOUT_CHANGE_REQUEST"
 };
 export {
   ARRIVED_STALE_MS,

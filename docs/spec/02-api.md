@@ -191,6 +191,18 @@ ACCEPTED 이후 모든 전이 단일 엔드포인트.
   CONFIRM_MEASURE / admin FORCE_COMPLETE 전용).
 - 에러: NOT_FOUND(주문 없음) / FORBIDDEN(타인 주문) / INVALID_TRANSITION(확인 대기 상태 아님).
 
+## 22-2. `payout-change-request` (supplier) — 08 P2 확장(2026-08-05, CEO 지시)
+- 입력: `{ orderId }` (core `payoutChangeRequestInputSchema`). 출력: `{ sent: boolean }` —
+  `sent:false`는 rate limit 스킵(에러 아님, 클라 카피 분기). confirm-remind(§22)의 미러다.
+- 처리: 본인 주문(supplier_id=auth.uid()) + ARRIVED + measured_kg not null +
+  **payout_method='POINT'** 검증 후 배정 라이더에게 "현금 지급 변경 요청" 푸시
+  (kind=PAYOUT_CHANGE_REQUEST, link=/active). rate limit **주문당 2시간 1회**는
+  `sendPushDeduped`가 서버 강제.
+- **pickup_orders를 일절 update하지 않는다** — 실제 수단 변경은 여전히 라이더 재제출
+  (SUBMIT_MEASURE, final_kg 고정 전)로만 일어난다(08 P2 2자 확인 원칙 유지).
+- 에러: NOT_FOUND(주문 없음) / FORBIDDEN(타인 주문) / INVALID_TRANSITION(확인 대기 아님
+  ·배정 라이더 없음·POINT 제출 주문 아님).
+
 ## 23. `settlement-watch` (cron, 15분 권고) — 16 L8
 - 입력 없음(POST, admin/service_role 인증 — order-expire와 동일). 출력: `{ band80Alerts, thresholdAlerts }`.
 - 처리: `v_dealer_statement` 전 좌상 스캔(service_role — invoker 뷰지만 RLS 우회) →

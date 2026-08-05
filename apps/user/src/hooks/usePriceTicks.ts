@@ -92,6 +92,10 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * 07-pivot-plan.md F7-③: `effective_at >= now()-interval` 범위 쿼리.
  * limit 방식(usePriceTicks)은 "30개 ≠ 30일"이라 일별 차트에 부적합 — resampleDaily(§1-5)와 짝을 이룬다.
  * (기존 usePriceTicks/useLatestPriceTick은 소비처 전환(F8) 전까지 보존한다.)
+ *
+ * 창 **직전 마지막 tick 1건을 함께 조회해 맨 앞에 붙인다** — 00-domain "tick 없는 날 =
+ * 직전값 캐리포워드"의 시드다. 창 안 tick만 주면 resampleDaily가 창 선행일을 영원히 못
+ * 메워서, 7일처럼 짧은 창에서 tick이 드문 날엔 점이 2개 미만 → 차트가 아예 사라졌다(확정 결함).
  */
 export function usePriceTicksSince(days: PriceTicksSinceDays) {
   const queryClient = useQueryClient();
@@ -101,13 +105,22 @@ export function usePriceTicksSince(days: PriceTicksSinceDays) {
     queryKey,
     queryFn: async (): Promise<PriceTick[]> => {
       const sinceIso = new Date(Date.now() - days * DAY_MS).toISOString();
-      const { data, error } = await supabase
-        .from("price_ticks")
-        .select("id, price_per_kg, rider_fee, effective_at")
-        .gte("effective_at", sinceIso)
-        .order("effective_at", { ascending: true });
-      if (error) throw error;
-      return (data ?? []).map(mapRow);
+      const [inWindow, seed] = await Promise.all([
+        supabase
+          .from("price_ticks")
+          .select("id, price_per_kg, rider_fee, effective_at")
+          .gte("effective_at", sinceIso)
+          .order("effective_at", { ascending: true }),
+        supabase
+          .from("price_ticks")
+          .select("id, price_per_kg, rider_fee, effective_at")
+          .lt("effective_at", sinceIso)
+          .order("effective_at", { ascending: false })
+          .limit(1),
+      ]);
+      if (inWindow.error) throw inWindow.error;
+      if (seed.error) throw seed.error;
+      return [...(seed.data ?? []), ...(inWindow.data ?? [])].map(mapRow);
     },
   });
 

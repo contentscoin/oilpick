@@ -198,6 +198,19 @@ export const confirmRemindOutputSchema = z.object({
 });
 export type ConfirmRemindOutput = z.infer<typeof confirmRemindOutputSchema>;
 
+// ===== [N3, 08 P2 확장] payout-change-request (supplier) — 현금 지급 변경 요청 =====
+
+export const payoutChangeRequestInputSchema = z.object({
+  orderId: uuidSchema,
+});
+export type PayoutChangeRequestInput = z.infer<typeof payoutChangeRequestInputSchema>;
+
+/** sent=false는 rate limit(주문당 2시간 1회) 스킵 — 에러가 아니다(confirm-remind와 동일 규약). */
+export const payoutChangeRequestOutputSchema = z.object({
+  sent: z.boolean(),
+});
+export type PayoutChangeRequestOutput = z.infer<typeof payoutChangeRequestOutputSchema>;
+
 export const riderLocationOutputSchema = z.object({
   updatedAt: z.string(),
 });
