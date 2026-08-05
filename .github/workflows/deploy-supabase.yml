@@ -1,0 +1,47 @@
+# 폐유(payou) 프로덕션 Supabase 배포 — DB 마이그레이션 + Edge Functions
+#
+# 수동 실행 전용(workflow_dispatch). 실행 전 저장소 Actions 시크릿 필요:
+#   - SUPABASE_ACCESS_TOKEN (필수): Supabase Account → Access Tokens에서 발급
+#   - SUPABASE_DB_PASSWORD  (선택): 링크/마이그레이션이 비밀번호를 요구할 때만
+# 배포 절차의 단일 진실은 DEPLOY.md — 이 워크플로는 그 1장(링크→db push→functions deploy)을
+# CI 러너에서 대신 실행한다. verify_jwt 등 함수별 설정은 supabase/config.toml을 따른다.
+name: Deploy Supabase
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: '배포 대상'
+        type: choice
+        options:
+          - all
+          - db
+          - functions
+        default: all
+
+concurrency: deploy-supabase
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      PROJECT_REF: dbvgxuevhmyoprafarnh
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: 프로젝트 링크
+        run: supabase link --project-ref "$PROJECT_REF"
+
+      - name: DB 마이그레이션 적용 (supabase db push)
+        if: ${{ inputs.target == 'all' || inputs.target == 'db' }}
+        run: supabase db push
+
+      - name: Edge Functions 배포 (전체)
+        if: ${{ inputs.target == 'all' || inputs.target == 'functions' }}
+        run: supabase functions deploy --project-ref "$PROJECT_REF"
