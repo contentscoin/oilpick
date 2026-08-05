@@ -67,6 +67,7 @@ spacing: 4px 그리드. 터치 타깃 최소 48px. radius: 카드 16px, 버튼 1
   `PriceStatsRow`(기간 최고/최저/평균/등락률) 신설. `PayoutMethodChip`(현금/포인트 뱃지 — 주문 카드/
   상세/드로어 공용) 신설. `CallCard` 쿠폰 칩 제거(예상 매입 지급액 유지). `PointBalanceCard`/`LedgerList`
   point 변형 현역 복권(user 지갑).
+- **[O3 2026-08-05, CEO 지시]** `PhotoUploader` 사진 첨부 **기본 압축** — `lib/compressImage`(순수 헬퍼): canvas 리사이즈 최장변 1600px 상한(업스케일 금지) + JPEG 품질 0.8 재인코딩, EXIF 회전은 `createImageBitmap(imageOrientation:"from-image")` 지원 시 반영. 압축 실패/canvas 불가 환경은 **원본 업로드 폴백**(업로드 비차단). 압축본이 `PhotoAsset.file`에 실려 사용처(user/rider)는 API 무변경 자동 적용 — 압축 로직은 packages/ui 한 곳만(규칙 7, 앱별 중복 금지).
 
 ## 라우팅 & 화면 스펙
 
@@ -95,8 +96,20 @@ spacing: 4px 그리드. 터치 타깃 최소 48px. radius: 카드 16px, 버튼 1
 > - **U11 지갑(`/wallet`)** [G5-①]: **포인트 지갑 부활** — 잔액 히어로(v_point_balance available/held) +
 >   [출금 신청] + 포인트 내역(LedgerList point 변형: EARN/WITHDRAW_*/ADJUST) + 수령 이력(주문별,
 >   PayoutMethodChip 현금/포인트 구분). 탭바 "수령액"→**"지갑"** 개명.
+>   **지갑 개선(2026-08-05)**: ① **출금 진행 섹션**(잔액 히어로 아래) — withdrawals 본인 행 최근
+>   20건(useWithdrawals, RLS 본인 read). 행 = 신청일 · 금액 · 상태 뱃지(REQUESTED "확정 대기" /
+>   APPROVED "지급 준비중" / PAID "지급 완료" / REJECTED "반려 — 포인트 복구됨"). 진행중
+>   (REQUESTED/APPROVED)은 카드 톤 강조, 완결은 회색 톤. 이력 0건이면 섹션 미노출, 진행중이 있으면
+>   헤더에 "진행중 N건 · 합계 X P" 병기. 승인/지급 전이는 원장 무기록(08 P4)이라 point_ledger
+>   Realtime이 못 잡는다 — 60초 refetchInterval + 포커스/마운트 재조회(staleTime 0)로 갱신.
+>   ② **스탯 교정** — held 스탯("지급 확정 대기" 오표기: held는 레거시 HOLD 전용, 00-domain.md)을
+>   **"출금 진행중"(REQUESTED+APPROVED 합)**으로 교체. held>0(레거시 잔존)일 때만 "보류(레거시)"
+>   보조 스탯 + "지급 예정 금액 아님" 카피 노출(히어로 held pill 라벨도 "보류(레거시)"로 교정).
+>   ③ **포인트 내역 [더 보기]** — useLedger limit 파라미터화(기본 50, 캐시 키에 limit 포함,
+>   50씩 증가·반환 행수<limit이면 숨김)로 잔액(전체 집계)과 내역 대사 가능.
 > - **U12 출금(`/wallet/withdraw`)** [G5-②]: 부활 — 계좌 등록/표시(useBankAccount) + 금액 입력(최소
 >   10,000P·잔액 검증) → withdraw-request → 성공 시트. 반려 시 WITHDRAW_CANCEL 복구가 내역에 표시.
+>   신청 후 승인→지급 상태 추적은 U11 "출금 진행" 섹션(위 ①)이 담당한다.
 > - **U7 주문상세(`/orders/:id`)** [G5-③]: 계량 제출 후 지급수단 표시(PayoutMethodChip). CONFIRM 카피
 >   분기 — CASH "무게 OO.Okg 확인 · 현금 ₩N 받았어요" / POINT "무게 OO.Okg 확인 · 포인트 N P 적립받기".
 >   COMPLETED 히어로 수단별(현금 수령/포인트 적립+지갑 링크).
@@ -113,6 +126,18 @@ spacing: 4px 그리드. 터치 타깃 최소 48px. radius: 카드 16px, 버튼 1
 > - **가입(`/auth`)** [H4]: supplier_profiles insert 성공 직후 저장된 코드로 `referral-attach` 호출(best-effort, 비차단).
 > - **U11 지갑(`/wallet`)** [H4]: LedgerList에 `REFERRAL`("추천 보너스") 라벨 추가 — 추천 보너스 적립이 내역에 표시.
 
+> **N2 희망시간 개편 [개정 2026-08-05, CEO 지시]**
+> - **U5 요청(`/request`)**: step2 희망시간 **퀵칩 4종(지금/오늘 오후 14:00/내일 오전 09:00/직접) 폐기**
+>   → `datetime-local` 상시 노출(라벨 "희망 날짜·시간", 기본값 = 현재 시각 15분 단위 올림) +
+>   [지금 바로] 퀵 버튼 1개(입력값을 현재 시각으로 세팅). 저장 포맷은 기존과 동일 `'YYYY-MM-DD HH:mm'`
+>   (datetime-local의 T→공백) — **"지금" 리터럴은 신규 저장에서 폐기**(레거시 표시 전용). 검증: 필수 +
+>   과거(현재−30분 이전) 거부(step next·제출 게이트 양쪽). DB 스키마(`preferred_time text`)·order-create
+>   계약(payload `preferredTime` string) 무변경.
+> - **U6~U9 주문상세(`/orders/:id`)**: 상태 헤드라인 아래 "희망 시간" 행(`order-preferred-time`) 추가 —
+>   저장 문자열 그대로 표시(레거시 "지금"도 그대로, 가공 금지). 값 없으면 행 미렌더.
+
+> **O1 판매 이력 표기 [개정 2026-08-05, CEO 지시]** — apps/user 유저 노출 "수거 이력" 전량을 **"판매 이력"**으로 전환(유저 기준에서 수거가 아니라 판매가 맞다): **U10(`/orders`)** 페이지 타이틀·EmptyState("아직 판매 이력이 없어요"), **U3 홈** "최근 판매 이력" 섹션 헤더·빈 문구, 주문상세 이동 버튼("판매 이력 (보기)"). rider/admin의 "수거" 관점 표기, "수거 요청"·"수거지" 등 이력 외 용어, U11 지갑 "수령 이력"(지급 수령 맥락 — 별개 용어)은 불변.
+
 Realtime: `pickup_orders` 자기 행 UPDATE 구독으로 상태 자동 갱신 (폴링 금지).
 
 ### apps/rider (하단 탭: 콜/운행/정산/마이)
@@ -125,6 +150,7 @@ Realtime: `pickup_orders` 자기 행 UPDATE 구독으로 상태 자동 갱신 (�
 | `/earnings` | R7/R8 | PointBalanceCard(held 강조: "배송완료 시 확정") + 일/주 합계 + 출금 |
 | `/badge` | R9 인증 카드 | 풀스크린: 사진/이름/차량번호 + QR(JWT는 Phase 2, 지금은 rider_id QR) |
 | `/history`, `/my`, `/notifications` | R10–R12 | |
+| `/coupons`, `/coupons/purchase` | R13 쿠폰 [17 Q3] | 쿠폰 내역(LedgerList `variant="coupon"` + 잔액 히어로) / 충전(수량 프리셋 10·30·50+직접 입력, 코엠 결제창·demo·토스 분기, PENDING orphan 재시도). 탭바에 없음 — 콜 홈 쿠폰 잔액 카드로 진입 |
 
 > **07 피벗 개정 (상세는 07-pivot-plan.md 참조)**
 > - **R2 콜 홈 / R3 콜 상세** [F5]: 상단 쿠폰 잔액 카드(v_coupon_balance + Realtime)+[충전하기]. CallCard/상세 "수거비"→"쿠폰 N장 소진"(coupon_cost)+"예상 매입 지급액"(requested_kg×시세). 잔액 부족 수락 시 INSUFFICIENT_COUPON→[충전하러 가기] CTA. 쿠폰 내역 화면(LedgerList 재사용).
@@ -148,14 +174,29 @@ Realtime: `pickup_orders` 자기 행 UPDATE 구독으로 상태 자동 갱신 (�
 >   (복사/공유, referral-code Edge) + 실적(가입/활성화/전환율/누적 보상, v_referral_stats + referrals Realtime).
 >   라이더 보상은 오프라인 정산 근거로만 표기(08 P5 — 라이더 지갑 없음). **마이(`/my`)**에 진입점 추가.
 
-### apps/admin (사이드바 내비, shadcn/ui + TanStack Table)
+> **[17 Q3] 수거쿠폰 복권 개정 (2026-08-05 — 상세는 17-coupon-revival.md. 08 블록의 쿠폰 삭제
+> 항목(G6-①②)을 명시적으로 역전한다. 08의 지급 표기(예상 매입 지급액·수단 분리 실적)는 불변, 17 C7)**
+> - **R2 콜 홈**: 상단 쿠폰 잔액 카드 복원(v_coupon_balance + coupon_ledger Realtime,
+>   PointBalanceCard 일반화 — label="보유 수거쿠폰"·N장) + [충전하기]→`/coupons/purchase`,
+>   카드 탭→`/coupons`. CallCard에 "쿠폰 N장" 칩 병기(coupon_cost — useOpenCalls select 재개,
+>   전환기 무쿠폰 주문 null은 미렌더).
+> - **R3 콜 상세**: "소진 쿠폰" 행(coupon_cost) + 수락 게이트(잔액<coupon_cost 사전 fail-fast +
+>   409 INSUFFICIENT_COUPON 토스트, 양쪽 다 [충전하러 가기] CTA — 화면에 머문다). 무쿠폰 주문은
+>   게이트 없이 수락(레거시 규약).
+> - **R13 쿠폰 내역(`/coupons`)**: 잔액 히어로 + [충전하기] + LedgerList `variant="coupon"`
+>   (CHARGE 충전/CONSUME 콜 배정/REFUND 환급/ADJUST 조정, 장 단위·최근 50).
+> - **R13 쿠폰 충전(`/coupons/purchase`)**: 수량 프리셋 10/30/50+직접 입력(1~200), 예상 금액=
+>   최신 tick 단가×수량(단가 미설정 시 안내+결제 비활성). [결제하기]→coupon-purchase-intent →
+>   분기: 코엠(결제창 파라미터 hidden form POST — 확정은 서버 rUrl 콜백, 재진입 시 "결제 상태
+>   새로고침") / demo(즉시 confirm — 데모 배너 명시) / 토스 레거시(위젯→successUrl confirm 콜백,
+>   키 미발급 시 수동 충전 안내). PENDING orphan 목록 + 재시도(멱등). 성공 화면 잔액 NumberFlow.
 | 경로 | 뷰 | 구현 요점 |
 |---|---|---|
 | `/` | 대시보드 | 카카오맵 전체 지도(진행중 주문 핀 + 온라인 라이더 핀, Realtime) + 오늘 KPI 카드 4개(주문수/수거kg/발행P/활성 라이더) |
-| `/price` | 시세 관리 | 현재값 + price-set 폼 + tick 이력 테이블 + 미니 차트 |
+| `/price` | 시세 관리 | 현재값 + price-set 폼 + tick 이력 테이블 + 미니 차트. [17 Q4] 수거쿠폰 단가 섹션(coupon-price-set + 이력 + 미설정 안내) 복원 |
 | `/orders` | 주문 관리 | 테이블(상태 필터) → 상세 드로어(이벤트 타임라인, 사진). DISPUTED 건: RESOLVE_DISPUTE 폼(finalKg 입력). CANCEL 버튼 |
-| `/users` | 회원 관리 | supplier/rider 탭. rider PENDING 큐: 서류 이미지 뷰어 + 승인/반려(rider-verify) |
-| `/settlement` | 정산 | withdrawals 큐(승인/반려/이체완료 처리) + point_ledger 감사 테이블 + 일별 합계 |
+| `/users` | 회원 관리 | supplier/rider 탭. rider PENDING 큐: 서류 이미지 뷰어 + 승인/반려(rider-verify). [17 Q4] 라이더 카드 쿠폰 패널(잔액·조정·구매 환불) 복원 |
+| `/settlement` | 정산 | withdrawals 큐(승인/반려/이체완료 처리) + point_ledger 감사 테이블 + 일별 합계. [17 Q4] 쿠폰 판매 통계(v_coupon_sales_daily + CSV) 복원 |
 | `/depots` | 집하장 | CRUD + QR 인쇄 뷰(qr_secret을 QR 이미지로) |
 | `/dealers` | 좌상 관리 [13 I3] | 좌상 계정 생성(dealer-create) + 라이더 소속 배정(dealer-assign). admin 전용 |
 | `/notify` | 공지 | 전체/역할별 푸시 발송 폼 |
@@ -242,7 +283,18 @@ Realtime: `pickup_orders` 자기 행 UPDATE 구독으로 상태 자동 갱신 (�
 >   **UTC 일자**(completed_at 앞 10자) — 일별 행과 합·소속이 항상 일치. 지급 없던 완료 주문은
 >   "지급 없음"(null≠0). snapshot_rider_fee 표시 금지(07 D1)는 계속 준수.
 
-> **16 운영편의성 개정 — 좌상 화면(L6~L9, 2026-08-02)**
+> **N5 요청 정보 라이더 노출·계량 프리필 [개정 2026-08-05, CEO 지시]**
+> - **R2 콜 홈(`/`)**: useOpenCalls select에 `preferred_time` 추가 → CallCard 옵셔널 prop
+>   `preferredTime`으로 보조행(거리·수량) **아래 줄**에 "🕐 {값}"(`call-card-preferred`) 표시.
+>   값 없으면 미렌더(flexWrap·minWidth:0 준수).
+> - **R3 콜 상세(`/calls/:id`)**: 주소 카드에 "희망 시간" 행(`call-detail-preferred`) — 저장 문자열
+>   그대로(레거시 "지금" 포함), 값 없으면 미렌더.
+> - **R4 운행(`/active`)**: ① useActiveRun select에 `preferred_time` 추가 → 헤드라인 주소 아래
+>   "🕐 희망 {값}" 한 줄(`active-run-preferred-time`, 모든 run 상태 공통, 값 없으면 미렌더).
+>   ② **계량 프리필** — ArrivedPanel `requestedKg` prop 신설, kg 입력 초기값 = 요청 kg(0=신유 단독은
+>   빈 값 유지) + 캡션 "요청 기준 예상값이에요 — 현장 계량으로 확정돼요"(값이 프리필 그대로일 때만).
+>   드래프트 복원(16 L4)·재제출 프리필(measuredKg)이 요청 기준 프리필보다 **우선**하고,
+>   key={run.id} 리마운트 규약(16 L10 리뷰 ①)은 그대로다. 서버·상태머신·원장 변경 0.
 > - **관할 대시보드(`/`)**: ① [L6] '진행중 운행' 관제 섹션 — v_dealer_active_orders(재무 컬럼 제외
 >   invoker 뷰, 14 §2-5 예약 실행) + 상태 pill + ARRIVED 24h '확인 지연' 배지 + 라이더 tel: CTA
 >   (현 소속만). 조회 전용 — 상태 액션 없음(13 D3). ② [L9] 라이더 액션 4-decision 완성 —
@@ -252,6 +304,23 @@ Realtime: `pickup_orders` 자기 행 UPDATE 구독으로 상태 자동 갱신 (�
 >   + 청구 이력 행별 [CSV](admin과 공용 `lib/settlementCsv` — 뷰 실컬럼 그대로, gross/net 구분).
 > - **알림 [L8]**: settlement-watch(15분 cron)의 크레딧 80%·임계 경보 + dealer-claim 청구
 >   라이프사이클 통지를 기존 NotificationsBell로 수신(신설 표면 없음).
+
+> **[17 Q4] 수거쿠폰 복권 — admin 화면 개정 (2026-08-05, 상세는 17-coupon-revival.md. 08 P1 역전 —
+> 08 G7-④/⑤의 "쿠폰 UI 제거"는 본 블록으로 되돌린다. 지급 모델(08)·정산 체인(14)은 불변, 17 C7)**
+> - **`/price`**: 수거쿠폰 단가 섹션 복원(07 F10-① 원형) — 현재 단가 카드(coupon_price_ticks 최신)
+>   + coupon-price-set 폼 + tick 이력 + 정정 배너(`tick-correction-notice-coupon`). **미설정 안내**
+>   (`coupon-price-unset-notice`) — 첫 tick 등록 전엔 라이더 구매가 409 COUPON_PRICE_NOT_SET로
+>   막힌다(DEPLOY 필수 초기 데이터). 구매 시점 단가 스냅샷 원칙(17 C2) 카피 병기.
+> - **`/users` 라이더탭**: RiderCouponPanel 복원(카드 footer) — 쿠폰 잔액(v_coupon_balance —
+>   잔액은 뷰로만, 17 C4) + 충전/조정 이력(coupon_ledger 최근 50건, entry_type 라벨) +
+>   [쿠폰 조정](coupon-adjust — qty ±·사유 필수, 음수 초과는 INSUFFICIENT_COUPON 409 표면화) +
+>   [구매 환불](coupon-refund — **PAID 구매 목록에서 선택**·수량(비우면 전액)·사유 필수, 건당 1회).
+>   **조정·환불 모두 실행 전 확인 다이얼로그 필수**(16 L9 파괴적 액션 관례 — append-only 원장).
+>   원장 insert는 Edge Function만 경유(절대 규칙 1).
+> - **`/settlement`**: '쿠폰 판매' 섹션 추가(07 F10-③ⓐ 원형. 07의 결제 목록·환불 UI는 /users
+>   라이더 패널로 재배치) — v_coupon_sales_daily 일별(충전 장수/판매액/귀책 환급/PG 환불/수동 조정)
+>   + 합계 카드 4종 + CSV(BOM, `lib/csv` 재사용, `lib/couponSales`가 뷰 집계의 TS 미러·합계 담당).
+>   출금 큐·수거 추이·지급 실적·포인트 감사 등 08 G7 구성은 불변(쿠폰 판매 = 플랫폼 수익, 17 §0).
 - 플러그인: @capacitor/push-notifications, geolocation, camera, app, splash-screen,
   @capacitor-community/barcode-scanner (rider만)
 - 딥링크: `oilpick-user://orders/:id`, `oilpick-user://ref/:code`(09 H3 추천 랜딩), `oilpick-rider://calls/:id` — 푸시 link 필드와 매핑
@@ -265,6 +334,36 @@ Realtime: `pickup_orders` 자기 행 UPDATE 구독으로 상태 자동 갱신 (�
 - 에러 표시: errorCodes → 한글 메시지 맵 (packages/core). 네트워크 오류 공통 토스트 + 재시도.
 - 로딩: 스켈레톤 (스피너 금지, 시세/잔액 카드는 스켈레톤 형태 유지).
 - 날짜: date-fns + ko locale.
+
+## 레이아웃 강건성 — 글자 확대·브라우저 폭 대응 (M-태스크, 2026-08-05 CEO 지시)
+
+배경: 폰 OS의 글자 크기 확대(Android WebView textZoom·브라우저 글꼴 설정)는 **px로 지정한
+텍스트도 1.3~2배로 키운다.** 고정 크기 박스·무단 nowrap 행은 이때 잘리고 겹치고 페이지
+가로 스크롤을 만든다. 아래 규칙은 3앱 + packages/ui의 **신규·수정 코드 전부에 적용**하며,
+리뷰·QA는 이 절을 기준으로 본다. (결정: px 단위는 유지 — WebView textZoom이 px도 확대하므로
+rem 전환은 불필요, 스코프 밖.)
+
+원칙: **텍스트는 흐르고, 컨테이너는 내용에 맞춰 늘어나며, 페이지는 세로로만 스크롤한다.**
+
+1. **페이지 가로 스크롤 금지.** 어떤 글자 배율·폭(최소 320px)에서도 body가 가로로 스크롤되면
+   결함이다. 넓을 수밖에 없는 콘텐츠(테이블·차트)는 자체 `overflow-x:auto` 컨테이너에 가둔다.
+2. **텍스트 컨테이너에 고정 height 금지 — minHeight만.** 버튼·칩·행·카드 높이는
+   padding+minHeight로 확보한다. 고정 height는 비텍스트 요소(스켈레톤·이미지·지도)만 허용.
+3. **텍스트 컨테이너에 고정 width 금지.** flex/grid 비율 + maxWidth로. 글자가 들어가는
+   원형/사각 뱃지도 width 대신 minWidth+padding(+aspectRatio 필요 시).
+4. **nowrap은 '한 줄 요약' 텍스트에만, 반드시 3종 세트로**: `whiteSpace:"nowrap"` +
+   `overflow:"hidden"` + `textOverflow:"ellipsis"`, 그리고 flex 자식이면 그 자식(혹은 경로상
+   부모)에 `minWidth:0`. 하나라도 빠지면 행이 컨테이너를 밀어내 페이지가 넘친다.
+   금액·수치·날짜는 nowrap 대신 줄바꿈 허용이 기본이다.
+5. **정보 행(라벨+값, space-between)은 `flexWrap:"wrap"` 기본.** 확대 시 자연스럽게 두 줄로
+   떨어지는 것이 정상 동작이다. 한 줄 유지가 꼭 필요한 쪽만 4번 규칙으로 자른다.
+6. **absolute 오버레이 텍스트는 겹침 안전장치 필수** — 자체 배경+radius를 갖고, 아래 콘텐츠에
+   여백(paddingTop 등)으로 자리를 비워준다(지도 위 칩, DynamicIsland 등).
+7. **고정 px grid 컬럼·`100vw`·음수 margin으로 폭 확장 금지** — `fr`/`minmax()`/`auto`와
+   부모 폭 100% 안에서 해결한다.
+8. **QA 절차**: Firefox '텍스트만 확대' 150~200%(px 텍스트도 확대되는 유일한 데스크톱 프록시)
+   또는 실기기(안드로이드 글자 크기 최대)에서 320px·480px 폭으로 주요 화면을 훑는다 —
+   qa-checklist에 항목 고정.
 
 ## 14 신유·정산 화면 (J-태스크, 14-fresh-oil-settlement.md 단일 진실)
 

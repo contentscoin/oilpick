@@ -51,7 +51,11 @@ export function useMyRiders() {
   });
 }
 
-/** 내 소속 라이더 실적 통계(v_dealer_rider_stats RLS = 자기 소속). */
+/**
+ * 내 소속 라이더 실적 통계(v_dealer_rider_stats RLS = 자기 소속).
+ * [17 Q5] coupon_used_qty(완료 주문 coupon_cost 합) 포함 — 뷰 append 컬럼이라 select("*") +
+ * dealerRiderStatsSchema 파싱으로 그대로 통과한다. 조회 전용 — 정산 무관(17 C5).
+ */
 export function useMyRiderStats() {
   return useQuery({
     queryKey: scopeKeys.stats(),

@@ -350,4 +350,70 @@ describe("OrderDetailPage", () => {
     renderPage();
     expect(screen.getByText("주문을 찾을 수 없어요.")).toBeInTheDocument();
   });
+
+  // [N2] 희망 시간 행 — 저장 문자열 그대로(신규 포맷·레거시 "지금" 모두), 값 없으면 미렌더.
+  it("[N2] renders the 희망 시간 row with the stored string as-is", () => {
+    mockUseOrder.mockReturnValue({
+      data: { ...BASE_ORDER, status: "REQUESTED", preferredTime: "2026-08-06 09:30" },
+      isLoading: false,
+    });
+    renderPage();
+    const row = screen.getByTestId("order-preferred-time");
+    expect(row).toHaveTextContent("희망 시간");
+    expect(row).toHaveTextContent("2026-08-06 09:30");
+  });
+
+  it("[N2] renders the legacy '지금' literal as-is", () => {
+    mockUseOrder.mockReturnValue({
+      data: { ...BASE_ORDER, status: "COMPLETED", riderId: "rider-1", finalKg: 14.5, cashPaidAmount: 10150, completedAt: "2026-07-02T00:00:00Z", preferredTime: "지금" },
+      isLoading: false,
+    });
+    renderPage();
+    expect(screen.getByTestId("order-preferred-time")).toHaveTextContent("지금");
+  });
+
+  it("[N2] does not render the 희망 시간 row when preferredTime is null", () => {
+    mockUseOrder.mockReturnValue({
+      data: { ...BASE_ORDER, status: "REQUESTED", preferredTime: null },
+      isLoading: false,
+    });
+    renderPage();
+    expect(screen.queryByTestId("order-preferred-time")).not.toBeInTheDocument();
+  });
+});
+
+describe("OrderDetailPage — 현금 지급 변경 요청(N3, 08 P2 확장)", () => {
+  it("POINT 확인 패널에서 버튼 클릭 → payout-change-request 호출 + 발송 토스트", async () => {
+    mockUseOrder.mockReturnValue({
+      data: { ...BASE_ORDER, status: "ARRIVED", riderId: "rider-1", measuredKg: 14.5, payoutMethod: "POINT", photoUrls: [] },
+      isLoading: false,
+    });
+    mockInvokeEdgeFunction.mockResolvedValue({ ok: true, data: { sent: true } });
+    renderPage();
+    fireEvent.click(screen.getByTestId("payout-change-request-button"));
+    await waitFor(() =>
+      expect(mockInvokeEdgeFunction).toHaveBeenCalledWith("payout-change-request", { orderId: "order-1" }),
+    );
+    expect(await screen.findByTestId("toast")).toHaveTextContent("현금 지급 변경을 요청했어요");
+  });
+
+  it("sent:false(서버 rate limit)면 '이미 요청' 안내 — 에러 아님", async () => {
+    mockUseOrder.mockReturnValue({
+      data: { ...BASE_ORDER, status: "ARRIVED", riderId: "rider-1", measuredKg: 14.5, payoutMethod: "POINT", photoUrls: [] },
+      isLoading: false,
+    });
+    mockInvokeEdgeFunction.mockResolvedValue({ ok: true, data: { sent: false } });
+    renderPage();
+    fireEvent.click(screen.getByTestId("payout-change-request-button"));
+    expect(await screen.findByTestId("toast")).toHaveTextContent("2시간에 한 번");
+  });
+
+  it("CASH 확인 패널에는 변경 요청 버튼이 없다", () => {
+    mockUseOrder.mockReturnValue({
+      data: { ...BASE_ORDER, status: "ARRIVED", riderId: "rider-1", measuredKg: 14.5, photoUrls: [] },
+      isLoading: false,
+    });
+    renderPage();
+    expect(screen.queryByTestId("payout-change-request-button")).not.toBeInTheDocument();
+  });
 });

@@ -59,13 +59,12 @@ export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
 
 /**
  * CS 문의 카테고리 한글 라벨(07 F12). CASH_DISPUTE = 지급(현금/포인트) 후 분쟁(상태머신 밖 수용처),
- * COUPON_PAYMENT = 레거시(쿠폰 모델 폐기, 08 P1) — DB enum 보존 원칙으로 값·라벨 유지, 신규 접수
- * 폼에서는 노출하지 않는다(과거 티켓 렌더용).
+ * COUPON_PAYMENT = [17 Q6] 쿠폰 복권으로 현역 복귀(08 P1 레거시 강등의 역전) — rider 신규 접수 폼에 재노출.
  */
 export const CS_CATEGORY_LABEL: Record<CsCategory, string> = {
   ORDER: "주문/수거",
   CASH_DISPUTE: "지급 분쟁",
-  COUPON_PAYMENT: "쿠폰 결제/환불(레거시)",
+  COUPON_PAYMENT: "쿠폰 결제/환불",
   ACCOUNT: "계정",
   ETC: "기타",
 };
@@ -137,6 +136,10 @@ export const NOTIFY_KIND = {
   CLAIM_VOIDED: "CLAIM_VOIDED",
   /** [16 L9] 추천 보상 오프라인 정산 완료 마킹 통지(라이더 대상, 09 H8) */
   PAYOUT_REFERRAL_SETTLED: "PAYOUT_REFERRAL_SETTLED",
+  /** [N3, 08 P2 확장] 점주 [현금 지급으로 변경 요청](rider 대상, 주문당 2h 1회 — 상태 무접촉) */
+  PAYOUT_CHANGE_REQUEST: "PAYOUT_CHANGE_REQUEST",
+  /** [17 Q2] 수거쿠폰 충전 완료(rider 대상 — coupon-purchase-confirm/코엠 return 콜백 공용) */
+  COUPON_CHARGED: "COUPON_CHARGED",
 } as const;
 
 export type NotifyKind = (typeof NOTIFY_KIND)[keyof typeof NOTIFY_KIND];

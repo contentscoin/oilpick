@@ -25,7 +25,7 @@ var ORDER_STATUS_LABEL = {
 var CS_CATEGORY_LABEL = {
   ORDER: "\uC8FC\uBB38/\uC218\uAC70",
   CASH_DISPUTE: "\uC9C0\uAE09 \uBD84\uC7C1",
-  COUPON_PAYMENT: "\uCFE0\uD3F0 \uACB0\uC81C/\uD658\uBD88(\uB808\uAC70\uC2DC)",
+  COUPON_PAYMENT: "\uCFE0\uD3F0 \uACB0\uC81C/\uD658\uBD88",
   ACCOUNT: "\uACC4\uC815",
   ETC: "\uAE30\uD0C0"
 };
@@ -62,7 +62,11 @@ var NOTIFY_KIND = {
   /** [16 L8] 좌상 정산 청구 무효(좌상 대상) */
   CLAIM_VOIDED: "CLAIM_VOIDED",
   /** [16 L9] 추천 보상 오프라인 정산 완료 마킹 통지(라이더 대상, 09 H8) */
-  PAYOUT_REFERRAL_SETTLED: "PAYOUT_REFERRAL_SETTLED"
+  PAYOUT_REFERRAL_SETTLED: "PAYOUT_REFERRAL_SETTLED",
+  /** [N3, 08 P2 확장] 점주 [현금 지급으로 변경 요청](rider 대상, 주문당 2h 1회 — 상태 무접촉) */
+  PAYOUT_CHANGE_REQUEST: "PAYOUT_CHANGE_REQUEST",
+  /** [17 Q2] 수거쿠폰 충전 완료(rider 대상 — coupon-purchase-confirm/코엠 return 콜백 공용) */
+  COUPON_CHARGED: "COUPON_CHARGED"
 };
 export {
   ARRIVED_STALE_MS,

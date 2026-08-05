@@ -8,6 +8,7 @@ const {
   mockUseSession,
   mockUseRiderProfile,
   mockUseOpenCalls,
+  mockUseCouponBalance,
   mockUseTodayStats,
   mockUseGeolocation,
   mockFrom,
@@ -15,6 +16,7 @@ const {
   mockUseSession: vi.fn(),
   mockUseRiderProfile: vi.fn(),
   mockUseOpenCalls: vi.fn(),
+  mockUseCouponBalance: vi.fn(),
   mockUseTodayStats: vi.fn(),
   mockUseGeolocation: vi.fn(),
   mockFrom: vi.fn(),
@@ -22,6 +24,7 @@ const {
 vi.mock("../hooks/useSession", () => ({ useSession: mockUseSession }));
 vi.mock("../hooks/useRiderProfile", () => ({ useRiderProfile: mockUseRiderProfile }));
 vi.mock("../hooks/useOpenCalls", () => ({ useOpenCalls: mockUseOpenCalls }));
+vi.mock("../hooks/useCoupons", () => ({ useCouponBalance: mockUseCouponBalance }));
 vi.mock("../hooks/useTodayStats", () => ({ useTodayStats: mockUseTodayStats }));
 vi.mock("../hooks/useGeolocation", () => ({ useGeolocation: mockUseGeolocation }));
 vi.mock("../lib/supabaseClient", () => ({ supabase: { from: mockFrom } }));
@@ -40,6 +43,8 @@ function renderHome() {
       <MemoryRouter initialEntries={["/"]}>
         <Routes>
           <Route path="/" element={<CallHomePage />} />
+          <Route path="/coupons" element={<div>쿠폰 내역 화면</div>} />
+          <Route path="/coupons/purchase" element={<div>충전 화면</div>} />
         </Routes>
       </MemoryRouter>
     </ToastProvider>,
@@ -51,17 +56,33 @@ beforeEach(() => {
   mockUseSession.mockReturnValue({ session: { user: { id: "rider-1" } }, loading: false });
   mockUseRiderProfile.mockReturnValue({ data: { isOnline: true, verifyStatus: "APPROVED" } });
   mockUseOpenCalls.mockReturnValue({ data: [], isLoading: false });
+  mockUseCouponBalance.mockReturnValue({ data: 5, isLoading: false });
   mockUseTodayStats.mockReturnValue({
     data: { completedCount: 2, collectedKg: 60, cashPaid: 96000, pointPaid: 21000 },
   });
   mockUseGeolocation.mockReturnValue(null);
 });
 
-describe("CallHomePage — 쿠폰 UI 제거(08 G6-①)", () => {
-  it("쿠폰 잔액 히어로·충전 진입점이 없다", () => {
+describe("CallHomePage — 쿠폰 잔액 카드(17 Q3, 07 F5-① 복권)", () => {
+  it("보유 수거쿠폰 N장 히어로 + [충전하기] → 충전 화면", () => {
     renderHome();
-    expect(screen.queryByText("보유 수거쿠폰")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("coupon-charge-button")).not.toBeInTheDocument();
+    const card = screen.getByTestId("point-balance-card");
+    expect(card).toHaveTextContent("보유 수거쿠폰");
+    expect(card).toHaveTextContent("5장");
+    fireEvent.click(screen.getByTestId("coupon-charge-button"));
+    expect(screen.getByText("충전 화면")).toBeInTheDocument();
+  });
+
+  it("카드 탭 → 쿠폰 내역 화면", () => {
+    renderHome();
+    fireEvent.click(screen.getByTestId("point-balance-card"));
+    expect(screen.getByText("쿠폰 내역 화면")).toBeInTheDocument();
+  });
+
+  it("잔액 로딩 중에는 0장 플래시 대신 스켈레톤", () => {
+    mockUseCouponBalance.mockReturnValue({ data: undefined, isLoading: true });
+    renderHome();
+    expect(screen.getByTestId("coupon-balance-skeleton")).toBeInTheDocument();
     expect(screen.queryByTestId("point-balance-card")).not.toBeInTheDocument();
   });
 });
@@ -170,5 +191,37 @@ describe("CallHomePage — 콜 정렬 토글(16 L3 §3-4)", () => {
     mockUseOpenCalls.mockReturnValue({ data: CALLS, isLoading: false });
     renderHome();
     expect(renderedCallIds()).toEqual(["big", "small"]);
+  });
+});
+
+describe("CallHomePage — 희망 시간 노출(N5)", () => {
+  it("preferred_time이 있는 콜은 카드에 '🕐 {값}' 줄이 붙고, 없는 콜은 붙지 않는다", () => {
+    mockUseOpenCalls.mockReturnValue({
+      data: [
+        { id: "with", requestedKg: 30, pickupAddress: "서울 강서구 화곡로 1", pickupLat: null, pickupLng: null, snapshotPricePerKg: 1600, snapshotRiderFee: null, preferredTime: "2026-08-06 09:30", createdAt: "2026-08-05T02:00:00Z" },
+        { id: "without", requestedKg: 15, pickupAddress: "서울 성북구 장월로 120", pickupLat: null, pickupLng: null, snapshotPricePerKg: 1600, snapshotRiderFee: null, preferredTime: null, createdAt: "2026-08-05T01:00:00Z" },
+      ],
+      isLoading: false,
+    });
+    renderHome();
+    const lines = screen.getAllByTestId("call-card-preferred");
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toHaveTextContent("🕐 2026-08-06 09:30");
+  });
+});
+
+describe("CallHomePage — 콜 카드 쿠폰 칩(17 Q3)", () => {
+  it("coupon_cost가 있는 콜은 '쿠폰 N장' 칩이 붙고, 전환기 무쿠폰 콜(null)은 붙지 않는다", () => {
+    mockUseOpenCalls.mockReturnValue({
+      data: [
+        { id: "with", requestedKg: 45, pickupAddress: "서울 강서구 화곡로 1", pickupLat: null, pickupLng: null, snapshotPricePerKg: 1600, snapshotRiderFee: null, couponCost: 3, preferredTime: null, createdAt: "2026-08-05T02:00:00Z" },
+        { id: "without", requestedKg: 15, pickupAddress: "서울 성북구 장월로 120", pickupLat: null, pickupLng: null, snapshotPricePerKg: 1600, snapshotRiderFee: null, couponCost: null, preferredTime: null, createdAt: "2026-08-05T01:00:00Z" },
+      ],
+      isLoading: false,
+    });
+    renderHome();
+    const chips = screen.getAllByTestId("call-card-coupon");
+    expect(chips).toHaveLength(1);
+    expect(chips[0]).toHaveTextContent("쿠폰 3장");
   });
 });

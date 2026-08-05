@@ -96,6 +96,8 @@ export function PointBalanceCard({
           fontWeight: 800,
           letterSpacing: "-0.02em",
           color: "#fff",
+          // [03 레이아웃 강건성] 금액은 ellipsis 금지 — 확대로 카드 폭을 넘치면 줄바꿈으로 흐른다.
+          overflowWrap: "anywhere",
         }}
       >
         {formatValue(available)}
@@ -148,7 +150,9 @@ export function PointHeroAction({
       disabled={disabled}
       {...rest}
       style={{
-        height: 48,
+        // [03 레이아웃 강건성] 고정 height 금지 — minHeight+padding으로 글자 확대 시 잘림 방지.
+        minHeight: 48,
+        padding: "8px 16px",
         width: "100%",
         borderRadius: radius.button,
         border: "none",

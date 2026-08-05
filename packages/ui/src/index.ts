@@ -4,6 +4,8 @@
 export * from "./tokens";
 export * from "./cx";
 export * from "./hooks/usePrefersReducedMotion";
+// [O3] 사진 업로드 전 기본 압축 헬퍼(PhotoUploader 내부 적용) — 앱별 중복 구현 금지(규칙 7).
+export * from "./lib/compressImage";
 
 export * from "./components/PriceCard";
 export * from "./components/PriceChart";

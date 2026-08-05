@@ -2,9 +2,10 @@ import { formatKg, formatKrw } from "@oilpick/core";
 import { colors, elevation, gray, radius, surface } from "../tokens";
 
 /**
- * 03-frontend.md "packages/ui 컴포넌트" — CallCard(거리/수량/매입액).
- * [08 G6-②] "쿠폰 N장 소진" 칩 제거(쿠폰 모델 폐기) — 우측은 "예상 매입 지급액 ₩M"
- * (requested_kg×시세, 라이더가 점주에게 현금 또는 포인트로 지급할 금액)만 남는다.
+ * 03-frontend.md "packages/ui 컴포넌트" — CallCard(거리/수량/쿠폰·매입액).
+ * [17 Q3] "쿠폰 N장" 칩 복권(07 F5 원형, 08 G6-②의 역연산) — 우측 "예상 매입 지급액 ₩M"
+ * (requested_kg×시세, 라이더가 점주에게 현금 또는 포인트로 지급할 금액)은 불변(17 C7),
+ * 그 아래 소진 쿠폰 칩만 병기한다. couponCost 미지정/null(전환기 무쿠폰 주문)이면 미렌더.
  *
  * [15] beUI 목업 "01 콜 홈 — Toast Stack" 행 구조로 재구성한다.
  * `[36px 원형 아이콘] [수거지 / 거리·수량] [금액 pill]` 3열 그리드.
@@ -22,8 +23,15 @@ export interface CallCardProps {
   estimatedKg: number;
   /** 예상 매입 지급액(원) = requested_kg × snapshot_price_per_kg. 현장에서 현금/포인트로 지급. */
   estimatedCash: number;
+  /** [17 Q3] 소진 쿠폰 장수(coupon_cost). null/미지정=전환기 무쿠폰 주문 → 칩 생략(17 C1). */
+  couponCost?: number | null;
   /** 수거 주소(선택). 지정 시 제목 줄에 한 줄 truncate로 표시. */
   address?: string;
+  /**
+   * [N5] 점주 희망 시간(선택) — 'YYYY-MM-DD HH:mm' 또는 레거시 '지금'. 저장 문자열 그대로
+   * 보조행 아래 줄에 "🕐 {값}"으로 표시. 없으면 미렌더.
+   */
+  preferredTime?: string | null;
   onClick?: () => void;
   className?: string;
 }
@@ -48,7 +56,9 @@ export function CallCard({
   distanceKm,
   estimatedKg,
   estimatedCash,
+  couponCost,
   address,
+  preferredTime,
   onClick,
   className,
 }: CallCardProps) {
@@ -67,7 +77,9 @@ export function CallCard({
       onClick={onClick}
       style={{
         display: "grid",
-        gridTemplateColumns: "36px 1fr auto",
+        // [03 레이아웃 강건성] 금액 pill을 고정 3열(auto)에서 빼고 본문 flexWrap 행으로 옮겼다 —
+        // 확대 시 pill이 주소 칸을 압착하는 대신 다음 줄로 내려간다(금액 ellipsis 금지).
+        gridTemplateColumns: "36px 1fr",
         alignItems: "center",
         gap: 12,
         width: "100%",
@@ -97,53 +109,99 @@ export function CallCard({
         <CallIcon />
       </span>
 
-      {/* 중앙: 수거지(제목) + 거리·수량(보조) */}
-      <span style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 3 }}>
-        <span
-          style={{
-            fontSize: 16,
-            fontWeight: 700,
-            color: gray[900],
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {title}
+      {/* 본문: [수거지/거리·수량] + [금액 pill] flexWrap 행. 1x에서는 한 줄(제목 좌·pill 우),
+          공간이 모자라면 pill이 다음 줄로 내려가 오른쪽 정렬(marginLeft:auto)을 유지한다. */}
+      <span
+        style={{
+          minWidth: 0,
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "center",
+          columnGap: 12,
+          rowGap: 6,
+        }}
+      >
+        {/* 수거지(제목) + 거리·수량(보조). basis 132px — 이보다 좁아지느니 pill을 내려보낸다. */}
+        <span style={{ flex: "1 1 132px", minWidth: 0, display: "flex", flexDirection: "column", gap: 3 }}>
+          <span
+            style={{
+              fontSize: 16,
+              fontWeight: 700,
+              color: gray[900],
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {title}
+          </span>
+          <span
+            className="oilpick-tabular-nums"
+            style={{ fontSize: 13, fontWeight: 500, color: colors.status.wait }}
+          >
+            {subtitle}
+          </span>
+          {/* [N5] 희망 시간 — 거리·수량 옆이 아니라 그 아래 줄(보조행 압착 방지). 값 없으면 미렌더.
+              문자열은 저장값 그대로(레거시 "지금" 포함) — 좁은 폭에선 임의 지점 개행 허용. */}
+          {preferredTime && (
+            <span
+              data-testid="call-card-preferred"
+              className="oilpick-tabular-nums"
+              style={{ fontSize: 12, fontWeight: 500, color: colors.status.wait, minWidth: 0, overflowWrap: "anywhere" }}
+            >
+              🕐 {preferredTime}
+            </span>
+          )}
         </span>
-        <span
-          className="oilpick-tabular-nums"
-          style={{ fontSize: 13, fontWeight: 500, color: colors.status.wait }}
-        >
-          {subtitle}
-        </span>
-      </span>
 
-      {/* 우: 예상 매입 지급액 — 목업 pill.lime(밝은 배경 위 lime.soft 배경 + primary.dark 텍스트,
-          tokens.ts colors.lime 주석의 허용 조합). 라벨은 남긴다: 이 금액은 라이더가 "받는" 돈이
-          아니라 점주에게 "지급할" 돈이라 숫자만 두면 뜻이 뒤집힌다. */}
-      <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
-        {/* 라벨은 "지급액"으로 줄인다 — "예상 매입 지급액"은 폭을 110px 넘게 먹어 정작 중요한
-            수거지 주소가 두세 글자만 남고 잘렸다. 전체 문구는 접근성 이름으로 남긴다. */}
-        <span style={{ fontSize: 11, fontWeight: 600, color: colors.status.wait }}>지급액</span>
-        <span
-          className="oilpick-tabular-nums"
-          data-testid="call-card-cash"
-          aria-label={`예상 매입 지급액 ${formatKrw(estimatedCash)}`}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            minHeight: 26,
-            padding: "0 10px",
-            borderRadius: radius.pill,
-            backgroundColor: colors.lime.soft,
-            color: colors.primary.dark,
-            fontSize: 15,
-            fontWeight: 800,
-            whiteSpace: "nowrap",
-          }}
-        >
-          {formatKrw(estimatedCash)}
+        {/* 예상 매입 지급액 — 목업 pill.lime(밝은 배경 위 lime.soft 배경 + primary.dark 텍스트,
+            tokens.ts colors.lime 주석의 허용 조합). 라벨은 남긴다: 이 금액은 라이더가 "받는" 돈이
+            아니라 점주에게 "지급할" 돈이라 숫자만 두면 뜻이 뒤집힌다. */}
+        <span style={{ marginLeft: "auto", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+          {/* 라벨은 "지급액"으로 줄인다 — "예상 매입 지급액"은 폭을 110px 넘게 먹어 정작 중요한
+              수거지 주소가 두세 글자만 남고 잘렸다. 전체 문구는 접근성 이름으로 남긴다. */}
+          <span style={{ fontSize: 11, fontWeight: 600, color: colors.status.wait }}>지급액</span>
+          <span
+            className="oilpick-tabular-nums"
+            data-testid="call-card-cash"
+            aria-label={`예상 매입 지급액 ${formatKrw(estimatedCash)}`}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              minHeight: 26,
+              padding: "0 10px",
+              borderRadius: radius.pill,
+              backgroundColor: colors.lime.soft,
+              color: colors.primary.dark,
+              fontSize: 15,
+              fontWeight: 800,
+              // 금액은 ellipsis·nowrap 금지 — 극단 확대에서는 pill 안에서 줄바꿈으로 흐른다.
+            }}
+          >
+            {formatKrw(estimatedCash)}
+          </span>
+          {/* [17 Q3] 소진 쿠폰 칩 — 지급액 pill 아래 보조 칩(그린 soft). 수락에 드는 비용이라
+              지급액과 시각 위계를 다르게 둔다. flexWrap 행에서 pill 열과 함께 통째로 접힌다. */}
+          {couponCost != null && (
+            <span
+              className="oilpick-tabular-nums"
+              data-testid="call-card-coupon"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                minHeight: 20,
+                padding: "1px 8px",
+                borderRadius: radius.pill,
+                backgroundColor: colors.primary.light,
+                color: colors.primary.dark,
+                fontSize: 11,
+                fontWeight: 700,
+                // 칩도 금액과 같은 규약 — ellipsis·nowrap 금지(극단 확대 시 줄바꿈으로 흐른다).
+              }}
+            >
+              쿠폰 {couponCost}장
+            </span>
+          )}
         </span>
       </span>
     </Tag>

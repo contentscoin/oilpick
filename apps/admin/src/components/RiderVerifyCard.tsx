@@ -86,7 +86,7 @@ export function RiderVerifyCard({
 
   return (
     <div className="rounded-card bg-white p-5 shadow-card" data-testid={`rider-card-${rider.id}`}>
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
         <div>
           <p className="font-semibold text-gray-900">
             {rider.displayName} <span className="text-sm font-normal text-gray-500">{rider.phone}</span>
@@ -96,7 +96,7 @@ export function RiderVerifyCard({
           </p>
         </div>
         <span
-          className={`rounded-pill px-3 py-1 text-xs font-semibold ${
+          className={`shrink-0 rounded-pill px-3 py-1 text-xs font-semibold ${
             rider.verifyStatus === "APPROVED"
               ? "bg-primary-light text-primary"
               : rider.verifyStatus === "REJECTED"
@@ -240,7 +240,7 @@ function DocThumb({
       href={url ?? undefined}
       target="_blank"
       rel="noreferrer"
-      className={`block w-28 rounded-card border p-1 text-center transition-shadow hover:shadow-card ${
+      className={`block w-32 rounded-card border p-1 text-center transition-shadow hover:shadow-card ${
         required && missing ? "border-status-danger" : "border-gray-100"
       }`}
       title={sublabel ?? label}
@@ -256,7 +256,7 @@ function DocThumb({
           {required && missing ? "미제출" : "없음"}
         </div>
       )}
-      <p className="mt-1 truncate text-xs text-gray-500">
+      <p className="mt-1 text-xs text-gray-500">
         {label}
         {required && <span className="ml-0.5 text-status-danger">*</span>}
       </p>

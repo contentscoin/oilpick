@@ -97,11 +97,11 @@ create table pickup_orders (
   requested_kg numeric(8,1) not null,       -- 예상 kg
   pickup_address text not null,
   pickup_location geography(point,4326) not null,
-  preferred_time text,                      -- '지금' 또는 'YYYY-MM-DD HH:mm'
+  preferred_time text,                      -- 레거시 '지금' 또는 'YYYY-MM-DD HH:mm' (신규는 항상 후자 — N2)
   -- 스냅샷 (생성 시 고정)
   snapshot_price_per_kg int not null,
   snapshot_rider_fee int,                   -- [07 F2] 레거시 — not null 해제, 신규 미기록
-  coupon_cost int,                          -- [08 P1] 레거시 — 07 쿠폰 스냅샷. order-create가 기록 중지(신규 항상 null → CONSUME/REFUND skip)
+  coupon_cost int,                          -- [08 P1→17 Q2 복권] 07 쿠폰 스냅샷 = ceil(requested_kg/15). order-create 기록 재개(ACCEPT CONSUME 게이트 부활). 폐기기 주문은 null 잔존(게이트 skip = 전환기 규약)
   -- 확정 정보
   measured_kg numeric(8,1),                 -- 라이더 계량
   final_kg numeric(8,1),                    -- 확정(중재 반영) — 지급액/EARN 계산 기준
@@ -196,12 +196,13 @@ create index idx_order_events_order on order_events (order_id, created_at);
 -- 현장 스캔 바코드(+촬영 GPS)를 바코드별 역추적 질의가 가능하도록 정규화 적재. 원본 payload는
 -- order_events에 영구 보존(이중 기록 — 감사·복원용). 쓰기는 fn_transition_order(SUBMIT_MEASURE)의
 -- replace-set(delete→insert)로만 — 쓰기 RLS 정책 없음(service_role 전용, 절대 규칙 1 미러).
--- 20260724000001_tracking.sql.
+-- 20260724000001_tracking.sql. photo_url은 [O2, 14 §2 확장] 20260805000002_pickup_item_photo.sql.
 create table pickup_items (
   id bigint generated always as identity primary key,
   order_id uuid not null references pickup_orders(id) on delete cascade,
   rider_id uuid not null references rider_profiles(id),
   barcode text not null,
+  photo_url text,                           -- [O2] 현장 첨부 사진(order-photos 1년 서명 URL). null=사진 없음(레거시·사진 없는 등록)
   geo_lat double precision,
   geo_lng double precision,
   captured_at timestamptz,                  -- 디바이스 촬영 시각(있으면). 서버 적재 시각은 created_at
@@ -745,6 +746,7 @@ create policy p_profiles_read_own_riders on profiles for select using (fn_dealer
 create policy p_referrals_read_by_dealer on referrals for select using (fn_dealer_owns_rider(referrer_rider_id));
 create policy p_profiles_read_my_dealer on profiles for select using (id = (select dealer_id from rider_profiles where id = auth.uid())); -- I5 라이더→소속 좌상 상호
 -- v_dealer_rider_stats(security_invoker): 라이더별 완료수·수거kg·현금/포인트 지급합·레퍼럴 실적(표시용 통계, 정산 아님).
+-- [17 Q5] + coupon_used_qty(완료 주문 coupon_cost 합, null→0) 끝에 append — 현행 정의는 20260805000001이 단일 진실(파일 끝 절 참조).
 
 -- ===== 함수 EXECUTE 권한 [14 J4] (20260724000010_rpc_execute_lockdown.sql) =====
 -- Supabase는 `alter default privileges in schema public grant execute on functions to anon,
@@ -784,3 +786,11 @@ create index idx_rider_active_orders on pickup_orders (rider_id)
 -- 중재는 final_kg만 정정할 수 있었고 delivered_cans는 손댈 수 없었다. 중재 후 SUBMIT_MEASURE는
 -- final_kg 가드에 막히고 pickup_orders에 update 정책이 없어, 잘못된 통수가 그대로 purchase_amount로
 -- 확정됐다. payload에 finalCans(0..50, 선택)를 더해 중재에서 정정 가능하게 한다(14 §3·§8).
+
+-- ===== [17 Q5] 좌상 쿠폰 실적 (20260805000001) =====
+-- v_dealer_rider_stats에 coupon_used_qty(라이더별 **완료 주문 coupon_cost 합**, null→0)::int를
+-- 끝에 append(기존 컬럼 순서·이름·타입 보존 — 20260724000011 append-only 계약 유지).
+-- 경로 제약(17 C5): coupon_ledger는 본인+admin RLS(p_coupon_ledger_read)라 security_invoker 뷰에서
+-- 좌상 조회 시 **항상 0행**(무음 결손) → 조인 금지. 좌상이 읽을 수 있는 유일 경로인
+-- pickup_orders(p_orders_read_by_dealer: dealer_id = auth.uid() 스냅샷) 경유로만 집계한다.
+-- 조회 전용 — 좌상 정산 체인(14)에 쿠폰 미편입, v_dealer_active_orders 재무 컬럼 제외 원칙(16 L6) 불변.

@@ -68,7 +68,9 @@ export function TabBar({ items, activeKey, onSelect, className }: TabBarProps) {
                 {item.icon}
               </span>
             )}
-            <span style={{ whiteSpace: "nowrap" }}>{item.label}</span>
+            {/* [03 레이아웃 강건성] nowrap 제거 — 글자 확대 시 라벨이 옆 탭을 침범하지 않고
+                줄바꿈으로 흐른다. */}
+            <span style={{ maxWidth: "100%" }}>{item.label}</span>
           </button>
         );
       })}

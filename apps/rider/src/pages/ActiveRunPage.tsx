@@ -18,10 +18,12 @@ import {
   surfaceDark,
   touchTarget,
   useToast,
+  compressImage,
   type PhotoAsset,
 } from "@oilpick/ui";
 import {
   PAYOUT_METHOD_LABEL,
+  type BarcodeItem,
   buildKakaoRouteUrl,
   buildKakaoWebRouteUrl,
   buildTmapRouteUrl,
@@ -120,8 +122,8 @@ export function ActiveRunPage() {
       <RunSwitcher runs={summaries ?? []} currentId={run.id} onSelect={setSelectedOrderId} position={position} />
 
       {/* 05-design-upgrade.md 상태 헤드라인 패턴을 라이더 관점 카피로. 주소는 헤드라인 카드 안에 묶어
-          "어디로 가야 하는지"를 함께 안내한다. */}
-      <RiderRunHeadline status={run.status} address={run.pickupAddress} />
+          "어디로 가야 하는지"를 함께 안내한다. [N5] 희망 시간도 주소 아래 한 줄로(전 상태 공통). */}
+      <RiderRunHeadline status={run.status} address={run.pickupAddress} preferredTime={run.preferredTime} />
 
       {/* 진행 맥락: U7과 동일한 세로 타임라인으로 라이더도 현재 단계를 본다. */}
       <OrderTimeline currentStatus={run.status} />
@@ -142,6 +144,7 @@ export function ActiveRunPage() {
         <ArrivedPanel
           key={run.id}
           orderId={run.id}
+          requestedKg={run.requestedKg}
           measuredKg={run.measuredKg}
           finalKg={run.finalKg}
           snapshotPricePerKg={run.snapshotPricePerKg}
@@ -283,7 +286,8 @@ function RunSwitcher({
               onClick={() => onSelect(r.id)}
               style={{
                 flexShrink: 0,
-                maxWidth: 200,
+                // [M] 글자 확대(textZoom) 시 상태+거리 칩이 고정 200px를 밀어내지 않게 상대 상한.
+                maxWidth: "min(260px, 70vw)",
                 textAlign: "left",
                 padding: "8px 12px",
                 borderRadius: radius.button,
@@ -295,7 +299,7 @@ function RunSwitcher({
                 cursor: "pointer",
               }}
             >
-              <span style={{ display: "flex", alignItems: "baseline", gap: 6, fontWeight: 700 }}>
+              <span style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: 6, fontWeight: 700 }}>
                 {/* 위치를 모르면 순서를 지어내지 않는다 — 뱃지는 position이 있을 때만. */}
                 {position && (
                   <span data-testid={`run-visit-badge-${r.id}`} aria-label={`권장 방문 순서 ${i + 1}번`}>
@@ -324,7 +328,16 @@ function RunSwitcher({
   );
 }
 
-function RiderRunHeadline({ status, address }: { status: OrderStatus; address: string }) {
+function RiderRunHeadline({
+  status,
+  address,
+  preferredTime,
+}: {
+  status: OrderStatus;
+  address: string;
+  /** [N5] 점주 희망 시간 — 저장 문자열 그대로. null/빈 값이면 줄 자체를 그리지 않는다. */
+  preferredTime?: string | null;
+}) {
   const copy = RIDER_HEADLINE[status] ?? { title: "운행 중", hint: "" };
   return (
     <section
@@ -351,16 +364,28 @@ function RiderRunHeadline({ status, address }: { status: OrderStatus; address: s
       <div
         style={{
           display: "flex",
-          alignItems: "flex-start",
-          gap: 8,
+          flexDirection: "column",
+          gap: 6,
           paddingTop: 12,
           borderTop: `1px solid ${surface.border}`,
         }}
       >
-        <PinIcon />
-        <p data-testid="active-run-address" style={{ margin: 0, fontSize: 15, fontWeight: 600, color: gray[800], flex: 1, minWidth: 0 }}>
-          {address}
-        </p>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+          <PinIcon />
+          <p data-testid="active-run-address" style={{ margin: 0, fontSize: 15, fontWeight: 600, color: gray[800], flex: 1, minWidth: 0 }}>
+            {address}
+          </p>
+        </div>
+        {/* [N5] 희망 시간 — 주소 아래 한 줄(모든 run 상태 공통). 저장 문자열 그대로, 값 없으면 미렌더. */}
+        {preferredTime && (
+          <p
+            data-testid="active-run-preferred-time"
+            className="oilpick-tabular-nums"
+            style={{ margin: 0, paddingLeft: 26, fontSize: 13, fontWeight: 600, color: colors.status.wait, minWidth: 0, overflowWrap: "anywhere" }}
+          >
+            🕐 희망 {preferredTime}
+          </p>
+        )}
       </div>
     </section>
   );
@@ -472,7 +497,7 @@ function AcceptedPanel({
         {pickupPoint ? "카카오맵으로 길안내" : "카카오맵에서 주소 검색"}
       </a>
       {pickupPoint && (
-        <div style={{ display: "flex", justifyContent: "center", gap: 18, fontSize: 13 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 18, fontSize: 13 }}>
           <a
             href={buildTmapRouteUrl(pickupAddress, pickupPoint)}
             data-testid="navigate-tmap"
@@ -533,7 +558,7 @@ function PayoutMethodSelect({
   disabled?: boolean;
 }) {
   return (
-    <div role="radiogroup" aria-label="지급 수단" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+    <div role="radiogroup" aria-label="지급 수단" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 8 }}>
       {PAYOUT_OPTIONS.map((option) => {
         const selected = value === option.value;
         return (
@@ -588,6 +613,7 @@ function captureGeo(): Promise<PickupGeo | null> {
 
 function ArrivedPanel({
   orderId,
+  requestedKg,
   measuredKg,
   finalKg,
   snapshotPricePerKg,
@@ -598,6 +624,8 @@ function ArrivedPanel({
   snapshotFreshCanPrice,
 }: {
   orderId: string;
+  /** [N5] 요청 kg(requested_kg) — 계량 입력 프리필. 0(신유 단독)이면 빈 값 유지. */
+  requestedKg: number;
   measuredKg: number | null;
   finalKg: number | null;
   snapshotPricePerKg: number;
@@ -612,13 +640,23 @@ function ArrivedPanel({
 }) {
   // [14 J2] 구매 동반(PURCHASE/MIXED)이면 현장 배달 통수를 입력받고 폐유 수령액과 상계한다.
   const purchaseInvolved = orderKind === "PURCHASE" || orderKind === "MIXED";
-  const [kg, setKg] = useState("");
+  // [N5] 계량 프리필 — 요청 기준 예상값(requested_kg). 신유 단독(0)은 빈 값 유지.
+  // 드래프트 복원(아래 loadDraft)·재제출(measure-resubmit-button의 setKg)이 프리필보다 우선한다.
+  // key={run.id} 리마운트 규약(16 L10 리뷰 ①) 덕에 주문 전환 시 항상 해당 주문 값으로 새로 시작한다.
+  const prefillKg = requestedKg > 0 ? String(requestedKg) : "";
+  const [kg, setKg] = useState(prefillKg);
   const [payout, setPayout] = useState<PayoutMethod | null>(submittedPayoutMethod);
   const [deliveredCans, setDeliveredCans] = useState(purchaseRequestedCans ?? 0);
   const [photos, setPhotos] = useState<PhotoAsset[]>([]);
-  // [12 §4] 바코드+GPS 수거이력(캡처 전용 — 지급/정산과 무관). barcodes 리스트 + 첫 캡처 시점 디바이스 GPS.
-  const [barcodes, setBarcodes] = useState<string[]>([]);
+  // [12 §4] 바코드+GPS 수거이력(캡처 전용 — 지급/정산과 무관). 항목 리스트 + 첫 캡처 시점 디바이스 GPS.
+  // [O2] 항목은 {code, photoUrl?} — 사진은 첨부 즉시 order-photos에 업로드해 서명 URL만 든다.
+  const [barcodeItems, setBarcodeItems] = useState<BarcodeItem[]>([]);
   const [barcodeInput, setBarcodeInput] = useState("");
+  // [O2] 바코드 사진 업로드 진행 여부 — 진행 중에는 첨부 버튼을 잠근다(중복 업로드 방지).
+  const [barcodePhotoUploading, setBarcodePhotoUploading] = useState(false);
+  // [O2] 숨김 파일 input 공유 — 클릭 직전에 대상 코드를 기록한다(null = 사진 단독 등록).
+  const barcodePhotoTargetRef = useRef<string | null>(null);
+  const barcodePhotoInputRef = useRef<HTMLInputElement | null>(null);
   const [geo, setGeo] = useState<PickupGeo | null>(null);
   const [submitting, setSubmitting] = useState(false);
   // [16 L5] [확인 요청 다시 보내기] 진행 상태 — rate limit 판정은 서버(confirm-remind)가 강제.
@@ -656,7 +694,8 @@ function ArrivedPanel({
         setKg(draft.text.kg);
         setPayout(draft.text.payout ?? submittedPayoutMethod);
         setDeliveredCans(draft.text.deliveredCans);
-        setBarcodes(draft.text.barcodes);
+        // [O2] 신드래프트는 barcodeItems(사진 URL 포함), 구드래프트는 barcodes(코드만)에서 복원.
+        setBarcodeItems(draft.text.barcodeItems ?? draft.text.barcodes.map((code) => ({ code })));
         setGeo(draft.text.geo);
         uploadedUrlsRef.current = draft.text.uploadedUrls;
         if (draft.photos.length > 0) setPhotos(draft.photos);
@@ -670,12 +709,14 @@ function ArrivedPanel({
     // orderId 전환(다중 콜) 시 해당 주문의 드래프트로 다시 복원한다.
   }, [orderId, finalKg]);
 
-  // 텍스트 입력은 변경 즉시 저장. 전부 초기값(빈 폼)이면 드래프트를 지운다(빈 배너 방지).
+  // 텍스트 입력은 변경 즉시 저장. 전부 초기값(프리필 폼)이면 드래프트를 지운다(빈 배너 방지).
+  // [N5] kg 초기값이 ""가 아니라 요청 kg 프리필이므로, 비교 기준도 prefillKg다 — 그렇지 않으면
+  // 아무것도 입력하지 않은 마운트 직후에 프리필이 드래프트로 저장돼 가짜 복원 배너가 뜬다.
   useEffect(() => {
     if (!draftReady || finalKg != null) return;
     const pristine =
-      kg === "" &&
-      barcodes.length === 0 &&
+      kg === prefillKg &&
+      barcodeItems.length === 0 &&
       photos.length === 0 &&
       geo == null &&
       payout === submittedPayoutMethod &&
@@ -689,11 +730,13 @@ function ArrivedPanel({
       kg,
       payout,
       deliveredCans,
-      barcodes,
+      // [O2] barcodes(코드만)는 구버전 읽기 호환용으로 병기 — 진실은 barcodeItems.
+      barcodes: barcodeItems.map((item) => item.code),
+      barcodeItems,
       geo,
       uploadedUrls: uploadedUrlsRef.current,
     });
-  }, [draftReady, kg, payout, deliveredCans, barcodes, geo, photos.length, orderId, finalKg]);
+  }, [draftReady, kg, payout, deliveredCans, barcodeItems, geo, photos.length, orderId, finalKg]);
 
   // 사진 Blob은 IndexedDB에 별도 저장(용량) — 실패해도 텍스트 드래프트는 유지(강등).
   useEffect(() => {
@@ -712,36 +755,91 @@ function ArrivedPanel({
     return () => window.removeEventListener("online", onOnline);
   }, []);
 
-  /** 복원 배너 [지우기] — 드래프트 파기 + 폼 초기화. */
+  /** 복원 배너 [지우기] — 드래프트 파기 + 폼 초기화(kg는 [N5] 요청 기준 프리필로 복귀). */
   async function discardDraft() {
     await clearDraft(orderId);
     uploadedUrlsRef.current = {};
-    setKg("");
+    setKg(prefillKg);
     setPayout(submittedPayoutMethod);
     setDeliveredCans(purchaseRequestedCans ?? 0);
-    setBarcodes([]);
+    setBarcodeItems([]);
     setGeo(null);
     setPhotos([]);
     setDraftRestoredAt(null);
   }
 
-  // [12 §4] 바코드 1건 추가(스캔/수동 공통). 중복·공백 무시. 첫 추가 시 디바이스 GPS를 1회 취득.
-  async function addBarcode(raw: string) {
-    const code = raw.trim();
-    if (!code) return;
-    setBarcodes((prev) => (prev.includes(code) ? prev : [...prev, code]));
-    setBarcodeInput("");
+  /** [12 §4] 첫 추가 시 디바이스 GPS 1회 취득(스캔/수동/사진 공통). */
+  async function ensureGeo() {
     if (!geo) {
       const g = await captureGeo();
       if (g) setGeo(g);
     }
   }
+
+  // [12 §4] 바코드 1건 추가(스캔/수동 공통). 중복·공백 무시.
+  async function addBarcode(raw: string) {
+    const code = raw.trim();
+    if (!code) return;
+    setBarcodeItems((prev) => (prev.some((item) => item.code === code) ? prev : [...prev, { code }]));
+    setBarcodeInput("");
+    await ensureGeo();
+  }
   function removeBarcode(code: string) {
-    setBarcodes((prev) => prev.filter((c) => c !== code));
+    setBarcodeItems((prev) => prev.filter((item) => item.code !== code));
+  }
+  /** [O2] 코드 항목의 첨부 사진만 제거(항목은 유지 — 항목 삭제는 ×). */
+  function removeBarcodePhoto(code: string) {
+    setBarcodeItems((prev) => prev.map((item) => (item.code === code ? { code: item.code } : item)));
   }
   async function handleScanBarcode() {
     const content = await scanQrCode();
     if (content) await addBarcode(content);
+  }
+
+  /** [O2] 사진 첨부 시작 — 대상 코드를 기록하고 숨김 파일 input을 연다(null = 사진 단독 등록). */
+  function openBarcodePhotoPicker(code: string | null) {
+    barcodePhotoTargetRef.current = code;
+    barcodePhotoInputRef.current?.click();
+  }
+
+  /**
+   * [O2] 바코드 사진 첨부 — 첨부 즉시 압축(compressImage)→order-photos 업로드→1년 서명 URL
+   * (계량 사진과 동일 관용구·동일 비공개 버킷). 드래프트에는 URL만 남는다(파일 원본 미저장).
+   * 코드 없이 사진만 첨부하면 `photo-` + 고유 접미 코드로 등록한다(unique(order_id, barcode) 충족).
+   */
+  async function handleBarcodePhotoFile(file: File | null) {
+    const target = barcodePhotoTargetRef.current;
+    barcodePhotoTargetRef.current = null;
+    if (barcodePhotoInputRef.current) barcodePhotoInputRef.current.value = "";
+    if (!file) return;
+    setBarcodePhotoUploading(true);
+    try {
+      const compressed = await compressImage(file);
+      const path = `${orderId}/barcode-${Date.now()}.jpg`;
+      const { error: uploadError } = await supabase.storage
+        .from("order-photos")
+        .upload(path, compressed, { upsert: true });
+      if (uploadError) throw uploadError;
+      const { data: signed, error: signError } = await supabase.storage
+        .from("order-photos")
+        .createSignedUrl(path, 60 * 60 * 24 * 365);
+      if (signError) throw signError;
+      const photoUrl = signed.signedUrl;
+      if (target) {
+        setBarcodeItems((prev) => prev.map((item) => (item.code === target ? { ...item, photoUrl } : item)));
+      } else {
+        // 사진 단독 등록 — 목록·이력에는 "사진 등록"으로 표시(photo- 접두 규약, 14 §2 O2).
+        const code = `photo-${Date.now().toString(36)}`;
+        setBarcodeItems((prev) => [...prev, { code, photoUrl }]);
+      }
+      await ensureGeo();
+    } catch (err) {
+      showToast(humanizeSupabaseError(err instanceof Error ? err : null, "바코드 사진 업로드에 실패했어요."), {
+        variant: "error",
+      });
+    } finally {
+      setBarcodePhotoUploading(false);
+    }
   }
 
   // 07 §1-3: 중재로 kg가 확정된(final_kg) 주문은 SUBMIT_MEASURE 재제출이 서버에서 거부된다.
@@ -769,10 +867,10 @@ function ArrivedPanel({
         >
           <ClockIcon />
         </span>
-        <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: colors.primary.dark }}>
+        <p style={{ margin: 0, width: "100%", fontSize: 16, fontWeight: 700, color: colors.primary.dark }}>
           중재 확정 무게 {formatKg(finalKg)}
         </p>
-        <p style={{ margin: 0, fontSize: 14, color: colors.status.wait }}>
+        <p style={{ margin: 0, width: "100%", fontSize: 14, color: colors.status.wait }}>
           {arbitratedPoint
             ? `사장님이 확인하면 포인트 ${formatPoint(arbitratedAmount)}가 적립돼요 — 앱에서 확인을 요청하세요.`
             : `사장님께 현금 ${formatKrw(arbitratedAmount)}을 지급한 뒤 앱에서 수령 확인을 받아주세요.`}
@@ -804,14 +902,14 @@ function ArrivedPanel({
         >
           <ClockIcon />
         </span>
-        <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: colors.primary.dark }}>사장님 확인 대기</p>
+        <p style={{ margin: 0, width: "100%", fontSize: 16, fontWeight: 700, color: colors.primary.dark }}>사장님 확인 대기</p>
         <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
           <PayoutMethodChip method={submittedPayoutMethod ?? "CASH"} />
           <span className="oilpick-tabular-nums" style={{ fontSize: 14, color: gray[900], fontWeight: 600 }}>
             {formatKg(measuredKg)}
           </span>
         </span>
-        <p data-testid="measure-wait-copy" style={{ margin: 0, fontSize: 14, color: colors.status.wait }}>
+        <p data-testid="measure-wait-copy" style={{ margin: 0, width: "100%", fontSize: 14, color: colors.status.wait }}>
           {submittedPoint
             ? `사장님이 확인하면 포인트 ${formatPoint(submittedAmount)}가 적립돼요 — 확인을 요청하세요.`
             : `사장님께 현금 ${formatKrw(submittedAmount)}을 지급하고 앱에서 수령 확인을 요청하세요.`}
@@ -874,6 +972,33 @@ function ArrivedPanel({
         >
           계량·지급 수단 다시 제출
         </button>
+        {/* [N3, 08 P2 확장] POINT 제출 건 한정 원터치 — 점주의 [현금 지급으로 변경 요청]
+            (payout-change-request 푸시)을 받았을 때 한 탭으로 CASH 재제출 폼에 진입한다.
+            기존 재제출 플로우 재사용(kg 유지·수단만 CASH 프리셋) — 상태머신 무변경. */}
+        {submittedPoint && (
+          <button
+            type="button"
+            data-testid="cash-resubmit-button"
+            onClick={() => {
+              setKg(String(measuredKg));
+              setPayout("CASH");
+              setResubmitting(true);
+            }}
+            style={{
+              width: "100%",
+              minHeight: 48,
+              borderRadius: radius.button,
+              border: "none",
+              backgroundColor: colors.primary.DEFAULT,
+              color: "#fff",
+              fontSize: 15,
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            💵 현금으로 바꿔 다시 제출
+          </button>
+        )}
       </Card>
     );
   }
@@ -904,7 +1029,8 @@ function ArrivedPanel({
       return;
     }
     // [12 §4] 첫 제출 시 폐식용유 바코드 ≥1건 필수(수거 시 입력). 재제출·폐유 없는 신유 단독은 면제.
-    if (!resubmitting && parsedKg > 0 && barcodes.length === 0) {
+    // [O2] 사진 단독 등록(photo- 코드 항목)도 1건으로 충족한다.
+    if (!resubmitting && parsedKg > 0 && barcodeItems.length === 0) {
       setError("폐식용유 바코드를 1개 이상 스캔하거나 입력해주세요.");
       return;
     }
@@ -973,8 +1099,15 @@ function ArrivedPanel({
           payoutMethod: payout,
           // [14 J2] 구매 동반 주문은 현장 배달 통수를 함께 제출(상계 계산의 신유 성분).
           ...(purchaseInvolved ? { deliveredCans } : {}),
-          // [12 §4] 바코드/GPS 수거이력(있을 때만). RPC가 order_events.payload에 보존.
-          ...(barcodes.length > 0 ? { barcodes } : {}),
+          // [12 §4]+[O2] 바코드/GPS 수거이력(있을 때만) — barcodeItems로 전송(사진 없는 항목은
+          // photoUrl 생략). RPC가 order_events.payload 보존 + pickup_items(photo_url) 적재.
+          ...(barcodeItems.length > 0
+            ? {
+                barcodeItems: barcodeItems.map(({ code, photoUrl }) =>
+                  photoUrl ? { code, photoUrl } : { code },
+                ),
+              }
+            : {}),
           ...(geoForSubmit ? { geo: geoForSubmit } : {}),
         },
       });
@@ -1013,6 +1146,7 @@ function ArrivedPanel({
     display: "flex",
     flexDirection: "column",
     gap: 4,
+    minWidth: 0,
     padding: 12,
     borderRadius: radius.button,
     backgroundColor: gray[50],
@@ -1037,6 +1171,7 @@ function ArrivedPanel({
           data-testid="measure-draft-restored"
           style={{
             display: "flex",
+            flexWrap: "wrap",
             alignItems: "center",
             justifyContent: "space-between",
             gap: 8,
@@ -1057,6 +1192,7 @@ function ArrivedPanel({
             data-testid="measure-draft-discard"
             onClick={() => void discardDraft()}
             style={{
+              flexShrink: 0,
               background: "none",
               border: "none",
               color: colors.primary.dark,
@@ -1088,11 +1224,18 @@ function ArrivedPanel({
             onChange={(e) => setKg(e.target.value)}
             style={inputStyle}
           />
+          {/* [N5] 프리필 안내 — 값이 요청 기준 예상값(그대로)일 때만. 라이더가 실측값으로 고치면
+              사라진다(00-domain "계량/수량 규칙": 확정은 현장 계량 기준 고지 필수). */}
+          {prefillKg !== "" && kg === prefillKg && (
+            <p data-testid="measure-kg-prefill-caption" style={{ margin: 0, fontSize: 12, color: colors.status.wait }}>
+              요청 기준 예상값이에요 — 현장 계량으로 확정돼요
+            </p>
+          )}
         </div>
 
         {/* [15] 목업의 총 무게 / 단가 2열 스탯. 입력한 kg와 주문 시점 시세 스냅샷을 나란히 둬
             "이 숫자 × 이 단가"가 아래 지급액이라는 계산이 눈에 보이게 한다. */}
-        <div data-testid="run-measure-stats" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+        <div data-testid="run-measure-stats" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(0, 1fr))", gap: 8 }}>
           <div style={measureStatStyle}>
             <span style={measureStatLabelStyle}>총 무게</span>
             <span className="oilpick-tabular-nums" style={measureStatValueStyle}>
@@ -1119,6 +1262,8 @@ function ArrivedPanel({
             data-testid="run-cash-payout"
             style={{
               display: "flex",
+              // [M] 글자 확대 시 라벨·금액이 한 줄에 안 들어가면 두 줄로 — 금액 자릿수는 자르지 않는다.
+              flexWrap: "wrap",
               alignItems: "center",
               justifyContent: "space-between",
               gap: 8,
@@ -1130,14 +1275,14 @@ function ArrivedPanel({
               boxShadow: elevation.heroDark,
             }}
           >
-            <span style={{ fontSize: 13, fontWeight: 600, color: surfaceDark.textOnDarkMuted }}>
+            <span style={{ minWidth: 0, fontSize: 13, fontWeight: 600, color: surfaceDark.textOnDarkMuted }}>
               {isPointSelected ? "점주에게 적립될 포인트" : "점주에게 지급할 현금"}
             </span>
             {/* [15] kg를 입력하는 동안 금액이 따라 움직인다 — 얼마를 지급할지가 실시간으로 보인다. */}
             <NumberFlow
               value={payoutAmount}
               format={(n) => (isPointSelected ? formatPoint(Math.round(n)) : formatKrw(Math.round(n)))}
-              style={{ fontSize: 24, fontWeight: 800, letterSpacing: "-0.01em", color: surfaceDark.textOnDark }}
+              style={{ minWidth: 0, flexShrink: 0, fontSize: 24, fontWeight: 800, letterSpacing: "-0.01em", color: surfaceDark.textOnDark }}
             />
           </div>
         )}
@@ -1165,15 +1310,15 @@ function ArrivedPanel({
             subLabel={snapshotFreshCanPrice != null ? `${formatKrw(purchaseAmount)} · 18L ${deliveredCans}통` : null}
           />
           <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingTop: 12, borderTop: `1px solid ${surface.border}` }}>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: colors.status.wait }}>
+            <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 4, fontSize: 13, color: colors.status.wait }}>
               <span>폐유 수령액</span>
               <span className="oilpick-tabular-nums">{formatKrw(payoutAmount)}</span>
             </div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: colors.status.wait }}>
+            <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 4, fontSize: 13, color: colors.status.wait }}>
               <span>새 기름 대금</span>
               <span className="oilpick-tabular-nums">− {formatKrw(purchaseAmount)}</span>
             </div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", paddingTop: 6, borderTop: `1px dashed ${surface.border}` }}>
+            <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "baseline", gap: 4, paddingTop: 6, borderTop: `1px dashed ${surface.border}` }}>
               <span style={{ fontSize: 14, fontWeight: 700, color: gray[900] }}>
                 {netAmount >= 0 ? "점주에게 지급" : "점주에게 받기"}
               </span>
@@ -1201,13 +1346,14 @@ function ArrivedPanel({
         <PhotoUploader photos={photos} onChange={setPhotos} maxCount={3} />
       </Card>
 
-      {/* [12 §4] 폐식용유 바코드 + GPS 수거이력(캡처 전용). 스캔(네이티브) 또는 수동 입력, 첫 추가 시 위치 기록. */}
+      {/* [12 §4] 폐식용유 바코드 + GPS 수거이력(캡처 전용). 스캔(네이티브) 또는 수동 입력, 첫 추가 시 위치 기록.
+          [O2] 사진 첨부(항목별 [📷 사진]·사진 단독 등록) — CEO: "바코드는 입력도 되지만 사진첨부도 되게". */}
       <Card style={{ gap: 10 }}>
         <span style={{ fontSize: 14, fontWeight: 600, color: gray[800] }}>
           폐식용유 바코드 {resubmitting ? "(재제출 — 선택)" : "(필수)"}
         </span>
         <p style={{ margin: 0, fontSize: 12, color: colors.status.wait }}>
-          통에 붙은 바코드를 스캔하거나 직접 입력하세요. 첫 추가 시 현재 위치(GPS)가 함께 기록돼요.
+          통에 붙은 바코드를 스캔·입력하거나 사진으로 등록하세요. 첫 추가 시 현재 위치(GPS)가 함께 기록돼요.
         </p>
         <div style={{ display: "flex", gap: 8 }}>
           <input
@@ -1222,7 +1368,7 @@ function ArrivedPanel({
                 void addBarcode(barcodeInput);
               }
             }}
-            style={{ ...inputStyle, flex: 1 }}
+            style={{ ...inputStyle, flex: 1, minWidth: 0, width: "100%" }}
           />
           <button
             type="button"
@@ -1248,37 +1394,128 @@ function ArrivedPanel({
             바코드 스캔
           </BigButton>
         )}
-        {barcodes.length > 0 && (
+        {/* [O2] 사진 단독 등록 — 코드 없이 사진만 첨부하면 photo- 고유 코드로 등록된다. */}
+        <button
+          type="button"
+          data-testid="barcode-photo-only"
+          disabled={barcodePhotoUploading || submitting}
+          onClick={() => openBarcodePhotoPicker(null)}
+          style={{
+            minHeight: 44,
+            borderRadius: radius.button,
+            border: `1px dashed ${colors.primary.DEFAULT}`,
+            backgroundColor: "#fff",
+            color: colors.primary.DEFAULT,
+            fontSize: 14,
+            fontWeight: 700,
+            cursor: barcodePhotoUploading || submitting ? "default" : "pointer",
+            opacity: barcodePhotoUploading || submitting ? 0.6 : 1,
+          }}
+        >
+          {barcodePhotoUploading ? "사진 업로드 중..." : "📷 사진으로 등록"}
+        </button>
+        {/* [O2] 공유 숨김 파일 input — PhotoUploader와 동일 관용구(카메라/갤러리). */}
+        <input
+          ref={barcodePhotoInputRef}
+          data-testid="barcode-photo-input"
+          type="file"
+          accept="image/*"
+          capture="environment"
+          style={{ display: "none" }}
+          onChange={(e) => void handleBarcodePhotoFile(e.target.files?.[0] ?? null)}
+        />
+        {barcodeItems.length > 0 && (
           <ul
             data-testid="barcode-list"
             style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 6 }}
           >
-            {barcodes.map((code) => (
-              <li
-                key={code}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: 8,
-                  padding: "8px 12px",
-                  borderRadius: radius.button,
-                  backgroundColor: gray[50],
-                }}
-              >
-                <span className="oilpick-tabular-nums" style={{ fontSize: 13, color: gray[900] }}>
-                  🏷️ {code}
-                </span>
-                <button
-                  type="button"
-                  aria-label={`${code} 삭제`}
-                  onClick={() => removeBarcode(code)}
-                  style={{ background: "none", border: "none", color: colors.status.wait, fontSize: 18, cursor: "pointer", minHeight: 32, minWidth: 32 }}
+            {barcodeItems.map(({ code, photoUrl }) => {
+              // [O2] photo- 접두 = 사진 단독 등록 항목(코드 미입력) — "사진 등록"으로 표시.
+              const photoOnly = code.startsWith("photo-");
+              return (
+                <li
+                  key={code}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 8,
+                    padding: "8px 12px",
+                    borderRadius: radius.button,
+                    backgroundColor: gray[50],
+                  }}
                 >
-                  ×
-                </button>
-              </li>
-            ))}
+                  {/* [O2] 첨부 사진 썸네일 — 서명 URL(계량 사진과 동일하게 <img src> 직접 사용). */}
+                  {photoUrl && (
+                    <img
+                      src={photoUrl}
+                      alt={photoOnly ? "등록한 바코드 사진" : `${code} 바코드 사진`}
+                      data-testid={`barcode-photo-thumb-${code}`}
+                      style={{ width: 36, height: 36, objectFit: "cover", borderRadius: 8, flexShrink: 0 }}
+                    />
+                  )}
+                  {/* 바코드는 금액이 아니라 임의 지점 개행 허용 — 행 넘침보다 낫다(M-태스크). */}
+                  <span
+                    className="oilpick-tabular-nums"
+                    style={{ minWidth: 0, flex: 1, overflowWrap: "anywhere", fontSize: 13, color: gray[900] }}
+                  >
+                    {photoOnly ? "📷 사진 등록" : `🏷️ ${code}`}
+                  </span>
+                  {/* [O2] 코드 항목: 사진 없으면 [📷 사진] 첨부, 있으면 [사진 제거](항목 유지). */}
+                  {!photoOnly && !photoUrl && (
+                    <button
+                      type="button"
+                      data-testid={`barcode-photo-attach-${code}`}
+                      disabled={barcodePhotoUploading || submitting}
+                      onClick={() => openBarcodePhotoPicker(code)}
+                      style={{
+                        flexShrink: 0,
+                        background: "none",
+                        border: `1px solid ${surface.border}`,
+                        borderRadius: radius.button,
+                        color: colors.primary.DEFAULT,
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: barcodePhotoUploading || submitting ? "default" : "pointer",
+                        padding: "6px 8px",
+                        minHeight: 32,
+                        opacity: barcodePhotoUploading || submitting ? 0.6 : 1,
+                      }}
+                    >
+                      📷 사진
+                    </button>
+                  )}
+                  {!photoOnly && photoUrl && (
+                    <button
+                      type="button"
+                      data-testid={`barcode-photo-remove-${code}`}
+                      onClick={() => removeBarcodePhoto(code)}
+                      style={{
+                        flexShrink: 0,
+                        background: "none",
+                        border: "none",
+                        color: colors.status.wait,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        padding: "6px 4px",
+                        minHeight: 32,
+                      }}
+                    >
+                      사진 제거
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    aria-label={photoOnly ? "사진 등록 삭제" : `${code} 삭제`}
+                    onClick={() => removeBarcode(code)}
+                    style={{ background: "none", border: "none", color: colors.status.wait, fontSize: 18, cursor: "pointer", minHeight: 32, minWidth: 32 }}
+                  >
+                    ×
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         )}
         {geo && (
@@ -1429,10 +1666,10 @@ function CompletedPanel({
       >
         <CheckMarkIcon />
       </span>
-      <p style={{ margin: 0, fontSize: 18, fontWeight: 800, color: colors.primary.dark }}>
+      <p style={{ margin: 0, width: "100%", fontSize: 18, fontWeight: 800, color: colors.primary.dark }}>
         {net < 0 ? "거래 완료" : "수거 완료"}
       </p>
-      <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+      <span style={{ display: "inline-flex", flexWrap: "wrap", maxWidth: "100%", alignItems: "center", gap: 6 }}>
         <PayoutMethodChip method={payoutMethod ?? "CASH"} />
         <p className="oilpick-tabular-nums" style={{ margin: 0, fontSize: 15, color: gray[900] }}>
           {settlementText}
@@ -1595,7 +1832,7 @@ function CheckMarkIcon() {
  *  흰 배경 보조 버튼 위에서 흰 아이콘이 사라지는 것을 막는다. */
 function PhoneCtaIcon() {
   return (
-    <svg width={20} height={20} viewBox="0 0 24 24" fill="none" aria-hidden>
+    <svg width={20} height={20} viewBox="0 0 24 24" fill="none" aria-hidden style={{ flexShrink: 0 }}>
       <path
         d="M6.5 4h3l1.2 3.2-1.8 1.4a11 11 0 0 0 4.5 4.5l1.4-1.8L18.5 12.5V15.5c0 1-.8 1.8-1.8 1.7A13.5 13.5 0 0 1 4.8 5.8C4.7 4.8 5.5 4 6.5 4Z"
         stroke="currentColor"

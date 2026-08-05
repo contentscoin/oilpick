@@ -5,7 +5,8 @@ import { formatKg, formatKrw, formatPoint } from "@oilpick/core";
 import { useSession } from "../hooks/useSession";
 import { useOrderHistory } from "../hooks/useOrderHistory";
 
-/** U10 "/orders" 과거 수거 이력. 페이지네이션(간단한 쪽 — 04-tasks.md T8 DoD). */
+/** U10 "/orders" 과거 판매 이력(구 "수거 이력" — 2026-08-05 CEO 지시로 유저 관점 표기 전환).
+ * 페이지네이션(간단한 쪽 — 04-tasks.md T8 DoD). */
 export function OrdersHistoryPage() {
   const navigate = useNavigate();
   const { session } = useSession();
@@ -31,7 +32,7 @@ export function OrdersHistoryPage() {
 
   return (
     <main style={{ display: "flex", flexDirection: "column", gap: 16, padding: 20, maxWidth: 560, margin: "0 auto" }}>
-      <PageHeader title="수거 이력" onBack={() => navigate("/")} backTestId="orders-history-back" />
+      <PageHeader title="판매 이력" onBack={() => navigate("/")} backTestId="orders-history-back" />
 
       {isLoading && (
         <div data-testid="orders-history-skeleton" style={{ height: 200, borderRadius: radius.card, backgroundColor: gray[100] }} />
@@ -53,7 +54,7 @@ export function OrdersHistoryPage() {
       )}
 
       {!isLoading && !loadFailed && items.length === 0 && (
-        <EmptyState title="아직 수거 이력이 없어요" description="첫 수거 요청을 보내보세요." />
+        <EmptyState title="아직 판매 이력이 없어요" description="첫 수거 요청을 보내보세요." />
       )}
 
       {!isLoading && !loadFailed && items.length > 0 && (
@@ -77,17 +78,18 @@ export function OrdersHistoryPage() {
                   gap: 6,
                 }}
               >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: 13, color: colors.status.wait }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 13, color: colors.status.wait, minWidth: 0 }}>
                     {new Date(order.createdAt).toLocaleDateString("ko-KR")}
                   </span>
                   <StatusBadge status={order.status} />
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: 14 }}>{formatKg(order.finalKg ?? order.requestedKg)}</span>
+                {/* [M] 확대 시 kg/금액이 자연스럽게 두 줄로 떨어지게 wrap — 금액 덩어리는 flexShrink:0으로 통째 유지. */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+                  <span style={{ fontSize: 14, minWidth: 0 }}>{formatKg(order.finalKg ?? order.requestedKg)}</span>
                   {/* 08 G5-⑦: 완료 주문은 확정 지급액 + 지급수단 칩(null=레거시 현금 간주). 레거시(supplier_point) 주문은 포인트 표기(레거시 렌더 분기). */}
                   {order.cashPaidAmount != null ? (
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
                       <PayoutMethodChip method={order.payoutMethod ?? "CASH"} />
                       <span
                         className="oilpick-tabular-nums"
@@ -98,7 +100,7 @@ export function OrdersHistoryPage() {
                     </span>
                   ) : (
                     order.supplierPoint != null && (
-                      <span className="oilpick-tabular-nums" style={{ fontSize: 16, fontWeight: 700, color: colors.accent.deep }}>
+                      <span className="oilpick-tabular-nums" style={{ fontSize: 16, fontWeight: 700, flexShrink: 0, color: colors.accent.deep }}>
                         {formatPoint(order.supplierPoint)}
                       </span>
                     )

@@ -90,8 +90,8 @@ export function DealersPage() {
         ) : dealers && dealers.length > 0 ? (
           <ul className="flex flex-col gap-2" data-testid="dealer-list">
             {dealers.map((d) => (
-              <li key={d.id} className="flex items-center justify-between rounded-card border border-gray-100 px-3 py-2 text-sm">
-                <span className="font-medium text-gray-800">{d.displayName}</span>
+              <li key={d.id} className="flex flex-wrap items-center justify-between gap-2 rounded-card border border-gray-100 px-3 py-2 text-sm">
+                <span className="min-w-0 font-medium text-gray-800">{d.displayName}</span>
                 <span className="text-gray-500">{d.phone}</span>
               </li>
             ))}
@@ -107,8 +107,8 @@ export function DealersPage() {
         {riders && riders.length > 0 ? (
           <div className="flex flex-col gap-2" data-testid="assign-rider-list">
             {riders.map((r) => (
-              <div key={r.id} className="flex items-center justify-between gap-3 rounded-card border border-gray-100 px-3 py-2 text-sm">
-                <div>
+              <div key={r.id} className="flex flex-wrap items-center justify-between gap-2 rounded-card border border-gray-100 px-3 py-2 text-sm">
+                <div className="min-w-0">
                   <p className="font-medium text-gray-800">{r.name}</p>
                   <p className="text-xs text-gray-500">
                     {r.verifyStatus} · 소속: {r.dealerName ?? "미배정(본사 직속)"}

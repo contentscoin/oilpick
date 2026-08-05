@@ -1,18 +1,22 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { BigButton, ErrorScreen, MapView, NumberFlow, PageHeader, colors, elevation, gradient, gray, radius, surface, surfaceDark, useToast } from "@oilpick/ui";
-import { estimateCash, formatEta, formatKg, formatKrw } from "@oilpick/core";
+import { INSUFFICIENT_COUPON, estimateCash, formatEta, formatKg, formatKrw } from "@oilpick/core";
 import { MAP_STYLE_URL } from "../lib/env";
 import { invokeEdgeFunction } from "../lib/edgeFunction";
+import { useCouponBalance } from "../hooks/useCoupons";
 import { useDirections } from "../hooks/useDirections";
 import { useGeolocation } from "../hooks/useGeolocation";
 import { useOpenCalls } from "../hooks/useOpenCalls";
+import { useSession } from "../hooks/useSession";
 
 /**
- * R3 콜 상세. 03-frontend.md(08 G6-②): "MapView + 예상 매입 지급액 대형 표시 + [수락]".
- * 08 P1로 쿠폰 게이트가 소멸 — 수락은 무비용이라 잔액 사전 체크·충전 CTA가 없다.
- * 전환기 레거시 쿠폰 주문의 수락이 409 INSUFFICIENT_COUPON으로 거부되면 코어의 한국어
- * 메시지를 그대로 토스트하고 목록으로 복귀한다(충전 플로우 자체가 폐기됨).
+ * R3 콜 상세. 03-frontend.md(08 G6-② + 17 Q3): "MapView + 예상 매입 지급액 대형 표시 +
+ * 쿠폰 N장 소진 + [수락]". [17 Q3] 수락 게이트 복권(07 F5 원형): 잔액 < coupon_cost면 사전에
+ * "쿠폰 부족" + [충전하러 가기] CTA로 fail-fast, 수락 API가 INSUFFICIENT_COUPON(409) 반환 시
+ * 토스트 + 동일 CTA(동시성 방어는 RPC가 유일 진실, 여기 사전 체크는 UX용). 전환기 무쿠폰
+ * 주문(coupon_cost null, 08 구간)은 게이트 없이 수락된다(17 리스크 레지스터 — 레거시 규약).
+ * 지급 표기(예상 매입 지급액)는 08 불변 — 쿠폰 소진량 칩만 병기한다(17 C7).
  *
  * 별도 단건 조회 Edge Function/쿼리를 새로 만들지 않고 useOpenCalls(R2와 동일 목록 쿼리)
  * 캐시에서 id로 찾는다 — RLS p_order_open_calls는 REQUESTED 상태에서만 select를 허용하므로
@@ -21,7 +25,9 @@ import { useOpenCalls } from "../hooks/useOpenCalls";
 export function CallDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { session } = useSession();
   const { data: calls, isLoading } = useOpenCalls(true);
+  const { data: couponBalance } = useCouponBalance(session?.user.id);
   const call = calls?.find((c) => c.id === id);
 
   // [16 L3 §3-1] 수락 판단용 도로거리·소요 칩. 내 위치(권한 거부·실패 시 null → 칩 미표기 폴백)
@@ -41,6 +47,8 @@ export function CallDetailPage() {
   const { showToast } = useToast();
 
   const [accepting, setAccepting] = useState(false);
+  // [17 Q3] 409 INSUFFICIENT_COUPON 반환 시 CTA를 띄우고 이 페이지에 머문다(사전 체크를 통과한 경합 상황).
+  const [gateBlocked, setGateBlocked] = useState(false);
 
   async function handleAccept() {
     if (!id) return;
@@ -51,8 +59,12 @@ export function CallDetailPage() {
     setAccepting(false);
 
     if (!result.ok) {
-      // 409 INSUFFICIENT_COUPON(전환기 레거시 주문) 포함 — 코어 매핑 한국어 메시지를 그대로
-      // 토스트하고 목록으로 복귀(08 P1: 충전 CTA 없음, 쿠폰 플로우 폐기).
+      if (result.code === INSUFFICIENT_COUPON) {
+        // [17 Q3] 쿠폰 부족: 목록으로 튕기지 않고 CTA를 노출해 바로 충전으로 유도(07 F5-④).
+        showToast(result.message, { variant: "error" });
+        setGateBlocked(true);
+        return;
+      }
       showToast(result.message, { variant: "error" });
       setTimeout(() => navigate("/", { replace: true }), 1500);
       return;
@@ -132,6 +144,28 @@ export function CallDetailPage() {
           <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: colors.status.wait }}>예상 수거량</p>
           <p className="oilpick-tabular-nums" style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>{formatKg(call.requestedKg)}</p>
         </div>
+        {/* [N5] 점주 희망 시간 — 저장 문자열 그대로(레거시 "지금" 포함). 값 없으면 행 미렌더. */}
+        {call.preferredTime && (
+          <div data-testid="call-detail-preferred" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: colors.status.wait }}>희망 시간</p>
+            <p className="oilpick-tabular-nums" style={{ margin: 0, fontSize: 16, fontWeight: 600, minWidth: 0, overflowWrap: "anywhere" }}>
+              {call.preferredTime}
+            </p>
+          </div>
+        )}
+        {/* [17 Q3] 소진 쿠폰(coupon_cost) — 07 F5-④ 복권. 전환기 무쿠폰 주문(null)은 행 미렌더. */}
+        {call.couponCost != null && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: colors.status.wait }}>소진 쿠폰</p>
+            <p
+              data-testid="call-detail-coupon"
+              className="oilpick-tabular-nums"
+              style={{ margin: 0, fontSize: 16, fontWeight: 600 }}
+            >
+              쿠폰 {call.couponCost}장 소진
+            </p>
+          </div>
+        )}
         {/* [16 L3 §3-1] 수락 판단 정보 — 실제 도로 기준 거리·소요. 위치 권한 거부·키 미설정이면
             이 행 자체가 없다(직선거리는 콜 목록 카드가 이미 표기 — 여기서 지어내지 않는다). */}
         {(roadKm || roadEta) && (
@@ -162,19 +196,47 @@ export function CallDetailPage() {
       >
         <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: surfaceDark.textOnDarkMuted }}>예상 매입 지급액</p>
         {/* [15] 콜을 열면 금액이 카운트업한다 — 수락 판단의 주인공 숫자. */}
-        <p style={{ margin: 0 }}>
+        {/* [M] 확대 시 fontSize를 폭에 맞춰 줄인다(clamp) — 금액 자릿수 중간 절단 금지. */}
+        <p style={{ margin: 0, width: "100%", minWidth: 0, textAlign: "center" }}>
           <NumberFlow
             value={estimateCash(call.requestedKg, call.snapshotPricePerKg)}
             format={(n) => formatKrw(Math.round(n))}
-            style={{ fontSize: 40, fontWeight: 800, letterSpacing: "-0.02em", color: surfaceDark.textOnDark }}
+            style={{ fontSize: "clamp(28px, 9vw, 40px)", fontWeight: 800, letterSpacing: "-0.02em", color: surfaceDark.textOnDark }}
           />
         </p>
         <p style={{ margin: 0, fontSize: 12, color: surfaceDark.textOnDarkMuted }}>현장 계량 기준으로 확정 · 현금 또는 포인트로 지급</p>
       </section>
 
-      <BigButton data-testid="call-accept-button" loading={accepting} onClick={handleAccept}>
-        수락
-      </BigButton>
+      {/* [17 Q3] 수락 게이트(07 F5-⑤ 복권). 잔액 < coupon_cost(사전 체크) 또는 409 반환 시 충전 유도 CTA.
+          전환기 무쿠폰 주문(coupon_cost null)은 게이트 없이 수락 버튼 그대로. */}
+      {call.couponCost != null && ((couponBalance ?? 0) < call.couponCost || gateBlocked) ? (
+        <section
+          data-testid="call-accept-gate"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 12,
+            padding: 16,
+            borderRadius: radius.card,
+            backgroundColor: colors.accent.light,
+            border: `1px solid ${surface.border}`,
+          }}
+        >
+          <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: colors.status.danger }}>
+            수거쿠폰이 부족해요 (보유 {couponBalance ?? 0}장 / 필요 {call.couponCost}장)
+          </p>
+          <BigButton
+            data-testid="call-charge-cta"
+            onClick={() => navigate("/coupons/purchase")}
+          >
+            충전하러 가기
+          </BigButton>
+        </section>
+      ) : (
+        <BigButton data-testid="call-accept-button" loading={accepting} onClick={handleAccept}>
+          수락
+        </BigButton>
+      )}
     </main>
   );
 }

@@ -49,8 +49,9 @@ export function PageHeader({
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            width: 44,
-            height: 44,
+            // [03 레이아웃 강건성] 고정 44 → min 치수(글자 확대 시 글리프에 맞춰 늘어난다).
+            minWidth: 44,
+            minHeight: 44,
             // 글리프의 시각적 좌측 라인을 콘텐츠 패딩에 맞추는 보정(터치 타깃은 44 유지).
             marginLeft: -12,
             flexShrink: 0,

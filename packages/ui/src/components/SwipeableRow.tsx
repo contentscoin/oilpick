@@ -36,8 +36,13 @@ export function SwipeableRow({
   const [dragging, setDragging] = useState(false);
   const startXRef = useRef(0);
   const startOffsetRef = useRef(0);
+  const actionRef = useRef<HTMLButtonElement>(null);
 
-  const open = () => setOffset(-actionWidth);
+  // [03 레이아웃 강건성] 액션 버튼이 minWidth로 바뀌어 글자 확대 시 actionWidth보다 넓어질 수
+  // 있다 — 열림 오프셋은 실측 폭 기준(측정 불가 환경에선 actionWidth 폴백).
+  const revealWidth = () => Math.max(actionWidth, actionRef.current?.offsetWidth ?? 0);
+
+  const open = () => setOffset(-revealWidth());
   const close = () => setOffset(0);
 
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
@@ -53,8 +58,8 @@ export function SwipeableRow({
   const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (!dragging || !Number.isFinite(e.clientX)) return;
     const dx = e.clientX - startXRef.current;
-    // 왼쪽으로만 열린다(0 ~ -actionWidth로 클램프).
-    const next = Math.max(-actionWidth, Math.min(0, startOffsetRef.current + dx));
+    // 왼쪽으로만 열린다(0 ~ -실측 액션 폭으로 클램프).
+    const next = Math.max(-revealWidth(), Math.min(0, startOffsetRef.current + dx));
     setOffset(next);
   };
 
@@ -62,7 +67,7 @@ export function SwipeableRow({
     if (!dragging) return;
     setDragging(false);
     // 절반 넘게 끌었으면 열고, 아니면 닫는다.
-    if (offset < -actionWidth / 2) open();
+    if (offset < -revealWidth() / 2) open();
     else close();
   };
 
@@ -81,6 +86,7 @@ export function SwipeableRow({
     >
       <button
         type="button"
+        ref={actionRef}
         data-testid="swipeable-action"
         onClick={() => {
           onAction();
@@ -94,7 +100,10 @@ export function SwipeableRow({
           top: 0,
           right: 0,
           bottom: 0,
-          width: actionWidth,
+          // [03 레이아웃 강건성] 고정 width 금지 — 글자 확대 시 라벨에 맞춰 넓어진다
+          // (1x에서는 그대로 actionWidth).
+          minWidth: actionWidth,
+          padding: "0 12px",
           border: 0,
           backgroundColor: actionColor,
           color: colors.primary.dark,

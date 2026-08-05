@@ -50,11 +50,16 @@ var pickupGeoSchema = z.object({
   capturedAt: z.string().optional()
   // ISO8601 촬영 시각(디바이스). 서버 now()와 별개 기록.
 });
+var barcodeItemSchema = z.object({
+  code: z.string().min(1),
+  photoUrl: z.string().url().optional()
+});
 var submitMeasurePayloadSchema = z.object({
   measuredKg: kgSchema,
   photoUrls: z.array(z.string().url()).min(1),
   payoutMethod: payoutMethodSchema,
   barcodes: z.array(z.string().min(1)).max(50).optional(),
+  barcodeItems: z.array(barcodeItemSchema).max(50).optional(),
   geo: pickupGeoSchema.optional(),
   // [14 J2] 현장 실배달 신유 통수(구매 동반 주문 필수 0..50 — 필수 강제는 RPC가 order_kind로 판정).
   deliveredCans: z.number().int().min(0).max(50).optional()
@@ -121,6 +126,12 @@ var confirmRemindInputSchema = z.object({
 var confirmRemindOutputSchema = z.object({
   sent: z.boolean()
 });
+var payoutChangeRequestInputSchema = z.object({
+  orderId: uuidSchema
+});
+var payoutChangeRequestOutputSchema = z.object({
+  sent: z.boolean()
+});
 var riderLocationOutputSchema = z.object({
   updatedAt: z.string()
 });
@@ -180,6 +191,66 @@ var pointAdjustInputSchema = z.object({
 var pointAdjustOutputSchema = z.object({
   userId: uuidSchema,
   amount: z.number().int()
+});
+var couponAdjustInputSchema = z.object({
+  riderId: uuidSchema,
+  qty: z.number().int().refine((v) => v !== 0, { message: "\uC870\uC815 \uC218\uB7C9\uC740 0\uC774 \uB420 \uC218 \uC5C6\uC5B4\uC694." }),
+  memo: z.string().min(1)
+});
+var couponAdjustOutputSchema = z.object({
+  riderId: uuidSchema,
+  qty: z.number().int()
+});
+var couponPriceSetInputSchema = z.object({
+  unitPrice: z.number().int().positive()
+});
+var couponPriceSetOutputSchema = z.object({
+  id: z.number().int(),
+  unitPrice: z.number().int().positive(),
+  effectiveAt: z.string()
+});
+var couponPurchaseIntentInputSchema = z.object({
+  qty: z.number().int().min(1).max(200)
+});
+var couponPurchaseIntentOutputSchema = z.object({
+  purchaseId: uuidSchema,
+  /** PG 주문번호(pg_order_id). 토스 requestPayment()의 orderId / 코엠 orderno(20자 이내). */
+  pgOrderId: z.string().min(1),
+  /** 결제 금액(원) = qty × unitPrice. 위젯 setAmount·confirm amount 검증 기준. */
+  amount: z.number().int().positive(),
+  unitPrice: z.number().int().positive(),
+  /** 코엠(PG_PROVIDER=koem — 기본, 17 C3) 결제창 진입 정보(07 F14). 클라이언트는 params를 수정
+      없이 hidden form으로 payUrl에 POST한다(checkHash 포함 — 서버 생성). 토스 모드에서는 없음. */
+  koem: z.object({
+    payUrl: z.string().min(1),
+    params: z.record(z.string())
+  }).optional(),
+  /** 데모 결제(PG_PROVIDER=demo, 07 F14 데모 운영 — 개발·데모 전용, 프로덕션 금지). 클라이언트는
+      결제창 없이 곧장 confirm(paymentKey=`demo_${purchaseId}`)을 호출한다. 실 PG 모드에서는 없음. */
+  demo: z.literal(true).optional()
+});
+var couponPurchaseConfirmInputSchema = z.object({
+  purchaseId: uuidSchema,
+  paymentKey: z.string().min(1),
+  pgOrderId: z.string().min(1),
+  amount: z.number().int().positive()
+});
+var couponPurchaseConfirmOutputSchema = z.object({
+  /** 충전 후 쿠폰 잔액(장). v_coupon_balance 재조회. */
+  balance: z.number().int().nonnegative()
+});
+var couponRefundInputSchema = z.object({
+  purchaseId: uuidSchema,
+  /** 환불 수량(장). 생략 시 구매 전액. 1 이상, 구매 qty 이하(RPC가 상한 검증). */
+  qty: z.number().int().positive().optional(),
+  reason: z.string().min(1)
+});
+var couponRefundOutputSchema = z.object({
+  purchaseId: uuidSchema,
+  /** 실제 환불된 수량(장). */
+  refundedQty: z.number().int().positive(),
+  /** 환불 후 라이더 쿠폰 잔액(장). */
+  balance: z.number().int().nonnegative()
 });
 var supplierSignupInputSchema = z.object({
   displayName: z.string().min(1),
@@ -304,7 +375,9 @@ var dealerRiderStatsSchema = z.object({
   cash_paid: z.number().int().nonnegative(),
   point_paid: z.number().int().nonnegative(),
   referral_signed_up: z.number().int().nonnegative(),
-  referral_activated: z.number().int().nonnegative()
+  referral_activated: z.number().int().nonnegative(),
+  /** [17 Q5] 완료 주문 coupon_cost 합(뷰 append, null→0). 조회 전용 — 정산 무관(17 C5). */
+  coupon_used_qty: z.number().int().nonnegative()
 });
 var dealerAccountSetInputSchema = z.object({
   dealerId: uuidSchema,
@@ -357,10 +430,21 @@ var dealerStatementSchema = z.object({
 });
 export {
   arrivePayloadSchema,
+  barcodeItemSchema,
   cancelPayloadSchema,
   confirmMeasurePayloadSchema,
   confirmRemindInputSchema,
   confirmRemindOutputSchema,
+  couponAdjustInputSchema,
+  couponAdjustOutputSchema,
+  couponPriceSetInputSchema,
+  couponPriceSetOutputSchema,
+  couponPurchaseConfirmInputSchema,
+  couponPurchaseConfirmOutputSchema,
+  couponPurchaseIntentInputSchema,
+  couponPurchaseIntentOutputSchema,
+  couponRefundInputSchema,
+  couponRefundOutputSchema,
   csCategorySchema,
   csReplyInputSchema,
   csReplyOutputSchema,
@@ -400,6 +484,8 @@ export {
   orderKindSchema,
   orderTransitionInputSchema,
   orderTransitionOutputSchema,
+  payoutChangeRequestInputSchema,
+  payoutChangeRequestOutputSchema,
   payoutMethodSchema,
   pickupGeoSchema,
   pointAdjustInputSchema,

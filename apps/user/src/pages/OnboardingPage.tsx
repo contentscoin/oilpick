@@ -94,6 +94,8 @@ export function OnboardingPage() {
         }}
         data-testid={`onboarding-slide-${index}`}
       >
+        {/* [M] 글자 확대 시 이모지 글리프(줄높이)가 128px 원을 넘어 겹치지 않게
+            lineHeight:1 + overflow:hidden — 장식(aria-hidden)이므로 넘치는 부분은 잘라도 된다. */}
         <div
           aria-hidden
           style={{
@@ -105,6 +107,8 @@ export function OnboardingPage() {
             borderRadius: "50%",
             backgroundColor: colors.primary.light,
             fontSize: 64,
+            lineHeight: 1,
+            overflow: "hidden",
           }}
         >
           {slide.emoji}

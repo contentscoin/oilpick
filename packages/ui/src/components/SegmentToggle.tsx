@@ -123,6 +123,9 @@ export function SegmentToggle<T extends string>({
               position: "relative",
               zIndex: 1,
               flex: 1,
+              // [03 레이아웃 강건성] minWidth:0 — 글자 확대 시 라벨이 트랙을 밀어내
+              // 인디케이터 폭 계산식(100%/count)과 어긋나는 것을 완화한다.
+              minWidth: 0,
               minHeight: touchTarget,
               border: "none",
               background: "transparent",

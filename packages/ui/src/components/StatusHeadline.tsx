@@ -87,7 +87,8 @@ export function StatusHeadline({ status, pill, subtitle, className }: StatusHead
   const resolvedSubtitle = subtitle ?? base.subtitle;
   return (
     <div className={className} data-testid="status-headline">
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      {/* [03 레이아웃 강건성] 확대로 좁아지면 pill이 타이틀 아래 줄로 접힌다. */}
+      <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
         <h2
           style={{
             margin: 0,
@@ -113,6 +114,7 @@ export function StatusHeadline({ status, pill, subtitle, className }: StatusHead
               borderRadius: radius.pill,
               fontSize: 13,
               fontWeight: 700,
+              whiteSpace: "nowrap",
               color: autoPill.color,
               backgroundColor: `${autoPill.color}1A`,
             }}

@@ -43,13 +43,16 @@ export function InfoStatCard({ stats, footnote, className }: InfoStatCardProps) 
         overflow: "hidden",
       }}
     >
-      <div style={{ display: "flex", padding: "16px 0" }}>
-        {stats.map((stat, i) => (
+      {/* [03 레이아웃 강건성] 글자 확대 시 셀이 행 접힘(flexWrap)으로 흐른다 — 금액이 잘려
+          틀리게 읽히던 결함. 구분선은 모든 셀 왼쪽에 긋고 행을 -1px 당겨, 각 줄 첫 셀의
+          구분선을 카드 overflow:hidden이 클립하게 한다(폭 확장 아님 — 1x 외관 동일). */}
+      <div style={{ display: "flex", flexWrap: "wrap", rowGap: 12, padding: "16px 0", marginLeft: -1 }}>
+        {stats.map((stat) => (
           <div
             key={stat.label}
             data-testid="info-stat-cell"
             style={{
-              flex: 1,
+              flex: "1 1 96px",
               minWidth: 0,
               display: "flex",
               flexDirection: "column",
@@ -57,8 +60,8 @@ export function InfoStatCard({ stats, footnote, className }: InfoStatCardProps) 
               gap: 6,
               padding: "0 8px",
               textAlign: "center",
-              // 열 사이 얇은 구분선(첫 열 제외).
-              borderLeft: i === 0 ? "none" : `1px solid ${surface.border}`,
+              // 열 사이 얇은 구분선(줄 첫 셀 몫은 카드 밖 -1px에서 클립됨).
+              borderLeft: `1px solid ${surface.border}`,
             }}
           >
             <span style={{ fontSize: 13, color: colors.status.wait }}>{stat.label}</span>
@@ -70,6 +73,8 @@ export function InfoStatCard({ stats, footnote, className }: InfoStatCardProps) 
                 letterSpacing: "-0.01em",
                 color: stat.accent ? colors.accent.deep : gray[900],
                 wordBreak: "keep-all",
+                // 금액은 잘리면 오독 — 셀 폭을 넘치면 줄바꿈으로 흐른다(ellipsis 금지).
+                overflowWrap: "anywhere",
               }}
             >
               {stat.value}

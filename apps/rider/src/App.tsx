@@ -33,6 +33,12 @@ const HistoryPage = lazy(() =>
 const EarningsPage = lazy(() =>
   import("./pages/EarningsPage").then((m) => ({ default: m.EarningsPage })),
 );
+const CouponPurchasePage = lazy(() =>
+  import("./pages/CouponPurchasePage").then((m) => ({ default: m.CouponPurchasePage })),
+);
+const CouponLedgerPage = lazy(() =>
+  import("./pages/CouponLedgerPage").then((m) => ({ default: m.CouponLedgerPage })),
+);
 const BadgePage = lazy(() => import("./pages/BadgePage").then((m) => ({ default: m.BadgePage })));
 const NotificationsPage = lazy(() =>
   import("./pages/NotificationsPage").then((m) => ({ default: m.NotificationsPage })),
@@ -50,8 +56,9 @@ const SupportPage = lazy(() =>
  * R1(/auth, /verify), R2(/), R3(/calls/:id), R4~R6(/active)는 T9 구현.
  * R7(/earnings="수거 실적"), R9(/badge), R11/R12(/notifications, /my)는 T10 구현.
  * 07 F6-⑤: 포인트 출금(/earnings/withdraw) 라우트 제거(구모델 라이더 포인트 폐기).
- * 08 G6-①: 쿠폰 모델 폐기 — /coupons·/coupons/purchase 라우트와 페이지·훅을 전면 삭제.
- * 잔존 딥링크/북마크는 catch-all이 콜 홈으로 되돌린다.
+ * [17 Q3] 수거쿠폰 복권 — 08 G6-①이 삭제했던 /coupons(내역)·/coupons/purchase(충전) 라우트를
+ * 복원한다. 진입은 콜 홈 쿠폰 잔액 카드(카드 탭→내역, [충전하기]→충전 — 원형 F5와 동일,
+ * 탭바에는 없다). 코엠 결제창 rUrl 복귀·토스 successUrl도 /coupons/purchase로 들어온다.
  */
 export function App() {
   // 네이티브(Capacitor) 통합: 커스텀 스킴 딥링크 + FCM 푸시 초기화(웹에서는 no-op).
@@ -113,6 +120,23 @@ export function App() {
                 <RiderShell>
                   <EarningsPage />
                 </RiderShell>
+              </AuthGuard>
+            }
+          />
+          {/* [17 Q3] 쿠폰 충전(코엠 form POST 복귀·토스 successUrl 콜백 포함)·내역. 셸 없이 단독 화면. */}
+          <Route
+            path="/coupons/purchase"
+            element={
+              <AuthGuard>
+                <CouponPurchasePage />
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/coupons"
+            element={
+              <AuthGuard>
+                <CouponLedgerPage />
               </AuthGuard>
             }
           />

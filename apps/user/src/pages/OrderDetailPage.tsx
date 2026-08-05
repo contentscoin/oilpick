@@ -67,6 +67,7 @@ export function OrderDetailPage() {
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [disputing, setDisputing] = useState(false);
+  const [requestingCashChange, setRequestingCashChange] = useState(false);
   const [disputeReason, setDisputeReason] = useState("");
   const [showDisputeForm, setShowDisputeForm] = useState(false);
 
@@ -107,7 +108,7 @@ export function OrderDetailPage() {
                 홈으로
               </BigButton>
               <BigButton variant="secondary" data-testid="order-notfound-history" onClick={() => navigate("/orders", { replace: true })}>
-                수거 이력 보기
+                판매 이력 보기
               </BigButton>
             </>
           }
@@ -154,6 +155,23 @@ export function OrderDetailPage() {
       // [14 J4] 상계 결제 실패 2종은 "현금으로 재제출"이 복구 경로다. 공용 코드 메시지는
       // 출금 맥락 문구라 여기서 맥락 카피로 덮어쓴다(그대로 두면 원인도 다음 행동도 알 수 없다).
       showToast(settlementFailureMessage(result.code) ?? result.message, { variant: "error" });
+    }
+  }
+
+  /** [N3] 현금 지급 변경 요청 — sent:false는 rate limit 스킵(에러 아님, 서버 2h 강제). */
+  async function handlePayoutChangeRequest() {
+    if (!id) return;
+    setRequestingCashChange(true);
+    const result = await invokeEdgeFunction<{ sent: boolean }>("payout-change-request", { orderId: id });
+    setRequestingCashChange(false);
+    if (!result.ok) {
+      showToast(result.message, { variant: "error" });
+      return;
+    }
+    if (result.data.sent) {
+      showToast("라이더에게 현금 지급 변경을 요청했어요", { variant: "success" });
+    } else {
+      showToast("잠시 전에 이미 요청했어요 — 2시간에 한 번 보낼 수 있어요");
     }
   }
 
@@ -293,6 +311,31 @@ export function OrderDetailPage() {
           + 라이더명 보조문구). */}
       <StatusHeadline status={order.status} subtitle={headlineSubtitle} />
 
+      {/* [N2] 주문 정보 — 희망 시간 행. 저장 문자열 그대로 표시(레거시 "지금"도 그대로 — 가공 금지). */}
+      {order.preferredTime && (
+        <div
+          data-testid="order-preferred-time"
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: 12,
+            padding: "12px 16px",
+            borderRadius: radius.card,
+            backgroundColor: surface.card,
+            border: `1px solid ${surface.border}`,
+          }}
+        >
+          <span style={{ fontSize: 14, color: colors.status.wait }}>희망 시간</span>
+          <span
+            className="oilpick-tabular-nums"
+            style={{ fontSize: 14, fontWeight: 600, marginLeft: "auto", textAlign: "right", minWidth: 0, overflowWrap: "anywhere" }}
+          >
+            {order.preferredTime}
+          </span>
+        </div>
+      )}
+
       {order.status === "REQUESTED" && (
         <section data-testid="order-requested-panel" style={{ display: "flex", flexDirection: "column", gap: 20, alignItems: "center" }}>
           <RadiusPulse />
@@ -402,14 +445,14 @@ export function OrderDetailPage() {
           {/* 목업처럼 타임라인까지 시트 안에 둔다 — 라이더와 진행 단계가 한 덩어리로 읽힌다. */}
           <OrderTimeline currentStatus={order.status} timestamps={timelineTimestamps} legacy={isLegacyOrder} />
           {/* 시트 하단 퀵액션. 존재하는 목적지만 넣는다(없는 화면을 만들지 않는다). */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 8 }}>
             <button
               type="button"
               data-testid="order-track-history"
               onClick={() => navigate("/orders")}
               style={sheetActionStyle}
             >
-              수거 이력
+              판매 이력
             </button>
             <button
               type="button"
@@ -481,7 +524,7 @@ export function OrderDetailPage() {
             </div>
           )}
           <div style={{ borderRadius: radius.card, backgroundColor: surface.card, border: `1px solid ${surface.border}`, boxShadow: elevation.card, padding: 16, display: "flex", flexDirection: "column", gap: 8 }}>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
               <span style={{ fontSize: 14, color: colors.status.wait }}>{isArbitrated ? "중재 확정 무게" : "확정 계량"}</span>
               <span data-testid="measured-kg-value" style={{ fontSize: 14, fontWeight: 600 }}>
                 {formatKg(confirmKg)}
@@ -491,13 +534,13 @@ export function OrderDetailPage() {
                 아래 "차액"이 왜 그 금액인지 점주가 확인할 수 있다. */}
             {hasPurchase && (
               <>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
                   <span style={{ fontSize: 14, color: colors.status.wait }}>폐유 금액</span>
                   <span data-testid="netting-waste-amount" className="oilpick-tabular-nums" style={{ fontSize: 14, fontWeight: 600 }}>
                     {formatKrw(confirmWaste)}
                   </span>
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
                   <span style={{ fontSize: 14, color: colors.status.wait }}>
                     새 기름 {order.deliveredCans ?? 0}통
                   </span>
@@ -508,15 +551,16 @@ export function OrderDetailPage() {
                 <div style={{ height: 1, backgroundColor: surface.border }} />
               </>
             )}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 14, color: colors.status.wait }}>
+            {/* [M] 확대 시 라벨+칩과 금액이 자연스럽게 두 줄로 떨어지게 wrap — 금액은 marginLeft:auto로 우측 정렬 유지. */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 14, color: colors.status.wait, minWidth: 0 }}>
                 {confirmNet < 0 ? "지불할 금액" : confirmNet === 0 ? "주고받을 금액" : isPointPayout ? "적립될 포인트" : "받을 현금"}
                 <PayoutMethodChip method={payoutMethod} />
               </span>
               <span
                 data-testid="measure-cash-amount"
                 className="oilpick-tabular-nums"
-                style={{ fontSize: 18, fontWeight: 700, color: confirmNet < 0 ? colors.status.wait : isPointPayout ? colors.accent.deep : colors.primary.dark }}
+                style={{ fontSize: 18, fontWeight: 700, marginLeft: "auto", color: confirmNet < 0 ? colors.status.wait : isPointPayout ? colors.accent.deep : colors.primary.dark }}
               >
                 {isPointPayout ? formatPoint(Math.abs(confirmNet)) : formatKrw(Math.abs(confirmNet))}
               </span>
@@ -542,6 +586,31 @@ export function OrderDetailPage() {
             <p data-testid="point-charge-caption" style={{ margin: 0, fontSize: 13, color: colors.status.wait, textAlign: "center" }}>
               확인하시면 새 기름 대금이 보유 포인트에서 즉시 차감돼요.
             </p>
+          )}
+          {/* [N3, 08 P2 확장] POINT 제출 건 한정 — 포인트가 싫거나 잔액이 부족할 때 라이더에게
+              현금 재제출을 인앱으로 요청한다(payout-change-request — 상태 무접촉 푸시, 주문당 2h
+              서버 dedupe). 실제 변경은 라이더 재제출로만 일어난다(2자 확인 원칙). */}
+          {isPointPayout && !isArbitrated && (
+            <button
+              type="button"
+              data-testid="payout-change-request-button"
+              disabled={requestingCashChange}
+              onClick={handlePayoutChangeRequest}
+              style={{
+                width: "100%",
+                minHeight: 48,
+                borderRadius: radius.button,
+                border: `1px solid ${colors.primary.DEFAULT}`,
+                backgroundColor: "#fff",
+                color: colors.primary.DEFAULT,
+                fontSize: 15,
+                fontWeight: 700,
+                cursor: requestingCashChange ? "default" : "pointer",
+                opacity: requestingCashChange ? 0.6 : 1,
+              }}
+            >
+              {requestingCashChange ? "요청 보내는 중..." : "💵 현금 지급으로 변경 요청"}
+            </button>
           )}
           {!isArbitrated && (
             <button
@@ -607,6 +676,7 @@ export function OrderDetailPage() {
             borderRadius: radius.hero,
             background: isPointPayout ? gradient.point : gradient.brand,
             boxShadow: elevation.raised,
+            minWidth: 0,
           }}
         >
           <p style={{ margin: 0, fontSize: 15, fontWeight: 600, color: "rgba(255,255,255,0.75)" }}>
@@ -620,10 +690,11 @@ export function OrderDetailPage() {
                   ? "적립된 포인트"
                   : "받은 현금"}
           </p>
+          {/* [M] 금액 숫자는 임의 지점 절단 금지(overflowWrap normal) — 넘치면 통째로 다음 줄. */}
           <p
             data-testid="completed-cash-amount"
             className="oilpick-tabular-nums"
-            style={{ margin: 0, fontSize: 40, fontWeight: 800, letterSpacing: "-0.02em", color: "#FFFFFF" }}
+            style={{ margin: 0, fontSize: 40, fontWeight: 800, letterSpacing: "-0.02em", color: "#FFFFFF", overflowWrap: "normal", maxWidth: "100%" }}
           >
             {isPointPayout ? formatPoint(Math.abs(settledNet)) : formatKrw(Math.abs(settledNet))}
           </p>
@@ -662,13 +733,15 @@ export function OrderDetailPage() {
             backgroundColor: colors.accent.light,
             border: `1px solid ${surface.border}`,
             boxShadow: elevation.card,
+            minWidth: 0,
           }}
         >
           <p style={{ margin: 0, fontSize: 15, fontWeight: 600, color: colors.status.wait }}>지급된 포인트</p>
+          {/* [M] 금액 숫자는 임의 지점 절단 금지(overflowWrap normal) — 넘치면 통째로 다음 줄. */}
           <p
             data-testid="completed-supplier-point"
             className="oilpick-tabular-nums"
-            style={{ margin: 0, fontSize: 40, fontWeight: 800, letterSpacing: "-0.02em", color: colors.accent.deep }}
+            style={{ margin: 0, fontSize: 40, fontWeight: 800, letterSpacing: "-0.02em", color: colors.accent.deep, overflowWrap: "normal", maxWidth: "100%" }}
           >
             {formatPoint(order.supplierPoint ?? 0)}
           </p>
@@ -734,10 +807,10 @@ function BellIcon() {
   );
 }
 
-/** 하단 CTA용 전화 아이콘(흰색). */
+/** 하단 CTA용 전화 아이콘(흰색). [M] flexShrink:0 — 확대로 라벨이 길어져도 아이콘이 찌그러지지 않게. */
 function PhoneCtaIcon() {
   return (
-    <svg width={20} height={20} viewBox="0 0 24 24" fill="none" aria-hidden>
+    <svg width={20} height={20} viewBox="0 0 24 24" fill="none" aria-hidden style={{ flexShrink: 0 }}>
       <path
         d="M6.5 4h3l1.2 3.2-1.8 1.4a11 11 0 0 0 4.5 4.5l1.4-1.8L18.5 12.5V15.5c0 1-.8 1.8-1.8 1.7A13.5 13.5 0 0 1 4.8 5.8C4.7 4.8 5.5 4 6.5 4Z"
         stroke="#fff"

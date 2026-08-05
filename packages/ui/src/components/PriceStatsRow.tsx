@@ -48,10 +48,12 @@ export function PriceStatsRow({ data, onDark = false, className }: PriceStatsRow
     <div
       data-testid="price-stats-row"
       className={className}
-      style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}
+      // [03 레이아웃 강건성] 고정 4열 대신 auto-fit — 글자 확대·좁은 폭에서 2×2로 접힌다.
+      // 1x 기준 컨테이너 폭 408px 이상(480px 화면 - 페이지 패딩)이면 그대로 4열 유지.
+      style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(96px, 1fr))", gap: 8 }}
     >
       {items.map((item) => (
-        <div key={item.label} style={{ textAlign: "center" }}>
+        <div key={item.label} style={{ minWidth: 0, textAlign: "center" }}>
           <div style={{ fontSize: typeScale.caption, color: labelColor, marginBottom: 2 }}>{item.label}</div>
           <div
             style={{

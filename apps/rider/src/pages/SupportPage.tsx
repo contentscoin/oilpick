@@ -13,8 +13,8 @@ import { useSession } from "../hooks/useSession";
 import { supabase } from "../lib/supabaseClient";
 import { csTicketsKey, useMyOrderOptions, useMyTickets } from "../hooks/useSupport";
 
-// 08 P1: COUPON_PAYMENT은 레거시(쿠폰 모델 폐기) — 신규 접수 폼에서 제외(과거 티켓 렌더는 라벨 맵으로 유지).
-const CATEGORY_ORDER: CsCategory[] = ["ORDER", "CASH_DISPUTE", "ACCOUNT", "ETC"];
+// [17 Q6] COUPON_PAYMENT 현역 복귀 — 쿠폰 복권(17)으로 결제/환불 문의가 다시 발생한다.
+const CATEGORY_ORDER: CsCategory[] = ["ORDER", "CASH_DISPUTE", "COUPON_PAYMENT", "ACCOUNT", "ETC"];
 
 /**
  * 라이더 고객센터(07 F12 ③). apps/user/src/pages/SupportPage.tsx와 동일 구성(role=rider 고정 —
@@ -104,7 +104,7 @@ export function SupportPage() {
             data-testid="support-category"
             value={category}
             onChange={(e) => setCategory(e.target.value as CsCategory)}
-            style={{ minHeight: 44, borderRadius: radius.button, border: `1px solid ${surface.border}`, padding: "0 12px", fontSize: 15 }}
+            style={{ width: "100%", maxWidth: "100%", minHeight: 44, borderRadius: radius.button, border: `1px solid ${surface.border}`, padding: "0 12px", fontSize: 15 }}
           >
             {CATEGORY_ORDER.map((c) => (
               <option key={c} value={c}>
@@ -145,7 +145,7 @@ export function SupportPage() {
             data-testid="support-order"
             value={orderId}
             onChange={(e) => setOrderId(e.target.value)}
-            style={{ minHeight: 44, borderRadius: radius.button, border: `1px solid ${surface.border}`, padding: "0 12px", fontSize: 15 }}
+            style={{ width: "100%", maxWidth: "100%", minHeight: 44, borderRadius: radius.button, border: `1px solid ${surface.border}`, padding: "0 12px", fontSize: 15 }}
           >
             <option value="">연결 안 함</option>
             {presetOrderId && !options.some((o) => o.id === presetOrderId) && (
@@ -189,7 +189,7 @@ export function SupportPage() {
               data-testid={`support-ticket-${t.id}`}
               style={{ borderRadius: radius.card, padding: 14, backgroundColor: surface.card, border: `1px solid ${surface.border}`, display: "flex", flexDirection: "column", gap: 6 }}
             >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                 <span style={{ fontSize: 12, color: colors.status.wait }}>{CS_CATEGORY_LABEL[t.category]}</span>
                 <span
                   data-testid={`support-ticket-status-${t.id}`}

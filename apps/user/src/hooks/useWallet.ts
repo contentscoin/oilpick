@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { LedgerEntry, LedgerEntryType } from "@oilpick/ui";
 import { supabase } from "../lib/supabaseClient";
 import { queryKeys } from "../lib/queryClient";
@@ -58,15 +58,24 @@ export function usePointBalance(userId: string | undefined) {
   return query;
 }
 
+/** 포인트 내역 1페이지 크기 — [더 보기]가 이 단위로 limit을 늘린다. */
+export const LEDGER_PAGE_SIZE = 50;
+
 /**
- * U11 지갑 "포인트 내역"(LedgerList variant="point") 데이터. 최근 point_ledger 본인 행 50건(최신순).
+ * U11 지갑 "포인트 내역"(LedgerList variant="point") 데이터. point_ledger 본인 행 최신순 limit건
+ * (기본 50 — WalletPage [더 보기]가 50씩 늘려 잔액(v_point_balance 전체 집계)과 대사 가능하게 한다).
  * 현역 entry_type: EARN(매각대금)/WITHDRAW_REQUEST(출금 신청)/WITHDRAW_CANCEL(출금 반려 복구)/
  * ADJUST(관리자 조정). HOLD/RELEASE/PURCHASE는 레거시 표시 전용(00-domain.md 포인트 원장 규칙).
  */
-export function useLedger(userId: string | undefined) {
+export function useLedger(userId: string | undefined, limit: number = LEDGER_PAGE_SIZE) {
   return useQuery({
-    queryKey: queryKeys.ledger(userId ?? ""),
+    // limit을 캐시 키에 포함 — [더 보기]로 limit이 커지면 키가 분리되고, prefix
+    // (queryKeys.ledger(userId)) invalidate(usePointBalance Realtime·WithdrawPage)는
+    // 모든 limit 캐시에 여전히 적중한다(TanStack Query 부분 일치).
+    queryKey: [...queryKeys.ledger(userId ?? ""), limit] as const,
     enabled: Boolean(userId),
+    // [더 보기]로 키가 바뀌는 동안 직전 목록을 유지해 스켈레톤 재점멸을 막는다.
+    placeholderData: keepPreviousData,
     queryFn: async (): Promise<LedgerEntry[]> => {
       if (!userId) return [];
       const { data, error } = await supabase
@@ -74,7 +83,7 @@ export function useLedger(userId: string | undefined) {
         .select("id, entry_type, amount, memo, created_at")
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
-        .limit(50);
+        .limit(limit);
       if (error) throw error;
       return (data ?? []).map((row) => ({
         id: row.id,

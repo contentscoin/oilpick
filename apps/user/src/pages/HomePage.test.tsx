@@ -150,7 +150,7 @@ describe("HomePage", () => {
     mockUseOrderHistory.mockReturnValue({ data: undefined, isLoading: true });
     renderHome();
     expect(screen.getByTestId("recent-orders-skeleton")).toBeInTheDocument();
-    expect(screen.queryByText("아직 수거 이력이 없어요.")).not.toBeInTheDocument();
+    expect(screen.queryByText("아직 판매 이력이 없어요.")).not.toBeInTheDocument();
   });
 
   it("shows this month's cash receipt summary and links to the receipts screen", () => {

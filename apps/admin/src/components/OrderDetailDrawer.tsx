@@ -178,7 +178,7 @@ export function OrderDetailDrawer({ order, events, isLoading, onClose, onMutated
               <p className="mt-0.5 text-lg font-bold text-gray-900">{ORDER_STATUS_LABEL[order.status]}</p>
             </section>
 
-            <section className="grid grid-cols-2 gap-3 rounded-card bg-white p-4 text-sm shadow-card">
+            <section className="grid grid-cols-1 gap-3 rounded-card bg-white p-4 text-sm shadow-card sm:grid-cols-2">
               <div>
                 <p className="text-xs text-gray-500">공급업체</p>
                 <p className="font-medium text-gray-800">{order.supplierName}</p>
@@ -243,7 +243,7 @@ export function OrderDetailDrawer({ order, events, isLoading, onClose, onMutated
                   </p>
                 </div>
               )}
-              <div className="col-span-2 border-t border-gray-50 pt-3">
+              <div className="border-t border-gray-50 pt-3 sm:col-span-2">
                 <p className="text-xs text-gray-500">수거 주소</p>
                 <p className="text-sm text-gray-700">{order.pickupAddress}</p>
               </div>
@@ -283,12 +283,13 @@ export function OrderDetailDrawer({ order, events, isLoading, onClose, onMutated
               <p className="mb-3 text-xs font-medium text-gray-500">이벤트 타임라인</p>
               <ol className="flex flex-col" data-testid="order-event-timeline">
                 {events.map((ev, i) => (
-                  <li key={ev.id} className="relative flex gap-3 pb-4 last:pb-0">
-                    <div className="flex flex-col items-center">
+                  <li key={ev.id} className="relative flex items-start gap-3 pb-4 last:pb-0">
+                    {/* 도트 컬럼은 self-stretch로 행 높이를 유지해 연결선(flex-1)이 끊기지 않게 한다. */}
+                    <div className="flex flex-col items-center self-stretch">
                       <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-pill bg-primary" />
                       {i < events.length - 1 && <span className="w-px flex-1 bg-gray-200" />}
                     </div>
-                    <div className="-mt-0.5 text-sm">
+                    <div className="text-sm">
                       <p className="font-medium text-gray-800">
                         {ev.fromStatus ? ORDER_STATUS_LABEL[ev.fromStatus as keyof typeof ORDER_STATUS_LABEL] : "생성"} →{" "}
                         {ORDER_STATUS_LABEL[ev.toStatus as keyof typeof ORDER_STATUS_LABEL]}

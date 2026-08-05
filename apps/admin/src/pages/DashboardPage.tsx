@@ -65,7 +65,7 @@ export function DashboardPage() {
           <QueryError onRetry={refetchKpi} message="오늘 지표를 불러오지 못했어요" />
         </div>
       ) : (
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <KpiCard label="오늘 주문 수" value={kpiLoading ? "-" : `${kpi?.orderCount ?? 0}건`} />
         <KpiCard label="오늘 수거 kg" value={kpiLoading ? "-" : `${(kpi?.collectedKg ?? 0).toFixed(1)}kg`} />
         <KpiCard label="오늘 현금 지급" value={kpiLoading ? "-" : formatKrw(kpi?.cashPaidAmount ?? 0)} accent />
@@ -102,11 +102,13 @@ export function DashboardPage() {
                   key={o.id}
                   className="flex items-center justify-between rounded-card border border-gray-100 px-3 py-2 text-sm"
                 >
-                  <div>
-                    <p className="font-medium text-gray-800">{o.pickupAddress}</p>
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-gray-800">{o.pickupAddress}</p>
                     <p className="text-xs text-gray-500">{o.requestedKg}kg 예상</p>
                   </div>
-                  <OrderStatusPill status={o.status as OrderStatus} />
+                  <span className="shrink-0">
+                    <OrderStatusPill status={o.status as OrderStatus} />
+                  </span>
                 </li>
               ))}
             </ul>

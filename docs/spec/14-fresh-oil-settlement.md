@@ -48,6 +48,21 @@ barcode 인덱스. RLS select = **`p_events_read` 정확 미러 = admin | 주문
 부활 시 별도 설계). 쓰기 정책 없음(service_role RPC만).
 SUBMIT 시 **replace-set**(delete→insert; 원본 payload는 order_events에 영구 보존).
 
+> **[확장 2026-08-05 O2]** 바코드 사진 첨부(CEO: "바코드는 입력도 되지만 사진첨부도 되게").
+> `20260805000002_pickup_item_photo.sql`.
+> - **`photo_url text null` 컬럼 추가** — 현장 첨부 사진의 order-photos **1년 서명 URL**(계량 사진과
+>   동일 비공개 버킷·동일 관용구, 경로 `${orderId}/barcode-{ts}.jpg`, 업로드는 첨부 즉시·compressImage
+>   압축 적용). null = 사진 없음(레거시 행·사진 없는 등록 호환).
+> - **SUBMIT_MEASURE payload += `barcodeItems?: [{ code, photoUrl? }]`(≤50, core `barcodeItemSchema`)** —
+>   RPC는 barcodeItems가 있으면 그것으로 replace-set(photo_url 포함, `barcodes`보다 우선), 없으면 기존
+>   `barcodes`(text[]) 경로 그대로(구버전 번들·재제출 후방 호환). geo는 두 경로 공통.
+> - **사진 단독 등록 규약**: 코드 없이 사진만 첨부하면 클라이언트가 `photo-` + 8자리 고유 접미
+>   (`Date.now().toString(36)`) 코드를 생성해 code로 보낸다 — unique(order_id,barcode) 충족. 목록·이력
+>   표시는 "사진 등록"(photo- 접두 판별). 서버는 코드 형태를 구분하지 않는다(일반 행과 동일 적재).
+> - 라이더 드래프트(measureDraft)에는 코드·photoUrl만 저장(파일 원본 미저장 — 업로드가 선행되므로).
+>   기존 "폐유 수거 시 바코드 ≥1" 가드는 사진 단독 등록으로도 충족된다.
+> - pgTAP `19_pickup_item_photo_test.sql`(12 asserts).
+
 ### 2-4. 좌상 정산 레이어
 > 아래는 **구현 확정형**(20260724000006/8과 1:1). 스키마 단일 진실은 `01-db-schema.sql`.
 

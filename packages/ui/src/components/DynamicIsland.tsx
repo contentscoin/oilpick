@@ -39,9 +39,11 @@ export function DynamicIsland({
         minHeight: 40,
         display: "inline-flex",
         alignItems: "center",
+        // [03 레이아웃 강건성] 확대 시 상태 문장·trailing이 pill 안에서 행 접힘으로 흐른다.
+        flexWrap: "wrap",
         gap: 10,
         borderRadius: radius.pill,
-        padding: "0 14px",
+        padding: "6px 14px",
         backgroundColor: surfaceDark.beui,
         color: surfaceDark.textOnDark,
         boxShadow: "0 14px 34px rgba(16,19,23,0.28)",
@@ -53,7 +55,9 @@ export function DynamicIsland({
     >
       {live && <LiveDot color={dotColor} />}
       <span style={{ minWidth: 0 }}>{children}</span>
-      {trailing}
+      {trailing != null && (
+        <span style={{ flexShrink: 0, display: "inline-flex", alignItems: "center" }}>{trailing}</span>
+      )}
     </div>
   );
 }

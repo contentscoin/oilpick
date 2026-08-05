@@ -62,6 +62,9 @@ export function DriverCard({ name, vehicleNo, phone, verified = true, className 
           color: colors.primary.dark,
           fontSize: 20,
           fontWeight: 800,
+          // [03 레이아웃 강건성] 글자 확대 시 이니셜이 원 밖으로 삐져나오지 않게 원형 클립.
+          lineHeight: 1,
+          overflow: "hidden",
         }}
       >
         {initial}
@@ -69,8 +72,9 @@ export function DriverCard({ name, vehicleNo, phone, verified = true, className 
 
       {/* 이름 / 라이더 + 인증 + 차량번호 */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 16, fontWeight: 700 }}>{name}</span>
+        {/* [03 레이아웃 강건성] 확대 시 이름·배지가 자연스럽게 두 줄로 떨어지게(행 접힘). */}
+        <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", columnGap: 8, rowGap: 4 }}>
+          <span style={{ fontSize: 16, fontWeight: 700, minWidth: 0 }}>{name}</span>
           <span style={{ fontSize: 13, color: colors.status.wait }}>라이더</span>
           {verified && (
             <span

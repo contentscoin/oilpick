@@ -78,7 +78,10 @@ export function CheckList({ items, className }: CheckListProps) {
               minHeight: 48,
               display: "grid",
               gridTemplateColumns: "28px 1fr auto",
-              alignItems: "center",
+              // [03 레이아웃 강건성] 라벨이 확대로 여러 줄이 되면 아이콘·pill은 첫 줄 기준
+              // 상단 정렬(start). 한 줄일 때의 세로 중앙감은 alignContent로 유지한다.
+              alignItems: "start",
+              alignContent: "center",
               gap: 10,
               padding: "8px 10px",
               borderRadius: radius.button,
@@ -101,6 +104,7 @@ export function CheckList({ items, className }: CheckListProps) {
             </span>
             <span
               style={{
+                minWidth: 0,
                 fontSize: 14,
                 fontWeight: item.state === "todo" ? 600 : 800,
                 color: item.state === "todo" ? gray[500] : gray[900],

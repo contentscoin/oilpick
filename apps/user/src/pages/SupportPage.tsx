@@ -180,7 +180,7 @@ export function SupportPage() {
               data-testid={`support-ticket-${t.id}`}
               style={{ borderRadius: radius.card, padding: 14, backgroundColor: surface.card, border: `1px solid ${surface.border}`, display: "flex", flexDirection: "column", gap: 6 }}
             >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
                 <span style={{ fontSize: 12, color: colors.status.wait }}>{CS_CATEGORY_LABEL[t.category]}</span>
                 <span
                   data-testid={`support-ticket-status-${t.id}`}

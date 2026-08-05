@@ -57,6 +57,7 @@ function baseRow(overrides: Record<string, unknown> = {}) {
     pickup_address: "주소",
     pickup_location: "0101000020E6100000713D0AD7A3B45F40E6AE25E483C64240",
     requested_kg: 45,
+    preferred_time: "2026-08-06 09:30",
     measured_kg: null,
     final_kg: null,
     photo_urls: [],
@@ -103,6 +104,8 @@ describe("useActiveRun — COMPLETED 완료 직후 창(07 F6-④)", () => {
     const { result } = renderHook(() => useActiveRun("rider-1"), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data?.status).toBe("ARRIVED");
+    // [N5] preferred_time이 저장 문자열 그대로 매핑된다(운행 화면 희망 시간 표시용).
+    expect(result.current.data?.preferredTime).toBe("2026-08-06 09:30");
   });
 });
 

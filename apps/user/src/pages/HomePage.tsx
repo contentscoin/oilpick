@@ -31,7 +31,7 @@ import { useProfile } from "../hooks/useProfile";
 /**
  * U3 홈 — 07 F8 전면 리디자인. **일별 시세 히어로가 주인공**.
  * 정보구조(위→아래): 헤더(로고+알림 벨/이력) → 다크 시세 히어로(현재가 40px 순백 + PriceChart 민트 +
- * 기간 토글) → 진행중 주문 카드 → 이번 달 현금 수령 요약 → 최근 수거 이력 2건 → 하단 fixed "수거 요청하기".
+ * 기간 토글) → 진행중 주문 카드 → 이번 달 현금 수령 요약 → 최근 판매 이력 2건 → 하단 fixed "수거 요청하기".
  * 구모델의 QtyStepper+예상포인트 섹션은 제거(RequestPage step1로 일원화, 07 F8).
  */
 
@@ -254,7 +254,7 @@ export function HomePage() {
             gap: 12,
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
             <p
               data-testid="price-hero-label"
               style={{ margin: 0, fontSize: typeScale.label, fontWeight: 500, color: surfaceDark.textOnDarkMuted }}
@@ -273,6 +273,7 @@ export function HomePage() {
                 fontWeight: 600,
                 cursor: "pointer",
                 padding: 0,
+                flexShrink: 0,
               }}
             >
               시세 상세 &gt;
@@ -337,6 +338,8 @@ export function HomePage() {
                       marginLeft: "auto",
                       display: "inline-flex",
                       alignItems: "center",
+                      // [M] 확대 시 "· 전일 대비"가 pill 안에서 자연 개행되게(nowrap 없음 유지).
+                      flexWrap: "wrap",
                       gap: 4,
                       padding: "5px 10px",
                       borderRadius: radius.pill,
@@ -459,23 +462,24 @@ export function HomePage() {
             <span style={{ fontSize: typeScale.body, fontWeight: 600, color: colors.status.wait }}>이번 달 수령</span>
             <span aria-hidden style={{ color: gray[400], fontSize: typeScale.body }}>&gt;</span>
           </span>
-          <span style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, width: "100%" }}>
-            <span style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          {/* [M] 글자 확대 대응 — 1fr은 min-width:auto라 긴 금액이 컬럼을 밀어 넘친다. minmax(0,1fr)+minWidth:0으로 금액이 행 단위로 개행되게 한다. */}
+          <span style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 8, width: "100%" }}>
+            <span style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
               <span style={{ fontSize: typeScale.caption, color: colors.status.wait }}>💵 현금</span>
               <span
                 data-testid="monthly-cash-amount"
                 className="oilpick-tabular-nums"
-                style={{ fontSize: typeScale.title, fontWeight: 800, color: colors.status.done }}
+                style={{ fontSize: typeScale.title, fontWeight: 800, color: colors.status.done, minWidth: 0 }}
               >
                 {formatKrw(monthly?.cash ?? 0)}
               </span>
             </span>
-            <span style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <span style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
               <span style={{ fontSize: typeScale.caption, color: colors.status.wait }}>🪙 포인트</span>
               <span
                 data-testid="monthly-point-amount"
                 className="oilpick-tabular-nums"
-                style={{ fontSize: typeScale.title, fontWeight: 800, color: colors.accent.deep }}
+                style={{ fontSize: typeScale.title, fontWeight: 800, color: colors.accent.deep, minWidth: 0 }}
               >
                 {formatPoint(monthly?.point ?? 0)}
               </span>
@@ -483,10 +487,10 @@ export function HomePage() {
           </span>
         </button>
 
-        {/* 최근 수거 이력 2건 */}
+        {/* 최근 판매 이력 2건 (구 "수거 이력" — 2026-08-05 CEO 지시 유저 관점 표기) */}
         <section data-testid="recent-orders" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <h2 style={{ fontSize: typeScale.body, margin: 0 }}>최근 수거 이력</h2>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+            <h2 style={{ fontSize: typeScale.body, margin: 0 }}>최근 판매 이력</h2>
             <button
               type="button"
               data-testid="recent-orders-more"
@@ -503,7 +507,7 @@ export function HomePage() {
               <div style={{ height: 64, borderRadius: radius.card, backgroundColor: gray[100] }} />
             </div>
           ) : recentOrders.length === 0 ? (
-            <p style={{ margin: 0, fontSize: typeScale.label, color: colors.status.wait }}>아직 수거 이력이 없어요.</p>
+            <p style={{ margin: 0, fontSize: typeScale.label, color: colors.status.wait }}>아직 판매 이력이 없어요.</p>
           ) : (
             <ul className="oilpick-stagger" style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
               {recentOrders.map((order) => (
@@ -517,6 +521,7 @@ export function HomePage() {
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "space-between",
+                      gap: 8,
                       textAlign: "left",
                       border: `1px solid ${surface.border}`,
                       borderRadius: radius.card,
@@ -526,7 +531,7 @@ export function HomePage() {
                       cursor: "pointer",
                     }}
                   >
-                    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
                       <span style={{ fontSize: 13, color: colors.status.wait }}>
                         {new Date(order.createdAt).toLocaleDateString("ko-KR")}
                       </span>

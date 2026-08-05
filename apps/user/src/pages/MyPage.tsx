@@ -101,9 +101,10 @@ export function MyPage() {
             {notifyEnabled ? "켜짐" : "꺼짐"}
           </span>
         </button>
+        {/* [M] 확대로 두 줄이 되면 minHeight를 넘어 자라야 하므로 상하 padding으로 숨쉴 공간 확보. */}
         <div
           data-testid="terms-placeholder"
-          style={{ display: "flex", alignItems: "center", minHeight: 48, padding: "0 4px", borderBottom: `1px solid ${surface.border}`, fontSize: 15, color: colors.status.wait }}
+          style={{ display: "flex", alignItems: "center", minHeight: 48, padding: "12px 4px", lineHeight: 1.4, borderBottom: `1px solid ${surface.border}`, fontSize: 15, color: colors.status.wait }}
         >
           이용약관 · 개인정보처리방침 (준비 중)
         </div>

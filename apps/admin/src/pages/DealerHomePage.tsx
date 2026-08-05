@@ -60,6 +60,9 @@ export function DealerHomePage() {
   // [16 L6] 라이더 전화 CTA — 현 소속 라이더의 연락처(useMyRiders — p_profiles_read_own_riders).
   // 전 소속(재배정) 라이더는 맵에 없어 CTA 미렌더(PII 최소화, 뷰 표시명 폴백과 동일 원칙).
   const riderPhones = new Map((riders ?? []).map((r) => [r.id, r.phone]));
+  // [17 Q5] 쿠폰 실적 — v_dealer_rider_stats.coupon_used_qty(완료 주문 coupon_cost 합).
+  // 조회 전용(정산 무관, 17 C5) — 통계 행이 아직 없으면 0장.
+  const couponUsed = new Map((stats ?? []).map((s) => [s.rider_id, s.coupon_used_qty]));
 
   // [16 L9] 파괴적 액션(반려·정지·해제) 확인 다이얼로그 + 사유 입력.
   const [action, setAction] = useState<RiderActionState | null>(null);
@@ -90,7 +93,7 @@ export function DealerHomePage() {
         <p className="text-sm text-gray-500">내 소속 라이더 현황과 실적을 한눈에 확인해요.</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4" data-testid="dealer-kpi">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4" data-testid="dealer-kpi">
         <Kpi label="소속 라이더" value={`${total}명`} />
         <Kpi label="승인 완료" value={`${approved}명`} />
         <Kpi label="승인 대기" value={`${pending}명`} accent />
@@ -117,7 +120,9 @@ export function DealerHomePage() {
       </div>
 
       <div className="rounded-card bg-white p-6 shadow-card">
-        <h2 className="mb-4 text-lg font-semibold text-gray-900">소속 라이더</h2>
+        <h2 className="mb-1 text-lg font-semibold text-gray-900">소속 라이더</h2>
+        {/* [17 Q5] 쿠폰 사용은 조회 전용 실적 — 정산 무관 카피(17 C5, 좌상 오해 방지). */}
+        <p className="mb-4 text-xs text-gray-500">쿠폰 사용은 플랫폼 실적 확인용이에요 — 정산과는 무관해요.</p>
         {isLoading ? (
           <p className="text-sm text-gray-500">불러오는 중...</p>
         ) : riders && riders.length > 0 ? (
@@ -134,12 +139,13 @@ export function DealerHomePage() {
                     {r.isOnline && <span className="ml-2 rounded-pill bg-primary-light px-2 py-0.5 text-xs text-primary">온라인</span>}
                   </p>
                   <p className="text-xs text-gray-500">
-                    {r.verifyStatus} · {r.phone ?? "연락처 없음"}
+                    {r.verifyStatus} · {r.phone ?? "연락처 없음"} ·{" "}
+                    <span data-testid={`coupon-used-${r.id}`}>쿠폰 사용 {couponUsed.get(r.id) ?? 0}장</span>
                   </p>
                 </div>
                 {/* [16 L9] verify_status별 4-decision 액션 — 서버(rider-verify)가 이미 허용하는
                     액션의 노출뿐(전이 유효성은 Edge/guard가 최종 판정). 파괴적 액션은 다이얼로그. */}
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   {r.verifyStatus === "PENDING" && (
                     <>
                       <button
@@ -263,11 +269,11 @@ function ActiveOrderRow({ order, phone }: { order: DealerActiveOrder; phone: str
       className="flex flex-col gap-2 rounded-card border border-gray-100 p-3 text-sm sm:flex-row sm:items-center sm:justify-between"
     >
       <div className="min-w-0">
-        <p className="flex items-center gap-2 font-medium text-gray-800">
+        <p className="flex flex-wrap items-center gap-2 font-medium text-gray-800">
           <span className={`rounded-pill px-2 py-0.5 text-xs font-semibold ${statusClass}`}>
             {ORDER_STATUS_LABEL[order.status]}
           </span>
-          {order.riderName}
+          <span className="min-w-0">{order.riderName}</span>
           {stale && (
             <span
               data-testid={`dealer-active-stale-${order.orderId}`}
@@ -297,9 +303,9 @@ function ActiveOrderRow({ order, phone }: { order: DealerActiveOrder; phone: str
 
 function Kpi({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
   return (
-    <div className="rounded-card bg-white p-5 shadow-card">
+    <div className="min-w-0 rounded-card bg-white p-5 shadow-card">
       <p className="text-sm text-gray-500">{label}</p>
-      <p className={`mt-1 text-2xl font-bold tabular-nums ${accent ? "text-accent-deep" : "text-gray-900"}`}>{value}</p>
+      <p className={`mt-1 text-xl font-bold tabular-nums ${accent ? "text-accent-deep" : "text-gray-900"}`}>{value}</p>
     </div>
   );
 }

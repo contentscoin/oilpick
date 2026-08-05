@@ -7,27 +7,34 @@ import type {
   RiderPayoutSummary,
   WithdrawalRow,
 } from "../hooks/useSettlementAdmin";
+import type { CouponSalesDailyRow } from "../lib/couponSales";
 
 /**
- * SettlementPage "정산" 재편(08 G7-①) 검증:
+ * SettlementPage "정산" 재편(08 G7-①) + [17 Q4] 쿠폰 판매 통계 복원 검증:
  * - ⓐ 출금 큐: 상태 필터, REQUESTED [승인]/[반려(사유 필수)], APPROVED [지급 완료] → withdraw-process 호출
- * - ⓑ 수거 활동 추이: 현금/포인트 지급 분리 + 합계 카드
- * - ⓒ 라이더별 지급 실적(포인트 지급 = 오프라인 정산 근거)
- * - ⓓ 포인트 원장 감사(entry_type 라벨·부호)
- * - ⓔ 구모델 쿠폰 매출/결제/원장 UI 부재(08 P1)
+ * - ⓑ 쿠폰 판매 통계(17 Q4): v_coupon_sales_daily 일별 행 + 합계 카드(판매/귀책/PG 환불 구분) + CSV
+ * - ⓒ 수거 활동 추이: 현금/포인트 지급 분리 + 합계 카드
+ * - ⓓ 라이더별 지급 실적(포인트 지급 = 오프라인 정산 근거)
+ * - ⓔ 포인트 원장 감사(entry_type 라벨·부호)
  */
 
-const { mockInvoke, mockWithdrawals, mockPickup, mockPayouts, mockLedger } = vi.hoisted(() => ({
-  mockInvoke: vi.fn(),
-  mockWithdrawals: vi.fn(),
-  mockPickup: vi.fn(),
-  mockPayouts: vi.fn(),
-  mockLedger: vi.fn(),
-}));
+const { mockInvoke, mockWithdrawals, mockCouponSales, mockPickup, mockPayouts, mockLedger, mockToCsv, mockDownloadCsv } =
+  vi.hoisted(() => ({
+    mockInvoke: vi.fn(),
+    mockWithdrawals: vi.fn(),
+    mockCouponSales: vi.fn(),
+    mockPickup: vi.fn(),
+    mockPayouts: vi.fn(),
+    mockLedger: vi.fn(),
+    mockToCsv: vi.fn(() => "csv"),
+    mockDownloadCsv: vi.fn(),
+  }));
 
 vi.mock("../lib/edgeFunction", () => ({ invokeEdgeFunction: mockInvoke }));
+vi.mock("../lib/csv", () => ({ toCsv: mockToCsv, downloadCsv: mockDownloadCsv }));
 vi.mock("../hooks/useSettlementAdmin", () => ({
   useWithdrawals: (statusFilter: string) => mockWithdrawals(statusFilter),
+  useCouponSalesDaily: () => mockCouponSales(),
   usePickupStatsDaily: () => mockPickup(),
   useRiderPayouts: () => mockPayouts(),
   usePointLedgerAudit: () => mockLedger(),
@@ -54,16 +61,19 @@ function makeWithdrawal(overrides: Partial<WithdrawalRow> = {}): WithdrawalRow {
 
 function setup({
   withdrawals = [makeWithdrawal()],
+  couponSales = [],
   pickup = [],
   payouts = [],
   ledger = [],
 }: {
   withdrawals?: WithdrawalRow[];
+  couponSales?: CouponSalesDailyRow[];
   pickup?: PickupStatsDailyRow[];
   payouts?: RiderPayoutSummary[];
   ledger?: PointLedgerAuditRow[];
 } = {}) {
   mockWithdrawals.mockReturnValue(ok(withdrawals));
+  mockCouponSales.mockReturnValue(ok(couponSales));
   mockPickup.mockReturnValue(ok(pickup));
   mockPayouts.mockReturnValue(ok(payouts));
   mockLedger.mockReturnValue(ok(ledger));
@@ -155,12 +165,43 @@ describe("SettlementPage — 수거 추이/라이더 실적/포인트 원장", (
   });
 });
 
-describe("SettlementPage — 쿠폰 UI 부재(08 P1)", () => {
-  it("쿠폰 매출/결제/원장 섹션이 렌더되지 않는다", () => {
-    setup();
-    expect(screen.queryByTestId("coupon-sales-table")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("coupon-ledger-audit-table")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("purchase-list")).not.toBeInTheDocument();
-    expect(screen.queryByText(/쿠폰/)).not.toBeInTheDocument();
+describe("SettlementPage — 쿠폰 판매 통계([17 Q4] 복원)", () => {
+  const SALES: CouponSalesDailyRow[] = [
+    { day: "2026-08-01", chargedQty: 40, salesAmount: 42000, refundQty: 0, pgRefundQty: 0, manualAdjustQty: 0 },
+    { day: "2026-08-02", chargedQty: 10, salesAmount: 12000, refundQty: 2, pgRefundQty: 4, manualAdjustQty: 20 },
+  ];
+
+  it("일별 행과 합계 카드(판매액/장수/귀책 환급/PG 환불)를 렌더한다", () => {
+    setup({ couponSales: SALES });
+    // 합계 = sumCouponSales(일별 행) — 원장 → 대시 정합(couponSales.test.ts가 뷰 미러를 검증).
+    expect(screen.getByTestId("sales-total-amount")).toHaveTextContent("54,000원");
+    expect(screen.getByTestId("sales-total-qty")).toHaveTextContent("50장");
+    expect(screen.getByTestId("sales-total-refund")).toHaveTextContent("2장");
+    expect(screen.getByTestId("sales-total-pg-refund")).toHaveTextContent("4장");
+
+    const table = screen.getByTestId("coupon-sales-table");
+    expect(within(table).getByText("2026-08-01")).toBeInTheDocument();
+    expect(within(table).getByText("42,000원")).toBeInTheDocument();
+    expect(within(table).getByText("2026-08-02")).toBeInTheDocument();
+    expect(within(table).getByText("+20장")).toBeInTheDocument();
+  });
+
+  it("판매 데이터가 없으면 빈 상태 행을 렌더한다(합계는 0 표기)", () => {
+    setup({ couponSales: [] });
+    expect(screen.getByTestId("coupon-sales-table")).toHaveTextContent("최근 14일 판매 데이터가 없어요.");
+    expect(screen.getByTestId("sales-total-amount")).toHaveTextContent("0원");
+  });
+
+  it("CSV 버튼이 일별 행을 toCsv/downloadCsv로 내보낸다", () => {
+    setup({ couponSales: SALES });
+    fireEvent.click(screen.getByTestId("sales-csv-button"));
+    expect(mockToCsv).toHaveBeenCalledWith(
+      ["날짜", "판매 장수", "판매액(원)", "귀책 환급(장)", "PG 환불(장)", "수동 조정(장)"],
+      [
+        ["2026-08-01", 40, 42000, 0, 0, 0],
+        ["2026-08-02", 10, 12000, 2, 4, 20],
+      ],
+    );
+    expect(mockDownloadCsv).toHaveBeenCalledWith("쿠폰_일별매출", "csv");
   });
 });

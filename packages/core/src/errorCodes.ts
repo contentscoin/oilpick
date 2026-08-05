@@ -44,11 +44,26 @@ export const NO_BANK_ACCOUNT = "NO_BANK_ACCOUNT";
 export const INSUFFICIENT_BALANCE = "INSUFFICIENT_BALANCE";
 
 /**
- * [08 P1 레거시] 전환기 잔존 쿠폰 주문(coupon_cost not null) 수락 시 fn_consume_coupon이 raise하는
- * 'INSUFFICIENT_COUPON' 예외의 매핑 코드. HTTP 409. 신규 주문은 쿠폰 게이트가 없어 발생하지 않는다.
- * order-accept mapTransitionError가 전환기 대비로 보존(02-api.md `order-accept`).
+ * [17 복권] 라이더의 수거쿠폰 잔액이 주문 coupon_cost보다 작을 때 반환. HTTP 409.
+ * fn_consume_coupon(ACCEPT CONSUME 게이트)/fn_charge_coupon(음수 ADJUST)/coupon-refund(미사용
+ * 잔액 부족)가 raise하는 'INSUFFICIENT_COUPON' 예외의 매핑 코드 — order-accept/coupon-adjust/
+ * coupon-refund가 409로 매핑한다. 라이더 복구 경로는 [충전하러 가기] CTA(17 C1).
+ * (08 P1이 레거시로 강등했던 것을 17이 현역 복권 — 코드·매핑은 전 기간 보존이라 무변경.)
  */
 export const INSUFFICIENT_COUPON = "INSUFFICIENT_COUPON";
+
+/**
+ * [17 복권] 쿠폰 단가 tick(coupon_price_ticks)이 아직 하나도 없을 때 coupon-purchase-intent가
+ * 반환. HTTP 409. 02-api.md `coupon-purchase-intent`, 07 §1-4.
+ */
+export const COUPON_PRICE_NOT_SET = "COUPON_PRICE_NOT_SET";
+
+/**
+ * [17 복권] PG 결제 승인/취소 API 호출 실패 시 coupon-purchase-confirm/coupon-refund가 반환.
+ * HTTP 402. (PG가 거절한 결제이며, amount 위변조(VALIDATION_ERROR)와 구분한다.)
+ * 02-api.md `coupon-purchase-confirm`/`coupon-refund`.
+ */
+export const PAYMENT_FAILED = "PAYMENT_FAILED";
 
 /**
  * [14 J3] CONFIRM_MEASURE/FORCE_COMPLETE에서 fn_settle_trade의 좌상 크레딧 게이트가 raise하는
@@ -104,6 +119,8 @@ export const ERROR_CODES = {
   NO_BANK_ACCOUNT,
   INSUFFICIENT_BALANCE,
   INSUFFICIENT_COUPON,
+  COUPON_PRICE_NOT_SET,
+  PAYMENT_FAILED,
   DEALER_LIMIT_EXCEEDED,
   RIDER_TOO_MANY_ACTIVE,
   NO_RIDER,
@@ -126,7 +143,9 @@ export const ERROR_MESSAGE_KO: Record<ErrorCode, string> = {
   INVALID_QR: "QR 코드가 일치하지 않아요.",
   NO_BANK_ACCOUNT: "먼저 출금 계좌를 등록해주세요.",
   INSUFFICIENT_BALANCE: "출금 가능 잔액이 부족해요.",
-  INSUFFICIENT_COUPON: "이 주문은 이전 방식(수거쿠폰) 주문이라 지금은 수락할 수 없어요.",
+  INSUFFICIENT_COUPON: "수거쿠폰이 부족해요. 충전 후 수락할 수 있어요.",
+  COUPON_PRICE_NOT_SET: "쿠폰 단가가 아직 설정되지 않았어요. 관리자 설정 후 이용할 수 있어요.",
+  PAYMENT_FAILED: "결제 승인에 실패했어요. 다시 시도해 주세요.",
   DEALER_LIMIT_EXCEEDED: "라이더 소속 좌상의 사용한도를 초과했어요. 현금 지급으로 다시 요청해 주세요.",
   RIDER_TOO_MANY_ACTIVE: "진행 중인 콜이 이미 3건이에요. 하나를 완료한 뒤 받을 수 있어요.",
   NO_RIDER: "수락한 라이더가 없어 자동 취소되었어요.",

@@ -55,7 +55,7 @@ export function NotificationsBell() {
       {open && (
         <div
           data-testid="notifications-panel"
-          className="absolute left-3 top-full z-40 mt-1 max-h-96 w-80 overflow-y-auto rounded-card border border-gray-100 bg-white p-2 shadow-raised"
+          className="absolute left-3 top-full z-40 mt-1 max-h-[70vh] w-[min(20rem,calc(100vw-1.5rem))] overflow-y-auto rounded-card border border-gray-100 bg-white p-2 shadow-raised"
         >
           {isLoading ? (
             <p className="px-3 py-4 text-sm text-gray-500">불러오는 중...</p>

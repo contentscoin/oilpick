@@ -20,7 +20,7 @@ PGPASSWORD=postgres psql -h 127.0.0.1 -p 54322 -U postgres -d postgres \
 
 각 파일은 `begin … rollback`으로 격리되어 DB 상태를 남기지 않는다.
 
-## 커버리지 (9스위트, 총 151 assertions)
+## 커버리지 (19스위트, 총 283 assertions)
 
 - **01_ledger_money_test.sql** — 포인트 원장 무결성: EARN=round(final_kg×snapshot_price),
   레거시 HOLD/RELEASE 회귀, held→available 이동, 멱등(이중지급 없음), append-only 트리거. (15)
@@ -41,6 +41,15 @@ PGPASSWORD=postgres psql -h 127.0.0.1 -p 54322 -U postgres -d postgres \
 - **09_referral_test.sql** — 레퍼럴(09): 오코드/미승인 라이더 거부, attach 정규화·스냅샷·멱등,
   다른 코드 재-attach ALREADY_REFERRED, 활성화 REFERRAL 발행·재활성화 no-op, v_referral_stats/
   v_referral_daily(교차일 버킷) 집계. (22)
+- 10~17 스위트(좌상 조직·추적·상계·좌상 정산·다중 콜·알림 kind·좌상 관제·my-payout)는 각 파일
+  상단 주석이 단일 진실.
+- **18_dealer_coupon_stats_test.sql** — [17 Q5] v_dealer_rider_stats.coupon_used_qty: 완료 주문
+  coupon_cost 합·미완료 제외·레거시 null=0·타 좌상 0행·coupon_ledger 좌상 RLS 0행(조인 금지
+  경로 제약의 근거 고정)·컬럼 append-only(columns_are). (10)
+- **19_pickup_item_photo_test.sql** — [O2, 14 §2 확장] pickup_items.photo_url 바코드 사진:
+  barcodeItems([{code, photoUrl?}]) 적재(photo_url 포함·사진 없는 항목 null·사진 단독 photo- 코드),
+  barcodeItems가 barcodes보다 우선, 레거시 barcodes(text[]) 폴백, replace-set 교체·둘 다 부재 무변경,
+  배열 내 중복 코드 1건. (12)
 
 이 시나리오들은 개발 중 실제 psql/curl로 수동 검증된 것을 pgTAP로 영구 자산화한 것이다.
 어서션 수가 바뀌면 이 목록도 함께 갱신할 것(각 파일 상단 `select plan(N)`이 단일 진실).

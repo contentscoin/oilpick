@@ -3,9 +3,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../lib/supabaseClient";
 import { queryKeys } from "../lib/queryClient";
 import { fetchDisplayNameMap, sinceIso } from "../lib/adminQueries";
+import type { CouponSalesDailyRow } from "../lib/couponSales";
 
 /**
- * 08 G7-① "정산" 재편 데이터 훅 — 07 F10의 useSalesAdmin(쿠폰 매출/결제)을 대체한다(쿠폰 모델 폐기).
+ * 08 G7-① "정산" 재편 데이터 훅 — 07 F10의 useSalesAdmin(쿠폰 매출/결제)을 대체한다.
+ * [17 Q4] 수거쿠폰 복권: 쿠폰 판매 통계(useCouponSalesDaily)만 이 파일로 복원 — 결제 목록·환불은
+ * /users 라이더 패널(RiderCouponPanel)이 담당한다(라이더 단위 운영으로 재배치).
  *  - 출금 큐: withdrawals 직접 조회(RLS: admin 전체 read) + withdraw-process Edge Function으로 처리.
  *  - 포인트 원장 감사: point_ledger 직접 조회(append-only) + 이름 join.
  *  - 라이더별 지급 실적: v_rider_payout_daily(admin 게이트 뷰) → 라이더 단위 합산.
@@ -186,6 +189,50 @@ export function useRiderPayouts(days = 30) {
         .sort((a, b) => b.pointAmount + b.cashAmount - (a.pointAmount + a.cashAmount));
     },
   });
+}
+
+// ===== [17 Q4] 쿠폰 판매 통계 — 07 F10-③ⓐ 원형 복원(쿠폰 판매가 플랫폼 수익 모델, 17 §0) =====
+
+/**
+ * 쿠폰 판매 통계(v_coupon_sales_daily — security_invoker + is_admin 게이트). 일별 충전 장수/
+ * 판매액/환불(귀책·PG·수동 조정 구분). 최근 days일. coupon_ledger INSERT 시 Realtime 무효화.
+ */
+export function useCouponSalesDaily(days = 14) {
+  const queryClient = useQueryClient();
+
+  const query = useQuery({
+    queryKey: queryKeys.couponSalesDaily(days),
+    queryFn: async (): Promise<CouponSalesDailyRow[]> => {
+      const { data, error } = await supabase
+        .from("v_coupon_sales_daily")
+        .select("day, charged_qty, sales_amount, refund_qty, pg_refund_qty, manual_adjust_qty")
+        .gte("day", sinceIso(days))
+        .order("day", { ascending: true });
+      if (error) throw error;
+      return (data ?? []).map((row) => ({
+        day: row.day,
+        chargedQty: Number(row.charged_qty ?? 0),
+        salesAmount: Number(row.sales_amount ?? 0),
+        refundQty: Number(row.refund_qty ?? 0),
+        pgRefundQty: Number(row.pg_refund_qty ?? 0),
+        manualAdjustQty: Number(row.manual_adjust_qty ?? 0),
+      }));
+    },
+  });
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("admin_coupon_sales_daily")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "coupon_ledger" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["admin", "settlement", "couponSales"] });
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
+
+  return query;
 }
 
 // ===== 수거 활동 추이 (08 — 수단 분리 컬럼) =====

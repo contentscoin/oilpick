@@ -14,10 +14,20 @@ describe("CallCard", () => {
     expect(screen.getByLabelText("예상 매입 지급액 72,000원")).toBeInTheDocument();
   });
 
-  it("[08 G6-②] 쿠폰 칩 없음 — 쿠폰 모델 폐기", () => {
-    render(<CallCard distanceKm={1} estimatedKg={30} estimatedCash={48000} />);
+  // [17 Q3] 쿠폰 칩 복권(07 F5 원형) — 지급액 pill은 불변(17 C7), 소진 쿠폰 칩만 병기.
+  it("[17 Q3] couponCost가 있으면 '쿠폰 N장' 칩을 지급액과 병기한다", () => {
+    render(<CallCard distanceKm={1} estimatedKg={30} estimatedCash={48000} couponCost={2} />);
+    expect(screen.getByTestId("call-card-coupon")).toHaveTextContent("쿠폰 2장");
+    // 지급액 pill 표기는 그대로다.
+    expect(screen.getByTestId("call-card-cash")).toHaveTextContent("48,000원");
+  });
+
+  it("[17 Q3] couponCost 미지정/null(전환기 무쿠폰 주문)은 칩을 렌더하지 않는다", () => {
+    const { rerender } = render(<CallCard distanceKm={1} estimatedKg={30} estimatedCash={48000} />);
     expect(screen.queryByTestId("call-card-coupon")).not.toBeInTheDocument();
     expect(screen.getByTestId("call-card")).not.toHaveTextContent("쿠폰");
+    rerender(<CallCard distanceKm={1} estimatedKg={30} estimatedCash={48000} couponCost={null} />);
+    expect(screen.queryByTestId("call-card-coupon")).not.toBeInTheDocument();
     expect(screen.getByTestId("call-card-cash")).toHaveTextContent("48,000원");
   });
 
@@ -45,5 +55,30 @@ describe("CallCard", () => {
     render(<CallCard distanceKm={1} estimatedKg={15} estimatedCash={24000} onClick={onClick} />);
     screen.getByTestId("call-card").click();
     expect(onClick).toHaveBeenCalledOnce();
+  });
+
+  // [N5] 점주 희망 시간 — 보조행 아래 줄 "🕐 {값}". 저장 문자열 그대로(레거시 "지금" 포함).
+  it("[N5] renders the preferred time on its own line below the subtitle", () => {
+    render(
+      <CallCard
+        distanceKm={3.2}
+        estimatedKg={45}
+        estimatedCash={72000}
+        address="서울시 강남구 테헤란로 123"
+        preferredTime="2026-08-06 09:30"
+      />,
+    );
+    const line = screen.getByTestId("call-card-preferred");
+    expect(line).toHaveTextContent("🕐 2026-08-06 09:30");
+    // 거리·수량 보조행과 같은 줄이 아니라 별도 노드다.
+    expect(line.textContent).not.toContain("km");
+  });
+
+  it("[N5] does not render the preferred-time line when the value is absent", () => {
+    const { rerender } = render(<CallCard distanceKm={1} estimatedKg={15} estimatedCash={24000} />);
+    expect(screen.queryByTestId("call-card-preferred")).not.toBeInTheDocument();
+    // null(조회값 없음)도 동일하게 미렌더.
+    rerender(<CallCard distanceKm={1} estimatedKg={15} estimatedCash={24000} preferredTime={null} />);
+    expect(screen.queryByTestId("call-card-preferred")).not.toBeInTheDocument();
   });
 });
