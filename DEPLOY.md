@@ -15,6 +15,12 @@
 > `PROJECT_REF` env로 재정의). 수동 단계(초기 데이터·Vercel·REFERRAL_BASE_URL·PG 시크릿)는
 > 스크립트가 끝에서 다시 안내한다. ⚠️ [17 Q2] 쿠폰 복권으로 coupon-* 6종이 재배포 대상이다 —
 > 08 컷오버의 "coupon-* undeploy"(아래 1-0 ⓔ)는 **역사 기록이며 더 이상 실행하지 말 것**.
+>
+> **CI 실행(로컬 CLI 없이)**: GitHub Actions `Deploy Supabase` 워크플로
+> (`.github/workflows/deploy-supabase.yml`, 수동 트리거)가 같은 1장(링크→`db push`→
+> `functions deploy`)을 러너에서 실행한다. 저장소 Actions 시크릿 `SUPABASE_ACCESS_TOKEN`(필수)·
+> `SUPABASE_DB_PASSWORD`(링크가 비밀번호를 요구할 때만) 등록 후 Actions 탭에서 Run workflow.
+> 시크릿 설정(FCM·코엠 등)과 초기 데이터는 여전히 아래 수동 절차를 따른다.
 
 ```bash
 # CLI 로그인 & 링크
