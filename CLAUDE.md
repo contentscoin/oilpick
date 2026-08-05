@@ -20,6 +20,9 @@ OilPick을 유지한다(`docs/spec/10-brand.md` B4가 단일 진실). 모든 설
 - `docs/spec/13-org-dealer.md` — 조직 계층 어드민–좌상(dealer, 서브어드민)–라이더(I-태스크). role 'dealer'·rider_profiles.dealer_id·RLS 조회 전용·admin 메뉴 분기의 단일 진실. **D5(정산 로직 없음)는 14가 대체**
 - `docs/spec/15-motion-design.md` — 모션 디자인 고도화(6차, beUI 목업 반영 K-태스크). 모션 컴포넌트(OtpInput·DynamicIsland·NumberFlow·SwipeableRow·HeroCard·CheckList)·모션 토큰·**UI 액센트 확장(라임/시안 — 다크 배경 전용)**의 단일 진실. 정보구조·상태머신 불변
 - `docs/spec/14-fresh-oil-settlement.md` — 신유(새 식용유) 구매·현장 혼합정산·좌상 정산 체인(J-태스크). 13 D5를 supersede. 신유 고시가 tick(18L 1종)·주문 order_kind(수거/구매/혼합)·현장 상계(폐유 수령액↔신유 대금, 차액 현금/포인트)·TRADE_PURCHASE 원장·좌상 보증금 크레딧 한도·정산 청구 라이프사이클(수수료율 초기 0%)·수거 추적(arrived_at·pickup_items 바코드·라이더 실시간 위치)의 단일 진실
+- `docs/spec/17-coupon-revival.md` — 수거쿠폰 복권(8차, Q-태스크). **08 P1 폐기 결정의 명시적
+  역전(CEO 2026-08-05)** — 라이더 쿠폰 구매(코엠 간편결제)·통당 1쿠폰 수락 게이트·좌상 실적
+  조회의 단일 진실. 07/F14 자산 복원 기반, 08 지급수단 모델 불변
 - `docs/spec/16-ops-convenience.md` — 라이더·좌상 운영편의성 고도화(7차, L-태스크). 알림 계층 단일화(notifications.kind·dedupe 헬퍼)·라이더 인앱 경로 ETA/계량 드래프트/방문 순서·확인 교착 리마인드(상태 무접촉)·좌상 관제 뷰(v_dealer_active_orders, 14 §2-5 예약 실행)·정산 셀프서비스·정산 워치의 단일 진실. 정보구조·상태머신·원장 불변(08/09/13/14 위 순수 추가)
 
 ## 스택 (변경 금지)
