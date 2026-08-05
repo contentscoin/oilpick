@@ -72,7 +72,19 @@ export function OfflineBanner({
         backgroundColor: colors.status.danger,
       }}
     >
-      {message}
+      {/* [03 레이아웃 강건성] fixed 유지(12 §8 뷰포트 고정 결정 존중) — 대신 글자 확대로
+          배너가 무한정 자라 아래 콘텐츠를 가리지 않게 2줄 클램프. sticky 전환은 앱 셸의
+          스크롤 컨테이너 구조에 의존해 리스크가 더 크다(apps/* 수정 금지 범위). */}
+      <span
+        style={{
+          display: "-webkit-box",
+          WebkitBoxOrient: "vertical",
+          WebkitLineClamp: 2,
+          overflow: "hidden",
+        }}
+      >
+        {message}
+      </span>
     </div>
   );
 }

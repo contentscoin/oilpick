@@ -90,6 +90,8 @@ export function HeroCard({
           lineHeight: 1.12,
           letterSpacing: "-0.01em",
           wordBreak: "keep-all",
+          // [03 레이아웃 강건성] keep-all로도 안 들어가는 긴 숫자·단어는 넘치지 말고 개행.
+          overflowWrap: "anywhere",
         }}
       >
         {title}

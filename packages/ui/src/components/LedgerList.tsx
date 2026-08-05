@@ -117,17 +117,51 @@ export function LedgerList({
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
+              // [03 레이아웃 강건성] 확대로 금액이 안 들어가면 금액이 다음 줄로 접힌다 —
+              // 금액은 ellipsis 금지(잘린 금액은 오독), 라벨 쪽만 자른다.
+              flexWrap: "wrap",
               padding: swipeable ? "12px 14px" : "12px 0",
               minHeight: 48,
             }}
           >
-            <div>
-              <p style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>{labelOf(entry.entryType)}</p>
-              <p style={{ margin: "2px 0 0", fontSize: 13, color: colors.status.wait }}>
+            <div style={{ flex: "1 1 0", minWidth: 0 }}>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: 15,
+                  fontWeight: 600,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                {labelOf(entry.entryType)}
+              </p>
+              <p
+                style={{
+                  margin: "2px 0 0",
+                  fontSize: 13,
+                  color: colors.status.wait,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
                 {entry.memo ?? formatRelativeTime(entry.createdAt)}
               </p>
             </div>
-            <span className="oilpick-tabular-nums" style={{ fontSize: 16, fontWeight: 700, color }}>
+            <span
+              className="oilpick-tabular-nums"
+              style={{
+                fontSize: 16,
+                fontWeight: 700,
+                color,
+                flexShrink: 0,
+                whiteSpace: "nowrap",
+                // 행이 접혀 금액이 혼자 남아도 우측 정렬을 유지한다.
+                marginLeft: "auto",
+              }}
+            >
               {isPositive ? "+" : "-"}
               {magnitude}
             </span>

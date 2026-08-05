@@ -53,7 +53,9 @@ export function OtpInput({
 
   return (
     <div data-testid="otp-input">
-      <div style={{ position: "relative" }}>
+      {/* [03 레이아웃 강건성] containerType — 슬롯 숫자 fontSize를 컨테이너 폭 비례(cqw)로
+          제한하기 위한 컨테이너 지정(레이아웃 영향 없음). */}
+      <div style={{ position: "relative", containerType: "inline-size" }}>
         <div
           aria-hidden="true"
           data-testid="otp-slots"
@@ -81,7 +83,9 @@ export function OtpInput({
                   border: `1.5px solid ${borderColor}`,
                   backgroundColor: surface.card,
                   boxShadow: isActive ? `0 0 0 4px ${colors.primary.light}` : undefined,
-                  fontSize: 20,
+                  // [03 레이아웃 강건성] 숫자 크기를 슬롯 폭 비례로 제한 — 기본 20px,
+                  // 좁은 컨테이너에선 슬롯(약 100cqw/length)의 60% 수준으로 줄어든다.
+                  fontSize: `min(20px, ${(60 / length).toFixed(2)}cqw)`,
                   fontWeight: 800,
                   fontVariantNumeric: "tabular-nums",
                   color: gray[900],

@@ -77,12 +77,21 @@ export function PhotoUploader({ photos, onChange, maxCount = 1, disabled, classN
           <div
             key={photo.url}
             data-testid="photo-uploader-thumb"
-            style={{ position: "relative", height: TILE_HEIGHT }}
+            // [03 레이아웃 강건성] 고정 height → minHeight. 옆 칸(촬영 버튼)이 글자 확대로
+            // 커지면 그리드 행 stretch로 같이 늘어나고, 이미지는 absolute로 칸을 채운다.
+            style={{ position: "relative", minHeight: TILE_HEIGHT }}
           >
             <img
               src={photo.url}
               alt={`촬영 사진 ${i + 1}`}
-              style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: radius.button }}
+              style={{
+                position: "absolute",
+                inset: 0,
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                borderRadius: radius.button,
+              }}
             />
             {/* 시각 24px 원 유지 + 투명 패딩으로 히트 영역 40px 확보(라이더 장갑 낀 손 고려).
                 그리드로 바뀌며 타일 바깥으로 튀어나온 위치(-14)는 옆 칸을 침범한다 — 안쪽 정렬. */}
@@ -94,8 +103,9 @@ export function PhotoUploader({ photos, onChange, maxCount = 1, disabled, classN
                 position: "absolute",
                 top: 0,
                 right: 0,
-                width: 40,
-                height: 40,
+                // [03 레이아웃 강건성] 고정 40 → min 치수(확대 시 × 글리프에 맞춰 늘어난다).
+                minWidth: 40,
+                minHeight: 40,
                 padding: 8,
                 borderRadius: "50%",
                 border: "none",
@@ -109,8 +119,10 @@ export function PhotoUploader({ photos, onChange, maxCount = 1, disabled, classN
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  width: 24,
-                  height: 24,
+                  // 시각 24px 원 유지하되 min 치수 + aspectRatio — 확대된 ×가 잘리지 않는다.
+                  minWidth: 24,
+                  minHeight: 24,
+                  aspectRatio: "1",
                   borderRadius: "50%",
                   backgroundColor: colors.status.danger,
                   color: "#fff",
@@ -134,11 +146,15 @@ export function PhotoUploader({ photos, onChange, maxCount = 1, disabled, classN
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
+              // [03 레이아웃 강건성] 확대 시 아이콘+라벨이 접혀 두 줄이 될 수 있다.
+              flexWrap: "wrap",
               gap: 8,
               // 아직 찍은 사진이 없으면 타일이 하나뿐이라 반쪽만 차지해 어색하다 — 두 칸을 다 쓴다.
               gridColumn: photos.length === 0 ? "1 / -1" : "auto",
               width: "100%",
-              height: TILE_HEIGHT,
+              // 고정 height → minHeight(글자 확대 시 잘림 방지).
+              minHeight: TILE_HEIGHT,
+              padding: 8,
               borderRadius: radius.button,
               // 목업의 dashed 초록 테두리 — 회색 점선은 "비활성"으로 읽혀 촬영 유도가 약했다.
               border: `1.6px dashed ${UPLOAD_BORDER}`,

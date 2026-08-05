@@ -138,7 +138,10 @@ export function OrderTimeline({ currentStatus, timestamps, legacy, className }: 
                 flex: 1,
                 minWidth: 0,
                 display: "flex",
-                alignItems: "center",
+                // [03 레이아웃 강건성] 확대 시 상태 pill이 라벨 아래 줄로 접히게 flexWrap.
+                // 노드-텍스트 정렬은 상단 기준(flex-start) — 여러 줄이 돼도 노드와 어긋나지 않는다.
+                alignItems: "flex-start",
+                flexWrap: "wrap",
                 justifyContent: "space-between",
                 gap: 8,
                 paddingTop: 1,

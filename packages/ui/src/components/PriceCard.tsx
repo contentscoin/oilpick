@@ -101,7 +101,8 @@ export function PriceCard({ pricePerKg, changeAmount, history = [], className }:
             fontWeight: 800,
             letterSpacing: "-0.02em",
             color: colors.primary.DEFAULT,
-            whiteSpace: "nowrap",
+            // [03 레이아웃 강건성] 금액은 ellipsis 금지 — nowrap을 걷어내고 줄바꿈을 허용한다
+            // (글자 확대 시 34px 금액이 카드 폭을 밀어내던 결함).
           }}
         >
           {formatKrw(pricePerKg)}

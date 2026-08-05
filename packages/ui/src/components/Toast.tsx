@@ -48,6 +48,9 @@ export function Toast({ message, variant = "info", onRetry, className }: ToastPr
             fontWeight: 700,
             fontSize: 14,
             cursor: "pointer",
+            // [03 레이아웃 강건성] 확대 시 버튼이 눌려 "재/시도"로 쪼개지지 않게.
+            flexShrink: 0,
+            whiteSpace: "nowrap",
           }}
         >
           재시도

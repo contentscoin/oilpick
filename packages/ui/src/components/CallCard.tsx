@@ -67,7 +67,9 @@ export function CallCard({
       onClick={onClick}
       style={{
         display: "grid",
-        gridTemplateColumns: "36px 1fr auto",
+        // [03 레이아웃 강건성] 금액 pill을 고정 3열(auto)에서 빼고 본문 flexWrap 행으로 옮겼다 —
+        // 확대 시 pill이 주소 칸을 압착하는 대신 다음 줄로 내려간다(금액 ellipsis 금지).
+        gridTemplateColumns: "36px 1fr",
         alignItems: "center",
         gap: 12,
         width: "100%",
@@ -97,53 +99,66 @@ export function CallCard({
         <CallIcon />
       </span>
 
-      {/* 중앙: 수거지(제목) + 거리·수량(보조) */}
-      <span style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 3 }}>
-        <span
-          style={{
-            fontSize: 16,
-            fontWeight: 700,
-            color: gray[900],
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {title}
+      {/* 본문: [수거지/거리·수량] + [금액 pill] flexWrap 행. 1x에서는 한 줄(제목 좌·pill 우),
+          공간이 모자라면 pill이 다음 줄로 내려가 오른쪽 정렬(marginLeft:auto)을 유지한다. */}
+      <span
+        style={{
+          minWidth: 0,
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "center",
+          columnGap: 12,
+          rowGap: 6,
+        }}
+      >
+        {/* 수거지(제목) + 거리·수량(보조). basis 132px — 이보다 좁아지느니 pill을 내려보낸다. */}
+        <span style={{ flex: "1 1 132px", minWidth: 0, display: "flex", flexDirection: "column", gap: 3 }}>
+          <span
+            style={{
+              fontSize: 16,
+              fontWeight: 700,
+              color: gray[900],
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {title}
+          </span>
+          <span
+            className="oilpick-tabular-nums"
+            style={{ fontSize: 13, fontWeight: 500, color: colors.status.wait }}
+          >
+            {subtitle}
+          </span>
         </span>
-        <span
-          className="oilpick-tabular-nums"
-          style={{ fontSize: 13, fontWeight: 500, color: colors.status.wait }}
-        >
-          {subtitle}
-        </span>
-      </span>
 
-      {/* 우: 예상 매입 지급액 — 목업 pill.lime(밝은 배경 위 lime.soft 배경 + primary.dark 텍스트,
-          tokens.ts colors.lime 주석의 허용 조합). 라벨은 남긴다: 이 금액은 라이더가 "받는" 돈이
-          아니라 점주에게 "지급할" 돈이라 숫자만 두면 뜻이 뒤집힌다. */}
-      <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
-        {/* 라벨은 "지급액"으로 줄인다 — "예상 매입 지급액"은 폭을 110px 넘게 먹어 정작 중요한
-            수거지 주소가 두세 글자만 남고 잘렸다. 전체 문구는 접근성 이름으로 남긴다. */}
-        <span style={{ fontSize: 11, fontWeight: 600, color: colors.status.wait }}>지급액</span>
-        <span
-          className="oilpick-tabular-nums"
-          data-testid="call-card-cash"
-          aria-label={`예상 매입 지급액 ${formatKrw(estimatedCash)}`}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            minHeight: 26,
-            padding: "0 10px",
-            borderRadius: radius.pill,
-            backgroundColor: colors.lime.soft,
-            color: colors.primary.dark,
-            fontSize: 15,
-            fontWeight: 800,
-            whiteSpace: "nowrap",
-          }}
-        >
-          {formatKrw(estimatedCash)}
+        {/* 예상 매입 지급액 — 목업 pill.lime(밝은 배경 위 lime.soft 배경 + primary.dark 텍스트,
+            tokens.ts colors.lime 주석의 허용 조합). 라벨은 남긴다: 이 금액은 라이더가 "받는" 돈이
+            아니라 점주에게 "지급할" 돈이라 숫자만 두면 뜻이 뒤집힌다. */}
+        <span style={{ marginLeft: "auto", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+          {/* 라벨은 "지급액"으로 줄인다 — "예상 매입 지급액"은 폭을 110px 넘게 먹어 정작 중요한
+              수거지 주소가 두세 글자만 남고 잘렸다. 전체 문구는 접근성 이름으로 남긴다. */}
+          <span style={{ fontSize: 11, fontWeight: 600, color: colors.status.wait }}>지급액</span>
+          <span
+            className="oilpick-tabular-nums"
+            data-testid="call-card-cash"
+            aria-label={`예상 매입 지급액 ${formatKrw(estimatedCash)}`}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              minHeight: 26,
+              padding: "0 10px",
+              borderRadius: radius.pill,
+              backgroundColor: colors.lime.soft,
+              color: colors.primary.dark,
+              fontSize: 15,
+              fontWeight: 800,
+              // 금액은 ellipsis·nowrap 금지 — 극단 확대에서는 pill 안에서 줄바꿈으로 흐른다.
+            }}
+          >
+            {formatKrw(estimatedCash)}
+          </span>
         </span>
       </span>
     </Tag>

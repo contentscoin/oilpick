@@ -45,7 +45,10 @@ export function BigButton({
       className={cx("oilpick-big-button", className)}
       disabled={isDisabled}
       style={{
-        height: 56,
+        // [03 레이아웃 강건성] 고정 height 금지 — 글자 확대(textZoom) 시 라벨이 잘리지 않게
+        // minHeight+세로 padding으로 확보한다(1x에서는 기존 56px 그대로).
+        minHeight: 56,
+        padding: "10px 16px",
         width: "100%",
         borderRadius: radius.button,
         border,

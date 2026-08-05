@@ -305,64 +305,79 @@ export function MapView({
       >
         <MapPreview />
 
-        {/* [14 J1] 라이더 실시간 위치 라이브 칩 — 프리뷰 폴백엔 실좌표 마커가 없으므로 상태로 대체.
-            좌표 수신 = "이동 중", 60초 무갱신 = "위치 갱신 대기"(흐리게). */}
-        {riderMarker && (
-          <span
-            data-testid="map-view-rider-live"
-            style={{
-              position: "absolute",
-              top: 12,
-              right: 12,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "6px 12px",
-              borderRadius: radius.pill,
-              backgroundColor: "#fff",
-              boxShadow: elevation.card,
-              fontSize: 13,
-              fontWeight: 700,
-              color: gray[900],
-              opacity: riderMarker.stale ? 0.55 : 1,
-            }}
-          >
-            <span
-              aria-hidden
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: "50%",
-                backgroundColor: riderMarker.stale ? gray[400] : colors.accent.DEFAULT,
-              }}
-            />
-            {riderMarker.stale ? "위치 갱신 대기" : "라이더 이동 중"}
-          </span>
-        )}
-
-        {/* ETA pill(실제 ETA 데이터가 있을 때만) */}
-        {etaLabel && (
-          <span
-            data-testid="map-view-eta"
+        {/* [03 레이아웃 강건성] 상단 칩 2개(ETA 좌 / 라이더 라이브 우)를 좌/우 절대배치로 따로
+            두면 글자 확대 시 서로 겹친다 — 하나의 절대배치 flex 행으로 묶어 좁으면 행 접힘.
+            1x 배치는 동일: ETA 좌측, 라이브 칩은 marginLeft:auto로 우측(단독일 때도 우측). */}
+        {(riderMarker || etaLabel) && (
+          <div
             style={{
               position: "absolute",
               top: 12,
               left: 12,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "6px 12px",
-              borderRadius: radius.pill,
-              backgroundColor: "#fff",
-              boxShadow: elevation.raised,
-              fontSize: 14,
-              fontWeight: 700,
-              color: gray[900],
+              maxWidth: "calc(100% - 24px)",
+              width: "calc(100% - 24px)",
+              display: "flex",
+              alignItems: "flex-start",
+              flexWrap: "wrap",
+              gap: 8,
             }}
           >
-            <ClockIcon />
-            {etaLabel}
-          </span>
+            {/* ETA pill(실제 ETA 데이터가 있을 때만) */}
+            {etaLabel && (
+              <span
+                data-testid="map-view-eta"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "6px 12px",
+                  borderRadius: radius.pill,
+                  backgroundColor: "#fff",
+                  boxShadow: elevation.raised,
+                  fontSize: 14,
+                  fontWeight: 700,
+                  color: gray[900],
+                }}
+              >
+                <ClockIcon />
+                {etaLabel}
+              </span>
+            )}
+
+            {/* [14 J1] 라이더 실시간 위치 라이브 칩 — 프리뷰 폴백엔 실좌표 마커가 없으므로 상태로
+                대체. 좌표 수신 = "이동 중", 60초 무갱신 = "위치 갱신 대기"(흐리게). */}
+            {riderMarker && (
+              <span
+                data-testid="map-view-rider-live"
+                style={{
+                  marginLeft: "auto",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "6px 12px",
+                  borderRadius: radius.pill,
+                  backgroundColor: "#fff",
+                  boxShadow: elevation.card,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: gray[900],
+                  opacity: riderMarker.stale ? 0.55 : 1,
+                }}
+              >
+                <span
+                  aria-hidden
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: "50%",
+                    flexShrink: 0,
+                    backgroundColor: riderMarker.stale ? gray[400] : colors.accent.DEFAULT,
+                  }}
+                />
+                {riderMarker.stale ? "위치 갱신 대기" : "라이더 이동 중"}
+              </span>
+            )}
+          </div>
         )}
 
         {/* 수거지 라벨 chip */}

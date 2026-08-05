@@ -43,7 +43,7 @@ export function StatusBadge({ status, className }: StatusBadgeProps) {
     >
       <span
         aria-hidden
-        style={{ width: 6, height: 6, borderRadius: "50%", backgroundColor: color }}
+        style={{ width: 6, height: 6, borderRadius: "50%", flexShrink: 0, backgroundColor: color }}
       />
       {ORDER_STATUS_LABEL[status]}
     </span>

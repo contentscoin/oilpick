@@ -35,8 +35,12 @@ export function QtyStepper({ value, onChange, min = 1, max = 33, className, subL
           onClick={() => onChange(clamp(value - 1))}
           disabled={value <= min}
           style={{
-            width: 48,
-            height: 48,
+            // [03 레이아웃 강건성] 고정 48 원 → min 치수 + aspectRatio. 글자 확대 시 글리프에
+            // 맞춰 원이 커진다(1x에서는 그대로 48×48).
+            minWidth: 48,
+            minHeight: 48,
+            aspectRatio: "1",
+            lineHeight: 1,
             borderRadius: "50%",
             border: `1.5px solid ${colors.primary.DEFAULT}`,
             backgroundColor: "#fff",
@@ -74,8 +78,11 @@ export function QtyStepper({ value, onChange, min = 1, max = 33, className, subL
           onClick={() => onChange(clamp(value + 1))}
           disabled={value >= max}
           style={{
-            width: 48,
-            height: 48,
+            // [03 레이아웃 강건성] 고정 48 원 → min 치수 + aspectRatio(감소 버튼과 동일).
+            minWidth: 48,
+            minHeight: 48,
+            aspectRatio: "1",
+            lineHeight: 1,
             borderRadius: "50%",
             border: `1.5px solid ${colors.primary.DEFAULT}`,
             backgroundColor: colors.primary.DEFAULT,
