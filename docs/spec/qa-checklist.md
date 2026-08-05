@@ -49,6 +49,7 @@
 | 콜 홈(R2, 08) | 온라인 토글 + 오늘 실적(**현금/포인트 분리**) + 콜 목록(거리순) | 콜 없음 EmptyState, 오프라인 안내 | ✅ [단위] |
 | 콜 상세(R3, 08) | "예상 매입 지급액" 대형 표시 + [수락](쿠폰 게이트 없음) | 409 "다른 라이더 수락" 토스트 후 복귀, SUSPENDED 수락 차단 | ✅ [단위 + pgTAP(verify 게이트·동시수락)] |
 | 운행(R4~R6, 08) | 도착 → 계량+사진+**지급수단 세그먼트(필수)** → 제출 후 수단별 안내 | 재제출 수단 변경 가능(중재 확정 전), DISPUTED 안내 패널 | ✅ [단위 + pgTAP(payoutMethod 검증·CASH 폴백)] |
+| **바코드 사진 첨부(R5, O2 2026-08-05)** | 바코드 항목별 [📷 사진] 첨부(즉시 압축 업로드→1년 서명 URL→썸네일/[사진 제거]) + **사진 단독 등록**(`photo-` 고유 코드, "사진 등록" 표시 — 바코드 필수 가드 충족) → SUBMIT_MEASURE `barcodeItems` 전송·`pickup_items.photo_url` 적재 | 사진 없는 항목 photoUrl 생략, 레거시 `barcodes`(text[]) 경로 RPC 폴백(구버전 번들·재제출), 업로드 실패 토스트(항목 미추가), 드래프트엔 코드·URL만(파일 원본 미저장) | ✅ [단위 3 + pgTAP 12] / 실기기 카메라 첨부 🔴 |
 | 위치 업로드 | 운행 중 15초 간격 rider-location | 진행중 주문 없으면 400 거부 | ✅ [단위] |
 | 실적(R7, 08) | 이번 달 **현금 지급/포인트 지급 분리**(건수/kg/금액) | 데이터 없음 0 표기 | ✅ [단위] |
 | **내 추천(/referrals, 09)** | 코드·공유 링크(복사/공유) + 실적(가입/활성화/전환율/누적 보상 — 원 단위) | 코드 로드 실패 재시도, 실적 없음 0, referrals Realtime 갱신 | ✅ [단위: 화면 3 + 훅 6] |
@@ -147,13 +148,13 @@ T13에서 로컬 스택 advisor lint를 점검·수정했다(상세는 이력 �
 
 | 패키지 | 테스트 수 |
 |---|---|
-| @oilpick/core | 393 |
-| @oilpick/ui | 165 |
+| @oilpick/core | 404 |
+| @oilpick/ui | 166 |
 | @oilpick/user | 172 |
-| @oilpick/rider | 153 |
+| @oilpick/rider | 191 |
 | @oilpick/admin | 151 |
 
-DB 계층: pgTAP **18스위트 271 asserts**(`bash scripts/pgtap-local/run.sh` 전체 GREEN — 마이그레이션 51건).
+DB 계층: pgTAP **19스위트 283 asserts**(`bash scripts/pgtap-local/run.sh` 전체 GREEN — 마이그레이션 52건).
 Deno: `_shared` 순수 헬퍼 테스트(std-assert·notifyDedupe 12·creditWatch 4).
 숫자가 바뀌면 이 표와 supabase/tests/README.md를 함께 갱신할 것.
 

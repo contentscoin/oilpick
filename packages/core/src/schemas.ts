@@ -94,13 +94,26 @@ export const pickupGeoSchema = z.object({
 });
 export type PickupGeo = z.infer<typeof pickupGeoSchema>;
 
+/**
+ * [O2 2026-08-05, 14 §2 확장] 바코드 1건 — 코드 + 선택 사진(order-photos 서명 URL, 첨부 즉시 업로드).
+ * 사진 단독 등록은 클라이언트가 `photo-` + 고유 접미(예: Date.now().toString(36)) 코드를 생성해
+ * code로 보낸다(unique(order_id, barcode) 충족 — 목록에는 "사진 등록"으로 표시).
+ */
+export const barcodeItemSchema = z.object({
+  code: z.string().min(1),
+  photoUrl: z.string().url().optional(),
+});
+export type BarcodeItem = z.infer<typeof barcodeItemSchema>;
+
 // 08 P2: payoutMethod 필수(신 클라이언트 강제). RPC는 생략 시 CASH 폴백으로 구버전 번들과 호환.
 // [14 §4] barcodes·geo는 선택(구버전 번들·재제출 호환). 있으면 order_events.payload + pickup_items에 보존.
+// [O2] barcodeItems가 있으면 RPC가 그것으로 적재(photo_url 포함, barcodes보다 우선) — barcodes는 구버전 폴백.
 export const submitMeasurePayloadSchema = z.object({
   measuredKg: kgSchema,
   photoUrls: z.array(z.string().url()).min(1),
   payoutMethod: payoutMethodSchema,
   barcodes: z.array(z.string().min(1)).max(50).optional(),
+  barcodeItems: z.array(barcodeItemSchema).max(50).optional(),
   geo: pickupGeoSchema.optional(),
   // [14 J2] 현장 실배달 신유 통수(구매 동반 주문 필수 0..50 — 필수 강제는 RPC가 order_kind로 판정).
   deliveredCans: z.number().int().min(0).max(50).optional(),

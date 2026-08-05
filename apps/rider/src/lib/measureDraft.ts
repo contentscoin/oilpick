@@ -1,4 +1,4 @@
-import type { PayoutMethod, PickupGeo } from "@oilpick/core";
+import type { BarcodeItem, PayoutMethod, PickupGeo } from "@oilpick/core";
 import type { PhotoAsset } from "@oilpick/ui";
 
 /**
@@ -21,7 +21,13 @@ export interface MeasureDraftText {
   kg: string;
   payout: PayoutMethod | null;
   deliveredCans: number;
+  /** 레거시(코드만) — 구드래프트 복원 호환. 신규 저장도 코드 목록을 함께 기록한다. */
   barcodes: string[];
+  /**
+   * [O2] 바코드+사진 항목(코드·업로드된 서명 URL만 — 파일 원본은 저장하지 않는다: 사진은 첨부
+   * 즉시 업로드된다). 없으면(구드래프트) barcodes에서 사진 없는 항목으로 복원한다.
+   */
+  barcodeItems?: BarcodeItem[];
   geo: PickupGeo | null;
   /**
    * 업로드 체크포인트: 사진 지문(photoFingerprint) → 발급된 1년 서명 URL.

@@ -313,7 +313,7 @@ describe("ActiveRunPage — 계량 제출: 업로드 진행 + 토스트(06 E6/E8
     expect(mockInvoke).not.toHaveBeenCalled();
   });
 
-  it("[12 §4] 바코드를 SUBMIT_MEASURE payload에 실어 보낸다", async () => {
+  it("[12 §4]+[O2] 텍스트 등록 바코드를 barcodeItems(photoUrl 생략)로 SUBMIT_MEASURE payload에 실어 보낸다", async () => {
     mockStorageFrom.mockReturnValue({
       upload: vi.fn(() => Promise.resolve({ error: null })),
       createSignedUrl: vi.fn(() =>
@@ -327,7 +327,9 @@ describe("ActiveRunPage — 계량 제출: 업로드 진행 + 토스트(06 E6/E8
     await waitFor(() => expect(mockInvoke).toHaveBeenCalled());
     const [, body] = mockInvoke.mock.calls[0]!;
     expect(body.action).toBe("SUBMIT_MEASURE");
-    expect(body.payload.barcodes).toEqual(["8801234567890"]);
+    // [O2] 전송은 barcodeItems로 — 사진 없는 항목은 photoUrl 자체가 없다(레거시 barcodes 미전송).
+    expect(body.payload.barcodeItems).toEqual([{ code: "8801234567890" }]);
+    expect(body.payload.barcodes).toBeUndefined();
   });
 
   it("순차 업로드 중 '사진 N/M 업로드 중' 표시 후 성공 토스트", async () => {
@@ -375,6 +377,95 @@ describe("ActiveRunPage — 계량 제출: 업로드 진행 + 토스트(06 E6/E8
       expect(screen.getByTestId("toast")).toHaveTextContent("스토리지 업로드 실패"),
     );
     expect(mockInvoke).not.toHaveBeenCalled();
+  });
+});
+
+// [O2 2026-08-05] 바코드 사진 첨부 — 첨부 즉시 order-photos 업로드→서명 URL, barcodeItems 전송.
+describe("ActiveRunPage — 바코드 사진 첨부(O2)", () => {
+  function mockUploadOk(signedUrl = "https://signed.example/barcode.jpg") {
+    const upload = vi.fn(() => Promise.resolve({ error: null }));
+    const createSignedUrl = vi.fn(() => Promise.resolve({ data: { signedUrl }, error: null }));
+    mockStorageFrom.mockReturnValue({ upload, createSignedUrl });
+    return { upload, createSignedUrl };
+  }
+
+  it("바코드 항목에 사진을 첨부하면 썸네일이 뜨고 barcodeItems에 photoUrl이 실린다", async () => {
+    const { upload } = mockUploadOk("https://signed.example/barcode.jpg");
+    mockInvoke.mockResolvedValue({ ok: true, data: {} });
+    renderRun(makeRun({ status: "ARRIVED" }));
+
+    // 텍스트 바코드 1건 등록 후 [📷 사진] 첨부 → 즉시 업로드·썸네일.
+    fireEvent.change(screen.getByTestId("barcode-input"), { target: { value: "8801234567890" } });
+    fireEvent.click(screen.getByTestId("barcode-add"));
+    fireEvent.click(screen.getByTestId("barcode-photo-attach-8801234567890"));
+    fireEvent.change(screen.getByTestId("barcode-photo-input"), {
+      target: { files: [new File(["bar"], "bar.jpg", { type: "image/jpeg" })] },
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId("barcode-photo-thumb-8801234567890")).toHaveAttribute(
+        "src",
+        "https://signed.example/barcode.jpg",
+      ),
+    );
+    // 업로드 경로는 order-photos `${orderId}/barcode-...jpg`(첨부 즉시 — 제출 전).
+    expect(upload).toHaveBeenCalledWith(
+      expect.stringMatching(/^o1\/barcode-\d+\.jpg$/),
+      expect.anything(),
+      { upsert: true },
+    );
+
+    // 나머지 필수 입력을 채워 제출 → barcodeItems에 photoUrl이 실린다.
+    fireEvent.change(screen.getByTestId("measured-kg-input"), { target: { value: "40" } });
+    fireEvent.click(screen.getByTestId("payout-option-cash"));
+    fireEvent.change(screen.getByTestId("photo-uploader-input"), {
+      target: { files: [new File(["a"], "a.jpg", { type: "image/jpeg" })] },
+    });
+    fireEvent.click(screen.getByTestId("submit-measure-button"));
+    await waitFor(() => expect(mockInvoke).toHaveBeenCalled());
+    const [, body] = mockInvoke.mock.calls[0]!;
+    expect(body.payload.barcodeItems).toEqual([
+      { code: "8801234567890", photoUrl: "https://signed.example/barcode.jpg" },
+    ]);
+  });
+
+  it("사진 단독 등록: photo- 고유 코드로 등록되고('사진 등록' 표시) 바코드 필수 가드를 충족한다", async () => {
+    mockUploadOk("https://signed.example/only.jpg");
+    mockInvoke.mockResolvedValue({ ok: true, data: {} });
+    renderRun(makeRun({ status: "ARRIVED" }));
+
+    // 코드 입력 없이 [📷 사진으로 등록] → 목록에 "사진 등록" 항목.
+    fireEvent.click(screen.getByTestId("barcode-photo-only"));
+    fireEvent.change(screen.getByTestId("barcode-photo-input"), {
+      target: { files: [new File(["p"], "p.jpg", { type: "image/jpeg" })] },
+    });
+    await waitFor(() => expect(screen.getByTestId("barcode-list")).toHaveTextContent("사진 등록"));
+
+    // 텍스트 바코드 없이도 제출이 가드를 통과한다(사진 등록 = 바코드 1건).
+    fireEvent.change(screen.getByTestId("measured-kg-input"), { target: { value: "40" } });
+    fireEvent.click(screen.getByTestId("payout-option-cash"));
+    fireEvent.change(screen.getByTestId("photo-uploader-input"), {
+      target: { files: [new File(["a"], "a.jpg", { type: "image/jpeg" })] },
+    });
+    fireEvent.click(screen.getByTestId("submit-measure-button"));
+    await waitFor(() => expect(mockInvoke).toHaveBeenCalled());
+    const [, body] = mockInvoke.mock.calls[0]!;
+    expect(body.payload.barcodeItems).toHaveLength(1);
+    expect(body.payload.barcodeItems[0].code).toMatch(/^photo-[0-9a-z]+$/);
+    expect(body.payload.barcodeItems[0].photoUrl).toBe("https://signed.example/only.jpg");
+  });
+
+  it("업로드 실패 시 항목을 추가하지 않고 에러 토스트를 띄운다", async () => {
+    mockStorageFrom.mockReturnValue({
+      upload: vi.fn(() => Promise.resolve({ error: new Error("바코드 사진 업로드 실패") })),
+      createSignedUrl: vi.fn(),
+    });
+    renderRun(makeRun({ status: "ARRIVED" }));
+    fireEvent.click(screen.getByTestId("barcode-photo-only"));
+    fireEvent.change(screen.getByTestId("barcode-photo-input"), {
+      target: { files: [new File(["p"], "p.jpg", { type: "image/jpeg" })] },
+    });
+    await waitFor(() => expect(screen.getByTestId("toast")).toHaveTextContent("바코드 사진 업로드 실패"));
+    expect(screen.queryByTestId("barcode-list")).not.toBeInTheDocument();
   });
 });
 

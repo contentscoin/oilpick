@@ -196,12 +196,13 @@ create index idx_order_events_order on order_events (order_id, created_at);
 -- 현장 스캔 바코드(+촬영 GPS)를 바코드별 역추적 질의가 가능하도록 정규화 적재. 원본 payload는
 -- order_events에 영구 보존(이중 기록 — 감사·복원용). 쓰기는 fn_transition_order(SUBMIT_MEASURE)의
 -- replace-set(delete→insert)로만 — 쓰기 RLS 정책 없음(service_role 전용, 절대 규칙 1 미러).
--- 20260724000001_tracking.sql.
+-- 20260724000001_tracking.sql. photo_url은 [O2, 14 §2 확장] 20260805000002_pickup_item_photo.sql.
 create table pickup_items (
   id bigint generated always as identity primary key,
   order_id uuid not null references pickup_orders(id) on delete cascade,
   rider_id uuid not null references rider_profiles(id),
   barcode text not null,
+  photo_url text,                           -- [O2] 현장 첨부 사진(order-photos 1년 서명 URL). null=사진 없음(레거시·사진 없는 등록)
   geo_lat double precision,
   geo_lng double precision,
   captured_at timestamptz,                  -- 디바이스 촬영 시각(있으면). 서버 적재 시각은 created_at

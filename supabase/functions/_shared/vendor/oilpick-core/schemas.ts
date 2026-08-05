@@ -50,11 +50,16 @@ var pickupGeoSchema = z.object({
   capturedAt: z.string().optional()
   // ISO8601 촬영 시각(디바이스). 서버 now()와 별개 기록.
 });
+var barcodeItemSchema = z.object({
+  code: z.string().min(1),
+  photoUrl: z.string().url().optional()
+});
 var submitMeasurePayloadSchema = z.object({
   measuredKg: kgSchema,
   photoUrls: z.array(z.string().url()).min(1),
   payoutMethod: payoutMethodSchema,
   barcodes: z.array(z.string().min(1)).max(50).optional(),
+  barcodeItems: z.array(barcodeItemSchema).max(50).optional(),
   geo: pickupGeoSchema.optional(),
   // [14 J2] 현장 실배달 신유 통수(구매 동반 주문 필수 0..50 — 필수 강제는 RPC가 order_kind로 판정).
   deliveredCans: z.number().int().min(0).max(50).optional()
@@ -425,6 +430,7 @@ var dealerStatementSchema = z.object({
 });
 export {
   arrivePayloadSchema,
+  barcodeItemSchema,
   cancelPayloadSchema,
   confirmMeasurePayloadSchema,
   confirmRemindInputSchema,

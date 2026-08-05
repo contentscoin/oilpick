@@ -299,7 +299,10 @@ ACCEPTED 이후 모든 전이 단일 엔드포인트.
 
 - **order-create** 확장: 입력 += `purchaseCans?`(신유 구매 통수 1..50). `requestedKg`는 0 허용(구매-only).
   구매 동반 시 최신 `fresh_oil_price_ticks` 스냅샷(부재 404) + `order_kind`(PICKUP/PURCHASE/MIXED) 판정.
-- **order-transition / SUBMIT_MEASURE** payload += `deliveredCans?`(구매 동반 필수 0..50), `barcodes?`, `geo?`.
+- **order-transition / SUBMIT_MEASURE** payload += `deliveredCans?`(구매 동반 필수 0..50), `barcodes?`, `geo?`,
+  `barcodeItems?`(**[O2 2026-08-05]** `[{ code, photoUrl? }]` ≤50 — 바코드 사진 첨부. RPC는 barcodeItems가
+  있으면 그것으로 pickup_items replace-set(**photo_url 포함**, barcodes보다 우선), 없으면 레거시 `barcodes`
+  경로 폴백. 사진 단독 등록은 클라이언트가 `photo-` 접두 고유 코드 생성 — 14 §2-3 O2 확장이 단일 진실).
   넷팅·게이트는 `fn_settle_trade`(CONFIRM_MEASURE/FORCE_COMPLETE). 부족/한도초과 시 INSUFFICIENT_BALANCE/
   DEALER_LIMIT_EXCEEDED(롤백) — **둘 다 409로 매핑**(`mapTransitionError`, 14 J4). 매핑이 없으면 폴백
   INVALID_TRANSITION으로 뭉개져 점주가 원인도 복구 경로("현금으로 재제출")도 알 수 없다.
