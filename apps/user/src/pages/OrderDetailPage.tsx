@@ -67,6 +67,7 @@ export function OrderDetailPage() {
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [disputing, setDisputing] = useState(false);
+  const [requestingCashChange, setRequestingCashChange] = useState(false);
   const [disputeReason, setDisputeReason] = useState("");
   const [showDisputeForm, setShowDisputeForm] = useState(false);
 
@@ -154,6 +155,23 @@ export function OrderDetailPage() {
       // [14 J4] 상계 결제 실패 2종은 "현금으로 재제출"이 복구 경로다. 공용 코드 메시지는
       // 출금 맥락 문구라 여기서 맥락 카피로 덮어쓴다(그대로 두면 원인도 다음 행동도 알 수 없다).
       showToast(settlementFailureMessage(result.code) ?? result.message, { variant: "error" });
+    }
+  }
+
+  /** [N3] 현금 지급 변경 요청 — sent:false는 rate limit 스킵(에러 아님, 서버 2h 강제). */
+  async function handlePayoutChangeRequest() {
+    if (!id) return;
+    setRequestingCashChange(true);
+    const result = await invokeEdgeFunction<{ sent: boolean }>("payout-change-request", { orderId: id });
+    setRequestingCashChange(false);
+    if (!result.ok) {
+      showToast(result.message, { variant: "error" });
+      return;
+    }
+    if (result.data.sent) {
+      showToast("라이더에게 현금 지급 변경을 요청했어요", { variant: "success" });
+    } else {
+      showToast("잠시 전에 이미 요청했어요 — 2시간에 한 번 보낼 수 있어요");
     }
   }
 
@@ -568,6 +586,31 @@ export function OrderDetailPage() {
             <p data-testid="point-charge-caption" style={{ margin: 0, fontSize: 13, color: colors.status.wait, textAlign: "center" }}>
               확인하시면 새 기름 대금이 보유 포인트에서 즉시 차감돼요.
             </p>
+          )}
+          {/* [N3, 08 P2 확장] POINT 제출 건 한정 — 포인트가 싫거나 잔액이 부족할 때 라이더에게
+              현금 재제출을 인앱으로 요청한다(payout-change-request — 상태 무접촉 푸시, 주문당 2h
+              서버 dedupe). 실제 변경은 라이더 재제출로만 일어난다(2자 확인 원칙). */}
+          {isPointPayout && !isArbitrated && (
+            <button
+              type="button"
+              data-testid="payout-change-request-button"
+              disabled={requestingCashChange}
+              onClick={handlePayoutChangeRequest}
+              style={{
+                width: "100%",
+                minHeight: 48,
+                borderRadius: radius.button,
+                border: `1px solid ${colors.primary.DEFAULT}`,
+                backgroundColor: "#fff",
+                color: colors.primary.DEFAULT,
+                fontSize: 15,
+                fontWeight: 700,
+                cursor: requestingCashChange ? "default" : "pointer",
+                opacity: requestingCashChange ? 0.6 : 1,
+              }}
+            >
+              {requestingCashChange ? "요청 보내는 중..." : "💵 현금 지급으로 변경 요청"}
+            </button>
           )}
           {!isArbitrated && (
             <button

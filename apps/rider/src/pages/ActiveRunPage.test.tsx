@@ -594,3 +594,17 @@ describe("ActiveRunPage — 요청 정보 노출·계량 프리필(N5)", () => {
     expect(screen.queryByTestId("measure-kg-prefill-caption")).not.toBeInTheDocument();
   });
 });
+
+describe("ActiveRunPage — 현금으로 바꿔 다시 제출(N3, 08 P2 확장)", () => {
+  it("POINT 제출 대기 배너에서 원터치 → 재제출 폼(kg 유지 + CASH 프리셋)", () => {
+    renderRun(makeRun({ status: "ARRIVED", measuredKg: 40, payoutMethod: "POINT" }));
+    fireEvent.click(screen.getByTestId("cash-resubmit-button"));
+    expect(screen.getByTestId("measured-kg-input")).toHaveValue(40);
+    expect(screen.getByTestId("payout-option-cash")).toHaveAttribute("aria-checked", "true");
+  });
+
+  it("CASH 제출 대기 배너에는 원터치 버튼이 없다", () => {
+    renderRun(makeRun({ status: "ARRIVED", measuredKg: 40, payoutMethod: "CASH" }));
+    expect(screen.queryByTestId("cash-resubmit-button")).not.toBeInTheDocument();
+  });
+});

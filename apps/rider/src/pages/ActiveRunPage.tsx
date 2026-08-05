@@ -906,6 +906,33 @@ function ArrivedPanel({
         >
           계량·지급 수단 다시 제출
         </button>
+        {/* [N3, 08 P2 확장] POINT 제출 건 한정 원터치 — 점주의 [현금 지급으로 변경 요청]
+            (payout-change-request 푸시)을 받았을 때 한 탭으로 CASH 재제출 폼에 진입한다.
+            기존 재제출 플로우 재사용(kg 유지·수단만 CASH 프리셋) — 상태머신 무변경. */}
+        {submittedPoint && (
+          <button
+            type="button"
+            data-testid="cash-resubmit-button"
+            onClick={() => {
+              setKg(String(measuredKg));
+              setPayout("CASH");
+              setResubmitting(true);
+            }}
+            style={{
+              width: "100%",
+              minHeight: 48,
+              borderRadius: radius.button,
+              border: "none",
+              backgroundColor: colors.primary.DEFAULT,
+              color: "#fff",
+              fontSize: 15,
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            💵 현금으로 바꿔 다시 제출
+          </button>
+        )}
       </Card>
     );
   }
