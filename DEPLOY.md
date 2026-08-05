@@ -12,8 +12,9 @@
 
 > **원샷 실행**: 아래 1장(링크→마이그레이션 확인→`db push`→`functions deploy`)은
 > `bash scripts/deploy-cutover.sh`가 순서대로 실행한다(프로젝트 ref 기본값 dbvgxuevhmyoprafarnh,
-> `PROJECT_REF` env로 재정의). 수동 단계(초기 데이터·Vercel·coupon-* 삭제·REFERRAL_BASE_URL/
-> PG 시크릿 정리)는 스크립트가 끝에서 다시 안내한다.
+> `PROJECT_REF` env로 재정의). 수동 단계(초기 데이터·Vercel·REFERRAL_BASE_URL·PG 시크릿)는
+> 스크립트가 끝에서 다시 안내한다. ⚠️ [17 Q2] 쿠폰 복권으로 coupon-* 6종이 재배포 대상이다 —
+> 08 컷오버의 "coupon-* undeploy"(아래 1-0 ⓔ)는 **역사 기록이며 더 이상 실행하지 말 것**.
 
 ```bash
 # CLI 로그인 & 링크
@@ -24,8 +25,10 @@ supabase link --project-ref <PROJECT_REF>
 # seed.sql은 로컬 전용이라 프로덕션엔 적용되지 않는다(아래 3-1에서 admin 수동 생성).
 supabase db push
 
-# Edge Functions 배포(17개 — 08 withdraw-*/point-adjust 부활, 09 referral-code/attach/settle,
-# 11 M9-b directions, 13 dealer-create/dealer-assign). verify_jwt 등은 supabase/config.toml을 따른다.
+# Edge Functions 배포 — 08 withdraw-*/point-adjust 부활, 09 referral-code/attach/settle,
+# 11 M9-b directions, 13 dealer-create/dealer-assign, [17 Q2] coupon-* 6종 재복원
+# (coupon-purchase-intent/confirm/return·coupon-refund/adjust/price-set — return은
+# verify_jwt=false). verify_jwt 등은 supabase/config.toml을 따른다.
 supabase functions deploy
 
 # 시크릿 설정
@@ -38,8 +41,36 @@ supabase secrets set FCM_SERVICE_ACCOUNT="$(cat fcm-service-account.json)"
 #    키 발급 후 설정하면 재배포 없이 즉시 활성화된다. 서버 시크릿(클라이언트 번들 금지).
 # supabase secrets set KAKAO_MOBILITY_KEY="<카카오모빌리티 REST 키>"
 # supabase secrets set REFERRAL_BASE_URL="https://app.oilpick.kr"
-#  - PG 시크릿(TOSS_SECRET_KEY / PG_PROVIDER / KOEM_*)은 08 피벗(쿠폰 결제 폐기)으로 불필요 —
-#    기존 설정돼 있어도 참조하는 함수가 없다(잔존 시 secrets unset으로 정리 가능. 07 F4/F14 이력 참조).
+#
+# --- PG 시크릿 ([17 Q2] 수거쿠폰 복권 — 08이 "불필요" 처리했던 절을 복원. 07 F14 준거) ---
+#  - PG_PROVIDER(선택): 활성 PG 어댑터 선택. **미설정=koem**(17 C3 — 코엠페이먼츠 SIMPLEPAY 확정.
+#    08 이전 기본 toss에서 개정). "toss" = 토스페이먼츠, "demo" = 데모 결제(PG 호출 없이 즉시 충전).
+#    rider 앱 env VITE_PG_PROVIDER와 반드시 같은 값으로 배포할 것.
+#    ⚠️ demo는 실 과금이 없다 — 라이더가 무상으로 쿠폰을 충전할 수 있으므로 개발·시연·내부 테스트
+#    전용이며 **프로덕션(실 라이더) 금지**. 실 라이더 온보딩(과금 시작) 전에 반드시 koem으로
+#    운영하고 아래 코엠 시크릿을 설정할 것.
+# supabase secrets set PG_PROVIDER="koem"
+#  - 코엠(SIMPLEPAY) 시크릿(07 F14, PG_PROVIDER=koem일 때 필수). 코엠 계약 시 이메일로 수령.
+#    KOEM_API_KEY는 checkHash(HMAC-SHA256) 생성용 64자리 키 — 클라이언트에 절대 노출 금지.
+#    미설정 시 coupon-purchase-intent가 결제창 파라미터 생성에서 명시적으로 실패한다(휴면 게이트).
+supabase secrets set KOEM_MID="M2026xxxxxxxxxxx"
+supabase secrets set KOEM_API_KEY="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+#  - 코엠 도메인(선택, 미설정=상용기 pay.coam.co.kr/paycc.coam.co.kr). 개발기 테스트 시에만 재정의:
+#    KOEM_PG_DOMAIN="https://test-pay.coam.co.kr:30300", KOEM_APPROV_DOMAIN="https://183.111.29.87:39500"
+#    ※ 개발기 취소 서버는 IP 도메인이라 TLS 인증서 검증 실패 가능(코엠 공식 샘플은 검증을 끈다) —
+#      Deno(Edge)는 검증을 끌 수 없으므로 취소 E2E는 상용기 인증서 도메인에서 확인한다.
+#  - KOEM_RETURN_URL(선택): 결제 결과 rUrl. 미설정 시 ${SUPABASE_URL}/functions/v1/coupon-purchase-return.
+#  - KOEM_RETURN_APP_URL(선택): 결제 완료 화면에서 앱 복귀 딥링크(예: oilpickrider://coupons/purchase).
+#  - KOEM_PAY_GROUP/KOEM_PAY_BRAND(선택): 기본 OPG/OCC — 계약서의 결제그룹·브랜드와 다르면 재정의.
+#  - TOSS_SECRET_KEY(선택): PG_PROVIDER=toss일 때만 필수(coupon-purchase-confirm/coupon-refund 전용).
+#    클라이언트 키(VITE_TOSS_CLIENT_KEY, rider 앱 env)와 다르다 — 시크릿 키는 서버(Edge)에만 둔다.
+# supabase secrets set TOSS_SECRET_KEY="test_sk_xxxxxxxxxxxxxxxxxxxx"
+#
+# ※ 코엠 운영 선행 조건(07 F14 확정 설계):
+#   ① 취소 API는 "가맹점 서버 공인 IP"를 코엠 방화벽에 등록해야 호출 가능(가이드 1.1) —
+#      Supabase Edge Functions는 고정 egress IP가 아니므로 코엠에 egress 대역 등록 가능 여부를
+#      문의하고, 불가하면 고정 IP 프록시 경유를 검토한다(개발기/상용기 각각 등록).
+#   ② rUrl(coupon-purchase-return)은 배포된 함수 URL(공개, verify_jwt=false) 기준으로 코엠 측 사전 협의.
 ```
 
 ### 1-0. 08·09 컷오버 절차 (지급수단 피벗 + 레퍼럴 — 순서 엄수, 08-payout-pivot.md·09-referral.md §배포)
@@ -53,9 +84,9 @@ supabase secrets set FCM_SERVICE_ACCOUNT="$(cat fcm-service-account.json)"
    ⓐ(마이그레이션)가 반드시 선행 — 순서가 뒤집히면 활성화가 조용히 실패(best-effort 로그만)한다.
    09 링크 도메인이 app.oilpick.kr이 아니면 `REFERRAL_BASE_URL` 시크릿을 이 단계 전에 설정.
 ⓓ 앱 순차 배포: rider→user→admin (Vercel 재빌드 — main 병합 시 자동).
-ⓔ coupon-* 6종 undeploy — ⓓ 완료 후(가동 중 구버전 앱 파손 방지):
-   `supabase functions delete coupon-purchase-intent coupon-purchase-confirm coupon-purchase-return coupon-refund coupon-adjust coupon-price-set`
-   DB의 fn_charge_coupon/fn_consume_coupon/fn_confirm_purchase/fn_refund_purchase·쿠폰 테이블은 **보존**(회계 기록).
+ⓔ ~~coupon-* 6종 undeploy~~ — **[17 Q2] 쿠폰 복권으로 폐기된 절차(실행 금지)**. 17에서 coupon-*
+   6종이 재배포 대상으로 복귀했다(`supabase functions deploy`가 포함 배포). DB의 fn_charge_coupon/
+   fn_consume_coupon/fn_confirm_purchase/fn_refund_purchase·쿠폰 테이블은 08에서도 보존돼 있었다.
 ⓕ 데모 시나리오 재기록: ① 수거 요청 → 수락 → 계량+지급수단 선택 → 점주 확인(포인트 적립) → 지갑 출금
    신청 → admin 처리. ② (09) 라이더 "내 추천"에서 링크 복사 → 신규 점주 /ref/:code 가입 → 첫 수거 완료
    → 점주 지갑 REFERRAL +5,000P·라이더 실적 활성화·admin /referrals 퍼널 반영.
@@ -89,7 +120,8 @@ supabase secrets set FCM_SERVICE_ACCOUNT="$(cat fcm-service-account.json)"
   생성된 좌상은 같은 admin 웹에 자기 아이디/비번으로 로그인하면 서브어드민 메뉴만 보인다(13).
 - **초기 시세 tick**: admin 웹의 시세 관리에서 첫 매입가 설정(`price-set`). ⚠️ 미설정 시
   order-create가 404("현재 시세 정보를 찾을 수 없어요")로 막힌다 — 필수 초기 데이터.
-  (쿠폰 단가는 08 피벗으로 폐기 — 설정 불필요.)
+- **초기 쿠폰 단가 tick([17 Q2] 복권)**: admin에서 쿠폰 단가 설정(`coupon-price-set`). ⚠️ 미설정 시
+  라이더 쿠폰 구매(coupon-purchase-intent)가 409 `COUPON_PRICE_NOT_SET`으로 막힌다 — 필수 초기 데이터.
 
 ### 1-2. 인증(전화 OTP)
 로컬은 `config.toml`의 test_otp(고정 123456)를 쓴다. **프로덕션은 실제 SMS 프로바이더 필요** —
@@ -170,7 +202,9 @@ curl -sS -X POST "$SUPABASE_URL/functions/v1/settlement-watch" \
   - (user만) `VITE_KAKAO_KEY` = 카카오 JS 앱 키(주소검색용. 선택 — 없으면 수동입력 폴백)
   - (user만, 선택 — 09) `VITE_APP_STORE_URL` / `VITE_PLAY_STORE_URL` = 추천 랜딩(/ref/:code)의 스토어
     버튼 링크. 미설정 시 버튼 비노출(스토어 출시 후 설정).
-  - (rider `VITE_PG_PROVIDER`는 08 피벗 — 쿠폰 결제 폐기 — 으로 불필요. 남아 있어도 무시된다.)
+  - (rider만, [17 Q2] 복권) `VITE_PG_PROVIDER` = 서버 secrets `PG_PROVIDER`와 **반드시 같은 값**
+    (기본 `koem`. `demo`는 개발·시연 전용 — 프로덕션 금지). PG_PROVIDER=toss일 때만
+    `VITE_TOSS_CLIENT_KEY`도 함께 설정.
 
 ### 도메인/서브도메인 연결
 1. Vercel(아무 프로젝트나) → Settings → Domains에 apex 도메인 `oilpick.kr` 추가 → DNS 안내대로
@@ -188,7 +222,8 @@ curl -sS -X POST "$SUPABASE_URL/functions/v1/settlement-watch" \
 ---
 
 ## 3. 배포 후 점검
-- admin 로그인(생성한 admin 계정) → 대시보드/시세 설정 + 출금 큐 확인. (집하장·쿠폰 단가는 일몰 — 설정 불필요.)
+- admin 로그인(생성한 admin 계정) → 대시보드/시세 설정 + **쿠폰 단가 설정([17 Q2] 복권 — 미설정 시
+  라이더 충전 불가)** + 출금 큐 확인. (집하장은 일몰 — 설정 불필요.)
 - user 앱: 가입(실 SMS) → 홈 실시세 표시 → 수거 요청 → 상태 Realtime 반영.
 - rider 앱: 가입 → 서류 제출 → admin 승인 → 콜 수락 → 운행.
 - (09) 레퍼럴 루프: 라이더 마이 → "내 추천" 코드 발급·shareUrl 도메인 확인(REFERRAL_BASE_URL 반영 여부)

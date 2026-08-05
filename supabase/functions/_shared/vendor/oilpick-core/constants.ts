@@ -64,7 +64,9 @@ var NOTIFY_KIND = {
   /** [16 L9] 추천 보상 오프라인 정산 완료 마킹 통지(라이더 대상, 09 H8) */
   PAYOUT_REFERRAL_SETTLED: "PAYOUT_REFERRAL_SETTLED",
   /** [N3, 08 P2 확장] 점주 [현금 지급으로 변경 요청](rider 대상, 주문당 2h 1회 — 상태 무접촉) */
-  PAYOUT_CHANGE_REQUEST: "PAYOUT_CHANGE_REQUEST"
+  PAYOUT_CHANGE_REQUEST: "PAYOUT_CHANGE_REQUEST",
+  /** [17 Q2] 수거쿠폰 충전 완료(rider 대상 — coupon-purchase-confirm/코엠 return 콜백 공용) */
+  COUPON_CHARGED: "COUPON_CHARGED"
 };
 export {
   ARRIVED_STALE_MS,

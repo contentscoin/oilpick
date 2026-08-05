@@ -448,7 +448,7 @@ import_map = "./functions/import_map.json"
 
 # 08 G3-⑤: 출금·포인트 조정 부활(F13이 삭제했던 엔트리 복원 — 함수 디렉터리와 짝 유지.
 # 엔트리만 있고 디렉터리가 없으면 functions deploy가 400으로 실패한다: 2026-07-10 실측).
-# coupon-* 엔트리(coupon-purchase-return verify_jwt=false 포함)는 08 P1 일몰로 디렉터리와 함께 삭제.
+# coupon-* 엔트리는 08 P1이 일몰시켰다가 [17 Q2] 쿠폰 복권으로 아래에 재복원(6종).
 [functions.withdraw-request]
 verify_jwt = true
 import_map = "./functions/import_map.json"
@@ -458,6 +458,33 @@ verify_jwt = true
 import_map = "./functions/import_map.json"
 
 [functions.point-adjust]
+verify_jwt = true
+import_map = "./functions/import_map.json"
+
+# [17 Q2] 수거쿠폰 복권 — coupon-* 6종 재배선(08 P1이 삭제, a4b4fdd^ 원형 복원. 02-api.md §11~15).
+[functions.coupon-purchase-intent]
+verify_jwt = true
+import_map = "./functions/import_map.json"
+
+[functions.coupon-purchase-confirm]
+verify_jwt = true
+import_map = "./functions/import_map.json"
+
+# F14: 코엠페이먼츠 rUrl 콜백(PG 서버가 호출) — JWT가 없으므로 verify_jwt=false가 필수.
+# 요청 검증은 함수 내부에서(orderno→구매건 대조·금액 대조, 07 F14 확정 설계).
+[functions.coupon-purchase-return]
+verify_jwt = false
+import_map = "./functions/import_map.json"
+
+[functions.coupon-refund]
+verify_jwt = true
+import_map = "./functions/import_map.json"
+
+[functions.coupon-adjust]
+verify_jwt = true
+import_map = "./functions/import_map.json"
+
+[functions.coupon-price-set]
 verify_jwt = true
 import_map = "./functions/import_map.json"
 

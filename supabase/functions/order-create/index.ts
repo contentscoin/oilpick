@@ -1,16 +1,18 @@
 // order-create (supplier). docs/spec/02-api.md "1. order-create (supplier)":
 // - 입력: { requestedCans?, requestedKg, address, lat, lng, preferredTime }
 // - 검증: requestedKg 1~500. 진행중(REQUESTED~PICKED_UP) 주문 3건 이상이면 409 TOO_MANY_ACTIVE.
-// - 처리: 최신 price_tick 스냅샷 → pickup_orders insert(REQUESTED) → order_events →
+// - 처리: 최신 price_tick 스냅샷 + [17 Q2 복권] coupon_cost = ceil(requestedKg / KG_PER_CAN)
+//   스냅샷 재개(17 C1 — 08 P1이 중지했던 것을 역전. 이 스냅샷이 fn_transition_order의 잠들어
+//   있던 ACCEPT CONSUME 게이트를 RPC 무변경으로 부활시킨다. 구매 단독 주문 requestedKg 0은
+//   coupon_cost 0 → null 저장 = 게이트 불요) → pickup_orders insert(REQUESTED) → order_events →
 //   반경 3km 매칭 브로드캐스트(broadcastCall 헬퍼).
-//   coupon_cost 스냅샷 중지(08 P1 — 쿠폰 모델 폐기, 신규 주문 null → RPC CONSUME/REFUND 자연 skip).
 //   rider_fee 스냅샷 중지 유지(레거시 — snapshot_rider_fee 미기록, 07 §1-3).
 // - 출력: { orderId, snapshotPricePerKg, estimatedCash } (08 G3-① — couponCost 삭제)
 //
 // 상태머신/원장 로직은 재구현하지 않는다 — 이 함수는 생성 자체(REQUESTED 최초 insert)만 담당하며
 // 이후 전이는 fn_transition_order(order-accept/order-transition)가 전담한다.
 
-import { orderCreateInputSchema, estimateCash } from "@oilpick/core/index.ts";
+import { orderCreateInputSchema, estimateCash, KG_PER_CAN } from "@oilpick/core/index.ts";
 import { AuthError, requireAuth, requireRole } from "../_shared/auth.ts";
 import { errorResponse, okResponse, withErrorHandling } from "../_shared/response.ts";
 import { sendPush } from "../_shared/push.ts";
@@ -86,7 +88,11 @@ Deno.serve((req) =>
       orderKind = input.requestedKg >= 1 ? "MIXED" : "PURCHASE";
     }
 
-    // 08 P1: coupon_cost 스냅샷 중지 — 신규 주문은 null(쿠폰 게이트 자연 소멸).
+    // [17 Q2] coupon_cost 스냅샷 재개(17 C1, 07 §1-2 공식 그대로) — kg 기준 ceil, 이후 계량
+    // 결과와 무관(쿠폰은 매칭 수수료). 0(구매 단독, requestedKg 0)이면 null 저장 —
+    // fn_transition_order의 CONSUME/REFUND 게이트는 `coupon_cost is not null`일 때만 실행된다.
+    const couponCost = Math.ceil(input.requestedKg / KG_PER_CAN) || null;
+
     const { data: order, error: insertErr } = await admin
       .from("pickup_orders")
       .insert({
@@ -98,6 +104,7 @@ Deno.serve((req) =>
         pickup_location: `SRID=4326;POINT(${input.lng} ${input.lat})`,
         preferred_time: input.preferredTime,
         snapshot_price_per_kg: priceTick.price_per_kg,
+        coupon_cost: couponCost,
         broadcast_radius_km: INITIAL_BROADCAST_RADIUS_KM,
         order_kind: orderKind,
         purchase_requested_cans: purchaseRequestedCans,
