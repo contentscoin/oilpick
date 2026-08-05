@@ -217,6 +217,12 @@ ARRIVED→COMPLETED는 supplier 전용이라 점주가 미루면 라이더는 �
   일별 접이식(포인트만)을 '일별 지급 내역' 카드(`daily-payout-card`)로 분리하고 일별
   건수/kg에 뷰의 `cash_amount`·`point_amount`를 병기(현금은 부호 보존 — 음수=상계 차액
   지급, 뷰 규약 그대로). 정산 카드는 합계+캡션 유지(② 불변). DB·뷰 변경 없음(【R】만).
+- **[확장 2026-08-05 ②, CEO 요청]** 일별 카드에 **건별 펼침** — 날짜 행 `details` 펼침으로
+  그날 완료 주문의 시각·주소·kg·수단별 지급액(useMyPayoutOrders — pickup_orders 본인 RLS,
+  이번 달 로컬 경계, 최근 200건). 일별 행과 어긋나지 않도록 금액은 뷰와 동일 net 규약
+  `coalesce(net_amount, cash_paid_amount)`, 일자 묶음은 **UTC 일자**(groupOrdersByUtcDay —
+  로컬 날짜 묶음이면 KST 00~09시 완료 건이 다른 행에 붙는 확정 결함). 지급 없던 완료
+  주문은 "지급 없음"(null≠0 구분). DB·뷰 변경 없음(【R】만).
 
 ## 7. 스코프 밖 (심사 탈락 4건 — 재론 조건 명시)
 

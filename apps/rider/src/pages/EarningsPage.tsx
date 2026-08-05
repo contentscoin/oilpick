@@ -1,7 +1,8 @@
 import { NumberFlow, colors, elevation, gradient, gray, radius, surface } from "@oilpick/ui";
 import { formatKg, formatKrw, formatPoint } from "@oilpick/core";
 import { useSession } from "../hooks/useSession";
-import { useMyPayout } from "../hooks/useMyPayout";
+import { useMyPayout, useMyPayoutOrders } from "../hooks/useMyPayout";
+import type { PayoutOrderItem } from "../hooks/useMyPayout";
 import { useMonthlyPickupStats } from "../hooks/useTodayStats";
 
 /**
@@ -15,6 +16,17 @@ import { useMonthlyPickupStats } from "../hooks/useTodayStats";
 function formatDayLabel(day: string): string {
   return day.slice(5).replace("-", ".");
 }
+
+/** 완료 시각(로컬) "HH:MM". 일자 묶음은 UTC(뷰 규약)지만 시각 표기는 라이더 체감 시간. */
+function formatTimeLabel(iso: string): string {
+  return new Date(iso).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false });
+}
+
+/** 건별 지급액 표기 — 일별 행과 같은 net 규약. null=지급 없던 완료 주문(레거시). */
+function formatOrderAmount(o: PayoutOrderItem): string {
+  if (o.amount == null) return "지급 없음";
+  return o.payoutMethod === "POINT" ? `🪙 ${formatPoint(o.amount)}` : `💵 ${formatKrw(o.amount)}`;
+}
 export function EarningsPage() {
   const { session } = useSession();
   const userId = session?.user.id;
@@ -22,6 +34,8 @@ export function EarningsPage() {
   const { data: stats, isLoading: statsLoading } = useMonthlyPickupStats(userId);
   // [16 L9] 플랫폼 정산 대사 — v_my_payout_daily(본인 스코프). 지갑·출금 아님(08 P5).
   const { data: payout } = useMyPayout(userId);
+  // 건별 펼침용 — 뷰와 같은 net 규약·UTC 일자 묶음이라 일별 행과 합이 맞는다.
+  const { data: orderGroups } = useMyPayoutOrders(userId);
 
   return (
     <main style={{ display: "flex", flexDirection: "column", gap: 20, padding: 20, maxWidth: 480, margin: "0 auto" }}>
@@ -118,22 +132,48 @@ export function EarningsPage() {
               <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: colors.status.wait }}>일별 지급 내역</p>
               <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 8 }}>
                 {(payout?.days ?? []).map((d) => (
-                  <li
-                    key={d.day}
-                    className="oilpick-tabular-nums"
-                    style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, fontSize: 13, color: gray[800] }}
-                  >
-                    <span style={{ whiteSpace: "nowrap" }}>
-                      {formatDayLabel(d.day)} · {d.completedCount}건 · {formatKg(d.totalKg)}
-                    </span>
-                    <span style={{ fontWeight: 700, textAlign: "right" }}>
-                      💵 {formatKrw(d.cashAmount)} · 🪙 {formatPoint(d.pointAmount)}
-                    </span>
+                  <li key={d.day}>
+                    {/* 날짜 행을 펼치면 그날 건별(시각·주소·kg·지급액)이 보인다. */}
+                    <details data-testid={`daily-payout-day-${d.day}`}>
+                      <summary
+                        className="oilpick-tabular-nums"
+                        style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, fontSize: 13, color: gray[800], cursor: "pointer", minHeight: 32, listStyle: "none" }}
+                      >
+                        <span style={{ whiteSpace: "nowrap" }}>
+                          {formatDayLabel(d.day)} · {d.completedCount}건 · {formatKg(d.totalKg)}
+                        </span>
+                        <span style={{ fontWeight: 700, textAlign: "right" }}>
+                          💵 {formatKrw(d.cashAmount)} · 🪙 {formatPoint(d.pointAmount)}
+                        </span>
+                      </summary>
+                      <ul
+                        data-testid={`daily-payout-orders-${d.day}`}
+                        style={{ margin: "4px 0 4px", padding: "0 0 0 8px", listStyle: "none", display: "flex", flexDirection: "column", gap: 8, borderLeft: `2px solid ${surface.border}` }}
+                      >
+                        {(orderGroups?.[d.day] ?? []).map((o) => (
+                          <li key={o.id} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: gray[900], overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {o.pickupAddress}
+                            </span>
+                            <span className="oilpick-tabular-nums" style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12, color: colors.status.wait }}>
+                              <span>
+                                {formatTimeLabel(o.completedAt)}
+                                {o.finalKg != null && ` · ${formatKg(o.finalKg)}`}
+                              </span>
+                              <span style={{ fontWeight: 700, color: gray[800] }}>{formatOrderAmount(o)}</span>
+                            </span>
+                          </li>
+                        ))}
+                        {(orderGroups?.[d.day] ?? []).length === 0 && (
+                          <li style={{ fontSize: 12, color: colors.status.wait }}>건별 내역을 불러오고 있어요…</li>
+                        )}
+                      </ul>
+                    </details>
                   </li>
                 ))}
               </ul>
               <p style={{ margin: 0, fontSize: 12, color: colors.status.wait }}>
-                현금은 현장에서 지급받은 금액이에요. 포인트 지급분은 아래 플랫폼 정산으로 받아요.
+                날짜를 누르면 건별 내역이 보여요. 현금은 현장에서 지급받은 금액이에요. 포인트 지급분은 아래 플랫폼 정산으로 받아요.
               </p>
             </section>
           )}
