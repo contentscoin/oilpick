@@ -132,6 +132,15 @@ export function CallDetailPage() {
           <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: colors.status.wait }}>예상 수거량</p>
           <p className="oilpick-tabular-nums" style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>{formatKg(call.requestedKg)}</p>
         </div>
+        {/* [N5] 점주 희망 시간 — 저장 문자열 그대로(레거시 "지금" 포함). 값 없으면 행 미렌더. */}
+        {call.preferredTime && (
+          <div data-testid="call-detail-preferred" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: colors.status.wait }}>희망 시간</p>
+            <p className="oilpick-tabular-nums" style={{ margin: 0, fontSize: 16, fontWeight: 600, minWidth: 0, overflowWrap: "anywhere" }}>
+              {call.preferredTime}
+            </p>
+          </div>
+        )}
         {/* [16 L3 §3-1] 수락 판단 정보 — 실제 도로 기준 거리·소요. 위치 권한 거부·키 미설정이면
             이 행 자체가 없다(직선거리는 콜 목록 카드가 이미 표기 — 여기서 지어내지 않는다). */}
         {(roadKm || roadEta) && (

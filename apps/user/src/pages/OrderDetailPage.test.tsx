@@ -350,4 +350,34 @@ describe("OrderDetailPage", () => {
     renderPage();
     expect(screen.getByText("주문을 찾을 수 없어요.")).toBeInTheDocument();
   });
+
+  // [N2] 희망 시간 행 — 저장 문자열 그대로(신규 포맷·레거시 "지금" 모두), 값 없으면 미렌더.
+  it("[N2] renders the 희망 시간 row with the stored string as-is", () => {
+    mockUseOrder.mockReturnValue({
+      data: { ...BASE_ORDER, status: "REQUESTED", preferredTime: "2026-08-06 09:30" },
+      isLoading: false,
+    });
+    renderPage();
+    const row = screen.getByTestId("order-preferred-time");
+    expect(row).toHaveTextContent("희망 시간");
+    expect(row).toHaveTextContent("2026-08-06 09:30");
+  });
+
+  it("[N2] renders the legacy '지금' literal as-is", () => {
+    mockUseOrder.mockReturnValue({
+      data: { ...BASE_ORDER, status: "COMPLETED", riderId: "rider-1", finalKg: 14.5, cashPaidAmount: 10150, completedAt: "2026-07-02T00:00:00Z", preferredTime: "지금" },
+      isLoading: false,
+    });
+    renderPage();
+    expect(screen.getByTestId("order-preferred-time")).toHaveTextContent("지금");
+  });
+
+  it("[N2] does not render the 희망 시간 row when preferredTime is null", () => {
+    mockUseOrder.mockReturnValue({
+      data: { ...BASE_ORDER, status: "REQUESTED", preferredTime: null },
+      isLoading: false,
+    });
+    renderPage();
+    expect(screen.queryByTestId("order-preferred-time")).not.toBeInTheDocument();
+  });
 });

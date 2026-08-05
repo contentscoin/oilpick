@@ -120,8 +120,8 @@ export function ActiveRunPage() {
       <RunSwitcher runs={summaries ?? []} currentId={run.id} onSelect={setSelectedOrderId} position={position} />
 
       {/* 05-design-upgrade.md 상태 헤드라인 패턴을 라이더 관점 카피로. 주소는 헤드라인 카드 안에 묶어
-          "어디로 가야 하는지"를 함께 안내한다. */}
-      <RiderRunHeadline status={run.status} address={run.pickupAddress} />
+          "어디로 가야 하는지"를 함께 안내한다. [N5] 희망 시간도 주소 아래 한 줄로(전 상태 공통). */}
+      <RiderRunHeadline status={run.status} address={run.pickupAddress} preferredTime={run.preferredTime} />
 
       {/* 진행 맥락: U7과 동일한 세로 타임라인으로 라이더도 현재 단계를 본다. */}
       <OrderTimeline currentStatus={run.status} />
@@ -142,6 +142,7 @@ export function ActiveRunPage() {
         <ArrivedPanel
           key={run.id}
           orderId={run.id}
+          requestedKg={run.requestedKg}
           measuredKg={run.measuredKg}
           finalKg={run.finalKg}
           snapshotPricePerKg={run.snapshotPricePerKg}
@@ -325,7 +326,16 @@ function RunSwitcher({
   );
 }
 
-function RiderRunHeadline({ status, address }: { status: OrderStatus; address: string }) {
+function RiderRunHeadline({
+  status,
+  address,
+  preferredTime,
+}: {
+  status: OrderStatus;
+  address: string;
+  /** [N5] 점주 희망 시간 — 저장 문자열 그대로. null/빈 값이면 줄 자체를 그리지 않는다. */
+  preferredTime?: string | null;
+}) {
   const copy = RIDER_HEADLINE[status] ?? { title: "운행 중", hint: "" };
   return (
     <section
@@ -352,16 +362,28 @@ function RiderRunHeadline({ status, address }: { status: OrderStatus; address: s
       <div
         style={{
           display: "flex",
-          alignItems: "flex-start",
-          gap: 8,
+          flexDirection: "column",
+          gap: 6,
           paddingTop: 12,
           borderTop: `1px solid ${surface.border}`,
         }}
       >
-        <PinIcon />
-        <p data-testid="active-run-address" style={{ margin: 0, fontSize: 15, fontWeight: 600, color: gray[800], flex: 1, minWidth: 0 }}>
-          {address}
-        </p>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+          <PinIcon />
+          <p data-testid="active-run-address" style={{ margin: 0, fontSize: 15, fontWeight: 600, color: gray[800], flex: 1, minWidth: 0 }}>
+            {address}
+          </p>
+        </div>
+        {/* [N5] 희망 시간 — 주소 아래 한 줄(모든 run 상태 공통). 저장 문자열 그대로, 값 없으면 미렌더. */}
+        {preferredTime && (
+          <p
+            data-testid="active-run-preferred-time"
+            className="oilpick-tabular-nums"
+            style={{ margin: 0, paddingLeft: 26, fontSize: 13, fontWeight: 600, color: colors.status.wait, minWidth: 0, overflowWrap: "anywhere" }}
+          >
+            🕐 희망 {preferredTime}
+          </p>
+        )}
       </div>
     </section>
   );
@@ -589,6 +611,7 @@ function captureGeo(): Promise<PickupGeo | null> {
 
 function ArrivedPanel({
   orderId,
+  requestedKg,
   measuredKg,
   finalKg,
   snapshotPricePerKg,
@@ -599,6 +622,8 @@ function ArrivedPanel({
   snapshotFreshCanPrice,
 }: {
   orderId: string;
+  /** [N5] 요청 kg(requested_kg) — 계량 입력 프리필. 0(신유 단독)이면 빈 값 유지. */
+  requestedKg: number;
   measuredKg: number | null;
   finalKg: number | null;
   snapshotPricePerKg: number;
@@ -613,7 +638,11 @@ function ArrivedPanel({
 }) {
   // [14 J2] 구매 동반(PURCHASE/MIXED)이면 현장 배달 통수를 입력받고 폐유 수령액과 상계한다.
   const purchaseInvolved = orderKind === "PURCHASE" || orderKind === "MIXED";
-  const [kg, setKg] = useState("");
+  // [N5] 계량 프리필 — 요청 기준 예상값(requested_kg). 신유 단독(0)은 빈 값 유지.
+  // 드래프트 복원(아래 loadDraft)·재제출(measure-resubmit-button의 setKg)이 프리필보다 우선한다.
+  // key={run.id} 리마운트 규약(16 L10 리뷰 ①) 덕에 주문 전환 시 항상 해당 주문 값으로 새로 시작한다.
+  const prefillKg = requestedKg > 0 ? String(requestedKg) : "";
+  const [kg, setKg] = useState(prefillKg);
   const [payout, setPayout] = useState<PayoutMethod | null>(submittedPayoutMethod);
   const [deliveredCans, setDeliveredCans] = useState(purchaseRequestedCans ?? 0);
   const [photos, setPhotos] = useState<PhotoAsset[]>([]);
@@ -671,11 +700,13 @@ function ArrivedPanel({
     // orderId 전환(다중 콜) 시 해당 주문의 드래프트로 다시 복원한다.
   }, [orderId, finalKg]);
 
-  // 텍스트 입력은 변경 즉시 저장. 전부 초기값(빈 폼)이면 드래프트를 지운다(빈 배너 방지).
+  // 텍스트 입력은 변경 즉시 저장. 전부 초기값(프리필 폼)이면 드래프트를 지운다(빈 배너 방지).
+  // [N5] kg 초기값이 ""가 아니라 요청 kg 프리필이므로, 비교 기준도 prefillKg다 — 그렇지 않으면
+  // 아무것도 입력하지 않은 마운트 직후에 프리필이 드래프트로 저장돼 가짜 복원 배너가 뜬다.
   useEffect(() => {
     if (!draftReady || finalKg != null) return;
     const pristine =
-      kg === "" &&
+      kg === prefillKg &&
       barcodes.length === 0 &&
       photos.length === 0 &&
       geo == null &&
@@ -713,11 +744,11 @@ function ArrivedPanel({
     return () => window.removeEventListener("online", onOnline);
   }, []);
 
-  /** 복원 배너 [지우기] — 드래프트 파기 + 폼 초기화. */
+  /** 복원 배너 [지우기] — 드래프트 파기 + 폼 초기화(kg는 [N5] 요청 기준 프리필로 복귀). */
   async function discardDraft() {
     await clearDraft(orderId);
     uploadedUrlsRef.current = {};
-    setKg("");
+    setKg(prefillKg);
     setPayout(submittedPayoutMethod);
     setDeliveredCans(purchaseRequestedCans ?? 0);
     setBarcodes([]);
@@ -1092,6 +1123,13 @@ function ArrivedPanel({
             onChange={(e) => setKg(e.target.value)}
             style={inputStyle}
           />
+          {/* [N5] 프리필 안내 — 값이 요청 기준 예상값(그대로)일 때만. 라이더가 실측값으로 고치면
+              사라진다(00-domain "계량/수량 규칙": 확정은 현장 계량 기준 고지 필수). */}
+          {prefillKg !== "" && kg === prefillKg && (
+            <p data-testid="measure-kg-prefill-caption" style={{ margin: 0, fontSize: 12, color: colors.status.wait }}>
+              요청 기준 예상값이에요 — 현장 계량으로 확정돼요
+            </p>
+          )}
         </div>
 
         {/* [15] 목업의 총 무게 / 단가 2열 스탯. 입력한 kg와 주문 시점 시세 스냅샷을 나란히 둬

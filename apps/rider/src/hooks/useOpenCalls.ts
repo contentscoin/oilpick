@@ -15,6 +15,8 @@ export interface OpenCall {
   snapshotPricePerKg: number;
   /** 레거시 수거비(구모델). 신규 주문은 미기록(null). 표기하지 않음 — 07 F5에서 매입액으로 전환. */
   snapshotRiderFee: number | null;
+  /** [N5] 점주 희망 시간 — 'YYYY-MM-DD HH:mm' 또는 레거시 '지금'. 저장 문자열 그대로 표시. */
+  preferredTime: string | null;
   createdAt: string;
 }
 
@@ -33,8 +35,9 @@ export function useOpenCalls(enabled: boolean) {
       const { data, error } = await supabase
         .from("pickup_orders")
         // 08 G6-②: coupon_cost 조회 중지 — 쿠폰 소진 표기가 사라져 신규 코드 경로에서 미사용.
+        // [N5] preferred_time 추가 — 콜 카드/상세에 점주 희망 시간 노출.
         .select(
-          "id, requested_kg, pickup_address, pickup_location, snapshot_price_per_kg, snapshot_rider_fee, created_at",
+          "id, requested_kg, pickup_address, pickup_location, snapshot_price_per_kg, snapshot_rider_fee, preferred_time, created_at",
         )
         .eq("status", "REQUESTED")
         .order("created_at", { ascending: false });
@@ -49,6 +52,7 @@ export function useOpenCalls(enabled: boolean) {
           pickupLng: point?.lng ?? null,
           snapshotPricePerKg: row.snapshot_price_per_kg,
           snapshotRiderFee: row.snapshot_rider_fee ?? null,
+          preferredTime: row.preferred_time ?? null,
           createdAt: row.created_at,
         };
       });

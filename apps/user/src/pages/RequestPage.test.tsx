@@ -117,7 +117,54 @@ describe("RequestPage", () => {
     );
   });
 
-  it("resolves the '내일 오전' quick chip to a next-day 09:00 preferred time", async () => {
+  // [N2] 퀵칩 4종 폐기 → datetime-local 상시 노출(기본값 = 현재 15분 올림) + [지금 바로] 1개.
+  it("[N2] shows an always-visible datetime-local (15-min rounded default) and no quick chips", () => {
+    renderPage();
+    fireEvent.click(screen.getByTestId("request-step-1-next"));
+
+    const input = screen.getByTestId("preferred-time-input") as HTMLInputElement;
+    expect(input).toHaveAttribute("type", "datetime-local");
+    expect(screen.getByText("희망 날짜·시간")).toBeInTheDocument();
+    // 기본값: 'YYYY-MM-DDTHH:mm' + 분은 15의 배수(현재 시각 올림).
+    expect(input.value).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
+    expect(Number(input.value.slice(-2)) % 15).toBe(0);
+    expect(new Date(input.value).getTime()).toBeGreaterThanOrEqual(Date.now() - 60 * 1000);
+
+    // 퀵칩(지금/오늘 오후/내일 오전/직접)은 폐기됐다 — [지금 바로]만 남는다.
+    expect(screen.queryByTestId("preferred-time-chips")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("preferred-time-todayPM")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("preferred-time-tomorrowAM")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("preferred-time-custom-input")).not.toBeInTheDocument();
+    expect(screen.getByTestId("preferred-time-now")).toHaveTextContent("지금 바로");
+  });
+
+  it("[N2] rejects a past time (before now-30min): inline alert + step2 next locked", () => {
+    renderPage();
+    fireEvent.click(screen.getByTestId("request-step-1-next"));
+    fireEvent.change(screen.getByTestId("address-input"), { target: { value: "서울시 강서구 1" } });
+    fillAddressCoords();
+
+    fireEvent.change(screen.getByTestId("preferred-time-input"), { target: { value: "2020-01-01T09:00" } });
+    expect(screen.getByTestId("preferred-time-past-error")).toBeInTheDocument();
+    expect(screen.getByTestId("request-step-2-next")).toBeDisabled();
+
+    // [지금 바로] → 현재 시각으로 세팅되면 게이트가 풀린다.
+    fireEvent.click(screen.getByTestId("preferred-time-now"));
+    expect(screen.queryByTestId("preferred-time-past-error")).not.toBeInTheDocument();
+    expect(screen.getByTestId("request-step-2-next")).not.toBeDisabled();
+  });
+
+  it("[N2] requires a value: clearing the datetime locks step2 next", () => {
+    renderPage();
+    fireEvent.click(screen.getByTestId("request-step-1-next"));
+    fireEvent.change(screen.getByTestId("address-input"), { target: { value: "서울시 강서구 1" } });
+    fillAddressCoords();
+
+    fireEvent.change(screen.getByTestId("preferred-time-input"), { target: { value: "" } });
+    expect(screen.getByTestId("request-step-2-next")).toBeDisabled();
+  });
+
+  it("[N2] sends the picked datetime as 'YYYY-MM-DD HH:mm' (T→space) and shows it on the confirm step", async () => {
     mockInvokeEdgeFunction.mockResolvedValue({
       ok: true,
       data: { orderId: "order-1", snapshotPricePerKg: 700, couponCost: 1, estimatedCash: 10500 },
@@ -126,13 +173,19 @@ describe("RequestPage", () => {
     fireEvent.click(screen.getByTestId("request-step-1-next"));
     fireEvent.change(screen.getByTestId("address-input"), { target: { value: "서울시 강서구 1" } });
     fillAddressCoords();
-    fireEvent.click(screen.getByTestId("preferred-time-tomorrowAM"));
+    fireEvent.change(screen.getByTestId("preferred-time-input"), { target: { value: "2030-05-01T14:30" } });
     fireEvent.click(screen.getByTestId("request-step-2-next"));
-    fireEvent.click(screen.getByTestId("request-submit"));
 
-    await waitFor(() => expect(mockInvokeEdgeFunction).toHaveBeenCalled());
-    const call = mockInvokeEdgeFunction.mock.calls[0]![1] as { preferredTime: string };
-    expect(call.preferredTime).toMatch(/^\d{4}-\d{2}-\d{2} 09:00$/);
+    // 확인 스텝 Row에 저장 포맷 그대로 노출.
+    expect(screen.getByText("2030-05-01 14:30")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("request-submit"));
+    await waitFor(() =>
+      expect(mockInvokeEdgeFunction).toHaveBeenCalledWith(
+        "order-create",
+        expect.objectContaining({ preferredTime: "2030-05-01 14:30" }),
+      ),
+    );
   });
 
   it("shows a success sheet with the estimated cash and navigates to the detail page on confirm", async () => {
@@ -167,7 +220,13 @@ describe("RequestPage", () => {
     await waitFor(() =>
       expect(mockInvokeEdgeFunction).toHaveBeenCalledWith(
         "order-create",
-        expect.objectContaining({ requestedKg: 15, requestedCans: 1, address: "서울시 강서구 화곡로 1", preferredTime: "지금" }),
+        expect.objectContaining({
+          requestedKg: 15,
+          requestedCans: 1,
+          address: "서울시 강서구 화곡로 1",
+          // [N2] "지금" 리터럴 폐기 — 기본값(현재 15분 올림)도 항상 'YYYY-MM-DD HH:mm'.
+          preferredTime: expect.stringMatching(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/),
+        }),
       ),
     );
   });

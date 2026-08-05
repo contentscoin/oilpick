@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { ToastProvider } from "@oilpick/ui";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -52,6 +52,7 @@ function makeRun(overrides: Partial<ActiveRun> = {}): ActiveRun {
     pickupLat: 37.5509,
     pickupLng: 126.8225,
     requestedKg: 45,
+    preferredTime: null,
     orderKind: null,
     purchaseRequestedCans: null,
     snapshotFreshCanPrice: null,
@@ -436,7 +437,7 @@ describe("ActiveRunPage — 계량 드래프트(16 L4 §3-2)", () => {
     expect(screen.getByTestId("measure-draft-restored")).toHaveTextContent("작성하던 내용을 불러왔어요");
   });
 
-  it("[지우기]를 누르면 드래프트를 파기하고 폼을 초기화한다", async () => {
+  it("[지우기]를 누르면 드래프트를 파기하고 폼을 초기화한다(kg는 [N5] 요청 기준 프리필로 복귀)", async () => {
     seedDraft("o1");
     renderRun(makeRun({ status: "ARRIVED" }));
     await waitFor(() => expect(screen.getByTestId("measure-draft-restored")).toBeInTheDocument());
@@ -444,7 +445,8 @@ describe("ActiveRunPage — 계량 드래프트(16 L4 §3-2)", () => {
     await waitFor(() =>
       expect(screen.queryByTestId("measure-draft-restored")).not.toBeInTheDocument(),
     );
-    expect(screen.getByTestId("measured-kg-input")).toHaveValue(null);
+    // [N5] 초기화된 폼 = 프리필 폼(requestedKg 45) — 빈 값이 아니다.
+    expect(screen.getByTestId("measured-kg-input")).toHaveValue(45);
     expect(localStorage.getItem("oilpick:measure-draft:o1")).toBeNull();
   });
 
@@ -513,5 +515,82 @@ describe("ActiveRunPage — 확인 요청 다시 보내기(16 L5)", () => {
   it("배너에 자동 에스컬레이션 안내 캡션이 있다", () => {
     renderRun(makeRun({ status: "ARRIVED", measuredKg: 40 }));
     expect(screen.getByText("24시간이 지나면 본사에 자동 접수돼요")).toBeInTheDocument();
+  });
+});
+
+describe("ActiveRunPage — 요청 정보 노출·계량 프리필(N5)", () => {
+  it("헤드라인 주소 아래에 '🕐 희망 {값}' 줄을 표시한다(모든 run 상태 공통)", () => {
+    const { unmount } = renderRun(makeRun({ status: "ACCEPTED", preferredTime: "2026-08-06 09:30" }));
+    expect(screen.getByTestId("active-run-preferred-time")).toHaveTextContent("🕐 희망 2026-08-06 09:30");
+    unmount();
+
+    // 레거시 "지금"도 저장 문자열 그대로 — ARRIVED에서도 동일하게 표시.
+    renderRun(makeRun({ status: "ARRIVED", preferredTime: "지금" }));
+    expect(screen.getByTestId("active-run-preferred-time")).toHaveTextContent("🕐 희망 지금");
+  });
+
+  it("preferredTime이 없으면(null) 희망 줄이 없다", () => {
+    renderRun(makeRun({ status: "ACCEPTED", preferredTime: null }));
+    expect(screen.queryByTestId("active-run-preferred-time")).not.toBeInTheDocument();
+  });
+
+  it("계량 kg 입력이 requestedKg로 프리필되고 '요청 기준 예상값' 캡션이 붙는다", () => {
+    renderRun(makeRun({ status: "ARRIVED", requestedKg: 45 }));
+    expect(screen.getByTestId("measured-kg-input")).toHaveValue(45);
+    expect(screen.getByTestId("measure-kg-prefill-caption")).toHaveTextContent(
+      "요청 기준 예상값이에요 — 현장 계량으로 확정돼요",
+    );
+    // 프리필 상태에선 지급액 미리보기도 요청 기준으로 이미 계산돼 있다(45×1,600=72,000원).
+    expect(screen.getByTestId("run-cash-payout")).toHaveTextContent("72,000원");
+  });
+
+  it("실측값으로 고치면 캡션이 사라진다(더 이상 요청 기준이 아니다)", () => {
+    renderRun(makeRun({ status: "ARRIVED", requestedKg: 45 }));
+    fireEvent.change(screen.getByTestId("measured-kg-input"), { target: { value: "40" } });
+    expect(screen.queryByTestId("measure-kg-prefill-caption")).not.toBeInTheDocument();
+  });
+
+  it("requestedKg 0(신유 단독)이면 빈 값 유지 — 프리필·캡션 없음", () => {
+    renderRun(makeRun({ status: "ARRIVED", requestedKg: 0, orderKind: "PURCHASE", purchaseRequestedCans: 2, snapshotFreshCanPrice: 26000 }));
+    expect(screen.getByTestId("measured-kg-input")).toHaveValue(null);
+    expect(screen.queryByTestId("measure-kg-prefill-caption")).not.toBeInTheDocument();
+  });
+
+  it("드래프트 복원이 프리필보다 우선한다", async () => {
+    localStorage.setItem(
+      "oilpick:measure-draft:o1",
+      JSON.stringify({
+        kg: "33.5",
+        payout: "CASH",
+        deliveredCans: 0,
+        barcodes: [],
+        geo: null,
+        uploadedUrls: {},
+        savedAt: Date.now(),
+      }),
+    );
+    renderRun(makeRun({ status: "ARRIVED", requestedKg: 45 }));
+    await waitFor(() => expect(screen.getByTestId("measure-draft-restored")).toBeInTheDocument());
+    expect(screen.getByTestId("measured-kg-input")).toHaveValue(33.5);
+    expect(screen.queryByTestId("measure-kg-prefill-caption")).not.toBeInTheDocument();
+  });
+
+  it("프리필만으로는(입력 없음) 드래프트가 저장되지 않는다 — 가짜 복원 배너 방지", async () => {
+    renderRun(makeRun({ status: "ARRIVED", requestedKg: 45 }));
+    // loadDraft(비동기 복원)와 뒤이은 저장 이펙트가 전부 돌도록 마이크로태스크를 비운다 —
+    // 그 뒤에도 드래프트(프리필 kg "45")가 저장돼 있으면 안 된다(pristine 기준 = 프리필).
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(screen.queryByTestId("measure-draft-restored")).not.toBeInTheDocument();
+    expect(localStorage.getItem("oilpick:measure-draft:o1")).toBeNull();
+  });
+
+  it("재제출 프리필(measuredKg)이 요청 기준 프리필보다 우선한다", () => {
+    renderRun(makeRun({ status: "ARRIVED", requestedKg: 45, measuredKg: 40, payoutMethod: "CASH" }));
+    fireEvent.click(screen.getByTestId("measure-resubmit-button"));
+    expect(screen.getByTestId("measured-kg-input")).toHaveValue(40);
+    expect(screen.queryByTestId("measure-kg-prefill-caption")).not.toBeInTheDocument();
   });
 });

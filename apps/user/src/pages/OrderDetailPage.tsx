@@ -293,6 +293,31 @@ export function OrderDetailPage() {
           + 라이더명 보조문구). */}
       <StatusHeadline status={order.status} subtitle={headlineSubtitle} />
 
+      {/* [N2] 주문 정보 — 희망 시간 행. 저장 문자열 그대로 표시(레거시 "지금"도 그대로 — 가공 금지). */}
+      {order.preferredTime && (
+        <div
+          data-testid="order-preferred-time"
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: 12,
+            padding: "12px 16px",
+            borderRadius: radius.card,
+            backgroundColor: surface.card,
+            border: `1px solid ${surface.border}`,
+          }}
+        >
+          <span style={{ fontSize: 14, color: colors.status.wait }}>희망 시간</span>
+          <span
+            className="oilpick-tabular-nums"
+            style={{ fontSize: 14, fontWeight: 600, marginLeft: "auto", textAlign: "right", minWidth: 0, overflowWrap: "anywhere" }}
+          >
+            {order.preferredTime}
+          </span>
+        </div>
+      )}
+
       {order.status === "REQUESTED" && (
         <section data-testid="order-requested-panel" style={{ display: "flex", flexDirection: "column", gap: 20, alignItems: "center" }}>
           <RadiusPulse />

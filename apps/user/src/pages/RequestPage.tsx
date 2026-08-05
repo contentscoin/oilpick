@@ -35,41 +35,51 @@ import { AddressField, type AddressValue } from "../components/AddressField";
 /**
  * U5 요청 3스텝. 03-frontend.md(07 F9 개정): 3스텝 골격 유지 +
  * ① 전 스텝 공통 sticky 예상 수령액 푸터(08 G5-⑥ 수단 중립 카피) ② 최근 주소 재사용 칩 ③ 통 크기 프리셋
- * ④ 희망시간 퀵칩 ⑤ 제출 성공 ConfirmSheet + 스텝 인디케이터.
+ * ④ 희망 날짜·시간 직접 지정 ⑤ 제출 성공 ConfirmSheet + 스텝 인디케이터.
+ *
+ * [N2 개정 2026-08-05, CEO 지시] 희망시간 퀵칩 4종(지금/오늘 오후 14:00/내일 오전 09:00/직접)을
+ * 폐기하고 datetime-local을 상시 노출한다 — "오전오후 버튼이 아니라 날짜 시간을 지정".
+ * 저장 포맷은 기존과 동일 'YYYY-MM-DD HH:mm'(T→공백), "지금" 리터럴은 신규 저장에서 폐기(레거시
+ * 표시 전용). 검증: 필수 + 과거(현재−30분 이전) 거부 — step next·제출 게이트 양쪽.
  *
  * 카피는 08 신모델: "예상 수령액"(지급수단은 현장에서 현금/포인트 중 결정 — 수단 중립). requestedKg는 서버가
  * requestedKg 기준으로 산정하므로(07 §1-2) 클라이언트는 kg만 정확히 보내면 된다.
  */
 
 type Step = 1 | 2 | 3;
-type TimeChip = "now" | "todayPM" | "tomorrowAM" | "custom";
 
 // 좌표는 주소 검색·지오코딩으로 확정되기 전까지 null(12 S2 — 기본 좌표 저장 금지).
 const DEFAULT_ADDRESS: AddressValue = { address: "", lat: null, lng: null };
 
 const STEP_LABELS: Record<Step, string> = { 1: "수량", 2: "장소·시간", 3: "확인" };
 
-/** Date → preferred_time 텍스트 'YYYY-MM-DD HH:mm' (01-db-schema.sql preferred_time 규약). */
-function formatPreferredDateTime(d: Date): string {
+/** Date → datetime-local 입력값 'YYYY-MM-DDTHH:mm'(로컬 타임존). */
+function toDatetimeLocal(d: Date): string {
   const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-/** 퀵칩 → preferred_time 텍스트. 오늘 오후=14:00, 내일 오전=09:00. */
-function resolvePreferredTime(chip: TimeChip, customTime: string): string {
-  if (chip === "now") return "지금";
-  if (chip === "custom") return customTime ? customTime.replace("T", " ") : "";
-  const now = new Date();
-  if (chip === "todayPM") {
-    const d = new Date(now);
-    d.setHours(14, 0, 0, 0);
-    return formatPreferredDateTime(d);
-  }
-  // tomorrowAM
+/** [N2] 기본값 — 현재 시각을 15분 단위로 올림한 datetime-local 값. */
+function defaultPreferredTime(now = new Date()): string {
   const d = new Date(now);
-  d.setDate(d.getDate() + 1);
-  d.setHours(9, 0, 0, 0);
-  return formatPreferredDateTime(d);
+  d.setSeconds(0, 0);
+  const remainder = d.getMinutes() % 15;
+  if (remainder !== 0) d.setMinutes(d.getMinutes() + (15 - remainder));
+  return toDatetimeLocal(d);
+}
+
+/** [N2] 과거 거부 유예 30분 — "방금 재서 지금 와달라"는 현장 요청을 막지 않는다. */
+const PREFERRED_TIME_GRACE_MS = 30 * 60 * 1000;
+
+/**
+ * [N2] datetime-local 값이 과거(현재−30분 이전)인지. 빈 값은 필수 검증에서 따로 걸리므로
+ * 여기서는 false. 'YYYY-MM-DDTHH:mm'는 Date 생성자가 로컬 타임존으로 해석한다.
+ */
+function isPastPreferredTime(value: string, now = new Date()): boolean {
+  if (!value) return false;
+  const t = new Date(value).getTime();
+  if (Number.isNaN(t)) return true;
+  return t < now.getTime() - PREFERRED_TIME_GRACE_MS;
 }
 
 export function RequestPage() {
@@ -90,8 +100,8 @@ export function RequestPage() {
   const [purchaseCans, setPurchaseCans] = useState(purchaseMode ? 1 : 0);
   const [address, setAddress] = useState<AddressValue>(DEFAULT_ADDRESS);
   const [addressInitialized, setAddressInitialized] = useState(false);
-  const [timeChip, setTimeChip] = useState<TimeChip>("now");
-  const [customTime, setCustomTime] = useState("");
+  // [N2] 희망 날짜·시간(datetime-local 값). 기본값 = 현재 시각 15분 올림.
+  const [preferredTime, setPreferredTime] = useState(() => defaultPreferredTime());
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<{ orderId: string; label: string; amount: number } | null>(null);
@@ -117,7 +127,9 @@ export function RequestPage() {
       : "예상 결제액(상계 후)"
     : "예상 수령액";
   const footerAmount = hasPurchase ? Math.abs(netEstimate) : wasteCash;
-  const preferredTimeValue = resolvePreferredTime(timeChip, customTime);
+  // [N2] 저장 포맷은 기존과 동일 'YYYY-MM-DD HH:mm'(datetime-local의 T를 공백으로).
+  const preferredTimeValue = preferredTime.replace("T", " ");
+  const preferredTimePast = isPastPreferredTime(preferredTime);
 
   // 폐유 수거 또는 신유 구매 중 하나는 있어야 다음 단계로 진행 가능(구매-only 허용).
   const step1Valid = cans >= 1 || hasPurchase;
@@ -138,7 +150,9 @@ export function RequestPage() {
               !address.address ||
               address.lat == null ||
               address.lng == null ||
-              (timeChip === "custom" && !customTime),
+              // [N2] 희망시간 필수 + 과거(현재−30분 이전) 거부 — step next 게이트.
+              !preferredTime ||
+              preferredTimePast,
             loading: false,
             onClick: () => setStep(3),
           }
@@ -151,6 +165,12 @@ export function RequestPage() {
   async function handleSubmit() {
     if (!userId) return;
     setError(null);
+
+    // [N2] 제출 게이트 — step2 통과 후 시간이 흘러 과거가 됐을 수 있다(양쪽 게이트).
+    if (!preferredTime || isPastPreferredTime(preferredTime)) {
+      setError("희망 시간이 지났어요. 시간을 다시 선택해주세요.");
+      return;
+    }
 
     const parsed = orderCreateInputSchema.safeParse({
       // 구매-only(폐유 0)면 requestedCans는 보내지 않는다(positive 제약). requestedKg는 0.
@@ -326,50 +346,50 @@ export function RequestPage() {
           <AddressField value={address} onChange={setAddress} />
 
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <span style={{ fontSize: 14, fontWeight: 600 }}>희망 시간</span>
-            <div data-testid="preferred-time-chips" style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {(
-                [
-                  { value: "now", label: "지금" },
-                  { value: "todayPM", label: "오늘 오후" },
-                  { value: "tomorrowAM", label: "내일 오전" },
-                  { value: "custom", label: "직접 지정" },
-                ] as { value: TimeChip; label: string }[]
-              ).map((chip) => {
-                const selected = timeChip === chip.value;
-                return (
-                  <button
-                    key={chip.value}
-                    type="button"
-                    data-testid={`preferred-time-${chip.value}`}
-                    aria-pressed={selected}
-                    onClick={() => setTimeChip(chip.value)}
-                    style={{
-                      minHeight: 44,
-                      padding: "0 16px",
-                      borderRadius: radius.pill,
-                      border: `1px solid ${selected ? colors.primary.DEFAULT : surface.border}`,
-                      backgroundColor: selected ? colors.primary.light : "#fff",
-                      color: selected ? colors.primary.dark : "#333",
-                      fontWeight: 600,
-                      fontSize: 14,
-                      cursor: "pointer",
-                    }}
-                  >
-                    {chip.label}
-                  </button>
-                );
-              })}
+            {/* [N2, CEO 지시] 퀵칩(지금/오늘 오후/내일 오전/직접) 폐기 — 날짜+시간을 직접 지정한다.
+                기본값은 현재 시각 15분 올림. 보조로 [지금 바로]만 남긴다(입력값을 현재 시각으로 세팅
+                — 저장 포맷은 동일, "지금" 리터럴 신규 저장 폐기). */}
+            <label htmlFor="preferred-time-input" style={{ fontSize: 14, fontWeight: 600 }}>
+              희망 날짜·시간
+            </label>
+            <input
+              id="preferred-time-input"
+              data-testid="preferred-time-input"
+              type="datetime-local"
+              required
+              value={preferredTime}
+              onChange={(e) => setPreferredTime(e.target.value)}
+              className={inputClassName}
+              style={inputStyle}
+            />
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              <button
+                type="button"
+                data-testid="preferred-time-now"
+                onClick={() => setPreferredTime(toDatetimeLocal(new Date()))}
+                style={{
+                  minHeight: 44,
+                  padding: "0 16px",
+                  borderRadius: radius.pill,
+                  border: `1px solid ${surface.border}`,
+                  backgroundColor: "#fff",
+                  color: colors.primary.dark,
+                  fontWeight: 600,
+                  fontSize: 14,
+                  cursor: "pointer",
+                }}
+              >
+                지금 바로
+              </button>
             </div>
-            {timeChip === "custom" && (
-              <input
-                data-testid="preferred-time-custom-input"
-                type="datetime-local"
-                value={customTime}
-                onChange={(e) => setCustomTime(e.target.value)}
-                className={inputClassName}
-                style={inputStyle}
-              />
+            {preferredTimePast && (
+              <p
+                role="alert"
+                data-testid="preferred-time-past-error"
+                style={{ margin: 0, fontSize: 13, color: colors.status.danger }}
+              >
+                지나간 시간이에요 — 현재 이후로 선택해주세요.
+              </p>
             )}
           </div>
 

@@ -46,4 +46,29 @@ describe("CallCard", () => {
     screen.getByTestId("call-card").click();
     expect(onClick).toHaveBeenCalledOnce();
   });
+
+  // [N5] 점주 희망 시간 — 보조행 아래 줄 "🕐 {값}". 저장 문자열 그대로(레거시 "지금" 포함).
+  it("[N5] renders the preferred time on its own line below the subtitle", () => {
+    render(
+      <CallCard
+        distanceKm={3.2}
+        estimatedKg={45}
+        estimatedCash={72000}
+        address="서울시 강남구 테헤란로 123"
+        preferredTime="2026-08-06 09:30"
+      />,
+    );
+    const line = screen.getByTestId("call-card-preferred");
+    expect(line).toHaveTextContent("🕐 2026-08-06 09:30");
+    // 거리·수량 보조행과 같은 줄이 아니라 별도 노드다.
+    expect(line.textContent).not.toContain("km");
+  });
+
+  it("[N5] does not render the preferred-time line when the value is absent", () => {
+    const { rerender } = render(<CallCard distanceKm={1} estimatedKg={15} estimatedCash={24000} />);
+    expect(screen.queryByTestId("call-card-preferred")).not.toBeInTheDocument();
+    // null(조회값 없음)도 동일하게 미렌더.
+    rerender(<CallCard distanceKm={1} estimatedKg={15} estimatedCash={24000} preferredTime={null} />);
+    expect(screen.queryByTestId("call-card-preferred")).not.toBeInTheDocument();
+  });
 });

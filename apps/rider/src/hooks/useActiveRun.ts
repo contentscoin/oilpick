@@ -21,6 +21,8 @@ export interface ActiveRun {
   pickupLat: number | null;
   pickupLng: number | null;
   requestedKg: number;
+  /** [N5] 점주 희망 시간 — 'YYYY-MM-DD HH:mm' 또는 레거시 '지금'. 저장 문자열 그대로 표시. */
+  preferredTime: string | null;
   /** [14 J2] 주문 종류(PICKUP/PURCHASE/MIXED). null=레거시=PICKUP. */
   orderKind: OrderKind | null;
   /** [14 J2] 신청 신유 통수·통당가 스냅샷 — deliveredCans 프리필·상계 미리보기. */
@@ -51,8 +53,9 @@ export interface ActiveRun {
   supplierName: string | null;
 }
 
+// [N5] preferred_time 추가 — 운행 화면 상단 희망 시간 표시.
 const RUN_COLUMNS =
-  "id, status, supplier_id, depot_id, pickup_address, pickup_location, requested_kg, order_kind, purchase_requested_cans, snapshot_fresh_can_price, delivered_cans, purchase_amount, net_amount, measured_kg, final_kg, photo_urls, snapshot_price_per_kg, snapshot_rider_fee, payout_method, cash_paid_amount, completed_at, created_at";
+  "id, status, supplier_id, depot_id, pickup_address, pickup_location, requested_kg, preferred_time, order_kind, purchase_requested_cans, snapshot_fresh_can_price, delivered_cans, purchase_amount, net_amount, measured_kg, final_kg, photo_urls, snapshot_price_per_kg, snapshot_rider_fee, payout_method, cash_paid_amount, completed_at, created_at";
 
 /**
  * 진행중으로 취급하는 상태(07 F6-②③④).
@@ -75,6 +78,7 @@ function mapRow(row: {
   pickup_address: string;
   pickup_location: string | null;
   requested_kg: number;
+  preferred_time?: string | null;
   order_kind: OrderKind | null;
   purchase_requested_cans: number | null;
   snapshot_fresh_can_price: number | null;
@@ -101,6 +105,7 @@ function mapRow(row: {
     pickupLat: pickupPoint?.lat ?? null,
     pickupLng: pickupPoint?.lng ?? null,
     requestedKg: row.requested_kg,
+    preferredTime: row.preferred_time ?? null,
     orderKind: row.order_kind,
     purchaseRequestedCans: row.purchase_requested_cans,
     snapshotFreshCanPrice: row.snapshot_fresh_can_price,

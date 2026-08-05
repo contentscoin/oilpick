@@ -308,6 +308,7 @@ export function CallHomePage() {
                 estimatedKg={call.requestedKg}
                 estimatedCash={estimateCash(call.requestedKg, call.snapshotPricePerKg)}
                 address={call.pickupAddress}
+                preferredTime={call.preferredTime}
                 onClick={() => navigate(`/calls/${call.id}`)}
               />
             ))}

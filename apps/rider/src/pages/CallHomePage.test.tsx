@@ -172,3 +172,19 @@ describe("CallHomePage — 콜 정렬 토글(16 L3 §3-4)", () => {
     expect(renderedCallIds()).toEqual(["big", "small"]);
   });
 });
+
+describe("CallHomePage — 희망 시간 노출(N5)", () => {
+  it("preferred_time이 있는 콜은 카드에 '🕐 {값}' 줄이 붙고, 없는 콜은 붙지 않는다", () => {
+    mockUseOpenCalls.mockReturnValue({
+      data: [
+        { id: "with", requestedKg: 30, pickupAddress: "서울 강서구 화곡로 1", pickupLat: null, pickupLng: null, snapshotPricePerKg: 1600, snapshotRiderFee: null, preferredTime: "2026-08-06 09:30", createdAt: "2026-08-05T02:00:00Z" },
+        { id: "without", requestedKg: 15, pickupAddress: "서울 성북구 장월로 120", pickupLat: null, pickupLng: null, snapshotPricePerKg: 1600, snapshotRiderFee: null, preferredTime: null, createdAt: "2026-08-05T01:00:00Z" },
+      ],
+      isLoading: false,
+    });
+    renderHome();
+    const lines = screen.getAllByTestId("call-card-preferred");
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toHaveTextContent("🕐 2026-08-06 09:30");
+  });
+});

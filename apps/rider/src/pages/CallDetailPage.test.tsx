@@ -30,6 +30,7 @@ function makeCall(overrides: Record<string, unknown> = {}) {
     pickupLng: 127.0,
     snapshotPricePerKg: 1600,
     snapshotRiderFee: null,
+    preferredTime: "2026-08-06 09:30",
     createdAt: "2026-07-09T00:00:00Z",
     ...overrides,
   };
@@ -94,6 +95,20 @@ describe("CallDetailPage — 표기(08 G6-②)", () => {
     renderDetail();
     expect(screen.queryByTestId("call-accept-gate")).not.toBeInTheDocument();
     expect(screen.getByTestId("call-accept-button")).toBeInTheDocument();
+  });
+
+  // [N5] 점주 희망 시간 행 — 저장 문자열 그대로, 값 없으면 행 미렌더.
+  it("[N5] 희망 시간 정보 행을 저장 문자열 그대로 표시한다", () => {
+    renderDetail();
+    const row = screen.getByTestId("call-detail-preferred");
+    expect(row).toHaveTextContent("희망 시간");
+    expect(row).toHaveTextContent("2026-08-06 09:30");
+  });
+
+  it("[N5] preferredTime이 없으면(null) 희망 시간 행이 없다", () => {
+    mockUseOpenCalls.mockReturnValue({ data: [makeCall({ preferredTime: null })], isLoading: false });
+    renderDetail();
+    expect(screen.queryByTestId("call-detail-preferred")).not.toBeInTheDocument();
   });
 });
 

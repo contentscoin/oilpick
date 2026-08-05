@@ -97,7 +97,7 @@ create table pickup_orders (
   requested_kg numeric(8,1) not null,       -- 예상 kg
   pickup_address text not null,
   pickup_location geography(point,4326) not null,
-  preferred_time text,                      -- '지금' 또는 'YYYY-MM-DD HH:mm'
+  preferred_time text,                      -- 레거시 '지금' 또는 'YYYY-MM-DD HH:mm' (신규는 항상 후자 — N2)
   -- 스냅샷 (생성 시 고정)
   snapshot_price_per_kg int not null,
   snapshot_rider_fee int,                   -- [07 F2] 레거시 — not null 해제, 신규 미기록

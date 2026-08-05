@@ -24,6 +24,11 @@ export interface CallCardProps {
   estimatedCash: number;
   /** 수거 주소(선택). 지정 시 제목 줄에 한 줄 truncate로 표시. */
   address?: string;
+  /**
+   * [N5] 점주 희망 시간(선택) — 'YYYY-MM-DD HH:mm' 또는 레거시 '지금'. 저장 문자열 그대로
+   * 보조행 아래 줄에 "🕐 {값}"으로 표시. 없으면 미렌더.
+   */
+  preferredTime?: string | null;
   onClick?: () => void;
   className?: string;
 }
@@ -49,6 +54,7 @@ export function CallCard({
   estimatedKg,
   estimatedCash,
   address,
+  preferredTime,
   onClick,
   className,
 }: CallCardProps) {
@@ -131,6 +137,17 @@ export function CallCard({
           >
             {subtitle}
           </span>
+          {/* [N5] 희망 시간 — 거리·수량 옆이 아니라 그 아래 줄(보조행 압착 방지). 값 없으면 미렌더.
+              문자열은 저장값 그대로(레거시 "지금" 포함) — 좁은 폭에선 임의 지점 개행 허용. */}
+          {preferredTime && (
+            <span
+              data-testid="call-card-preferred"
+              className="oilpick-tabular-nums"
+              style={{ fontSize: 12, fontWeight: 500, color: colors.status.wait, minWidth: 0, overflowWrap: "anywhere" }}
+            >
+              🕐 {preferredTime}
+            </span>
+          )}
         </span>
 
         {/* 예상 매입 지급액 — 목업 pill.lime(밝은 배경 위 lime.soft 배경 + primary.dark 텍스트,
