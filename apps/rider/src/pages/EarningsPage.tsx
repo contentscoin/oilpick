@@ -6,10 +6,15 @@ import { useMonthlyPickupStats } from "../hooks/useTodayStats";
 
 /**
  * R7 "수거 실적"(08 G6-④). 쿠폰 요약(07 F6-⑤)을 제거하고 이번 달 지급을 수단 분리로 재구성:
- * 현금 지급/포인트 지급 히어로(건수 병기) + 수거 건수/수거량 카드.
+ * 현금 지급/포인트 지급 히어로(건수 병기) + 수거 건수/수거량 카드 + 일별 지급 내역(현금·포인트 병기).
  * 완료 집계는 completed_at 기준 + 레거시 coalesce 규약(useMonthlyPickupStats).
  * 포인트 지급분은 플랫폼이 점주에게 부담(EARN)하므로 라이더 지갑 개념은 없다(08 P5).
  */
+
+/** v_my_payout_daily의 day(YYYY-MM-DD)를 "MM.DD"로 줄인다 — 이번 달 스코프라 연·월 반복은 소음. */
+function formatDayLabel(day: string): string {
+  return day.slice(5).replace("-", ".");
+}
 export function EarningsPage() {
   const { session } = useSession();
   const userId = session?.user.id;
@@ -93,6 +98,46 @@ export function EarningsPage() {
             </div>
           </section>
 
+          {/* 일별 지급 내역 — v_my_payout_daily. 히어로 합계의 세부내역으로 현금·포인트를 병기한다.
+              현금은 현장에서 이미 지급받은 금액(음수 = 상계 차액을 점주에게 지급, 부호 보존 참고 표기),
+              포인트는 아래 플랫폼 정산 카드의 대사 근거가 되는 발행분이다. */}
+          {(payout?.days ?? []).length > 0 && (
+            <section
+              data-testid="daily-payout-card"
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 8,
+                padding: 16,
+                borderRadius: radius.card,
+                backgroundColor: surface.card,
+                border: `1px solid ${surface.border}`,
+                boxShadow: elevation.card,
+              }}
+            >
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: colors.status.wait }}>일별 지급 내역</p>
+              <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 8 }}>
+                {(payout?.days ?? []).map((d) => (
+                  <li
+                    key={d.day}
+                    className="oilpick-tabular-nums"
+                    style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, fontSize: 13, color: gray[800] }}
+                  >
+                    <span style={{ whiteSpace: "nowrap" }}>
+                      {formatDayLabel(d.day)} · {d.completedCount}건 · {formatKg(d.totalKg)}
+                    </span>
+                    <span style={{ fontWeight: 700, textAlign: "right" }}>
+                      💵 {formatKrw(d.cashAmount)} · 🪙 {formatPoint(d.pointAmount)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p style={{ margin: 0, fontSize: 12, color: colors.status.wait }}>
+                현금은 현장에서 지급받은 금액이에요. 포인트 지급분은 아래 플랫폼 정산으로 받아요.
+              </p>
+            </section>
+          )}
+
           {/* [16 L9 §6-2] 플랫폼 정산 카드 — 포인트 지급분은 플랫폼이 점주에게 부담(EARN)했으므로
               플랫폼이 라이더에게 정산할 금액의 대사 근거다. 지갑/출금 오해 차단 카피 필수(08 P5). */}
           <section
@@ -115,25 +160,6 @@ export function EarningsPage() {
             <p style={{ margin: 0, fontSize: 12, color: colors.status.wait }}>
               오프라인 정산 대상 금액 — 지급 일정은 본사 안내를 따라요.
             </p>
-            {(payout?.days ?? []).length > 0 && (
-              <details data-testid="my-payout-days">
-                <summary style={{ fontSize: 13, fontWeight: 600, color: colors.primary.DEFAULT, cursor: "pointer", minHeight: 32 }}>
-                  일별 내역 보기
-                </summary>
-                <ul style={{ margin: "8px 0 0", padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 6 }}>
-                  {(payout?.days ?? []).map((d) => (
-                    <li
-                      key={d.day}
-                      className="oilpick-tabular-nums"
-                      style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 13, color: gray[800] }}
-                    >
-                      <span>{d.day} · {d.completedCount}건</span>
-                      <span style={{ fontWeight: 700 }}>{formatPoint(d.pointAmount)}</span>
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            )}
           </section>
         </>
       )}
