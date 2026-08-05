@@ -6,7 +6,8 @@
 #   bash scripts/deploy-cutover.sh
 #
 # 이후 수동 단계(스크립트 말미에 다시 안내):
-#   ⓑ 잔존 주문 드레인(admin 웹) → ⓓ Vercel 3앱 재배포(DEPLOY.md §2) → ⓔ coupon-* 함수 삭제(아래 안내)
+#   ⓑ 잔존 주문 드레인(admin 웹) → ⓓ Vercel 3앱 재배포(DEPLOY.md §2)
+#   ([17 Q6] 구 ⓔ coupon-* 함수 삭제 단계는 폐기 — 쿠폰 복권으로 coupon-* 6종은 현역 배포 대상이다. DEPLOY.md 참조)
 
 set -euo pipefail
 
@@ -43,17 +44,12 @@ cat <<'NEXT'
    0건 확인. 있으면 완결/취소(잔존분의 쿠폰 소진·환급은 RPC 레거시 분기가 처리).
 
 ⓓ Vercel 3앱 재배포 — main 병합 시 자동(DEPLOY.md §2). 순서: rider → user → admin.
-   · 공통 env: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY (VITE_PG_PROVIDER는 불필요 — 무시됨)
-   · 초기 데이터: 시세 tick 1건 필수(admin 웹 시세 관리). 쿠폰 단가는 폐기 — 불필요.
+   · 공통 env: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY (rider는 VITE_PG_PROVIDER 선택 — DEPLOY.md)
+   · 초기 데이터: 시세 tick 1건 + **쿠폰 단가 tick 1건**(admin 웹 — [17 Q6] 복권으로 필수 복귀,
+     미설정 시 라이더 충전 불가 → 신규 콜 수락 전면 차단).
 
-ⓔ coupon-* 함수 삭제(앱 배포 확인 후 마지막 — 가동 중 구버전 앱 파손 방지):
-   supabase functions delete coupon-purchase-intent
-   supabase functions delete coupon-purchase-confirm
-   supabase functions delete coupon-purchase-return
-   supabase functions delete coupon-refund
-   supabase functions delete coupon-adjust
-   supabase functions delete coupon-price-set
-   (DB의 쿠폰 RPC·테이블·원장 데이터는 회계 기록으로 보존 — 내리지 않는다.)
+([17 Q6] 구 ⓔ coupon-* 함수 삭제 단계는 폐기 — 17-coupon-revival.md 복권으로 coupon-* 6종은
+ 현역 배포 대상이다. 절대 삭제하지 말 것. KOEM 시크릿·배포 절차는 DEPLOY.md 참조.)
 
 ⓕ 데모 시나리오: ① 요청 → 수락 → 계량+지급수단 선택 → 점주 확인(포인트 적립) → 지갑 출금 신청 → admin 처리.
    ② (09) 라이더 "내 추천" 링크 복사 → 신규 점주 /ref/:code 가입 → 첫 수거 완료 → 점주 REFERRAL +5,000P

@@ -58,7 +58,8 @@ describe("csReplyInputSchema", () => {
 describe("CS 라벨", () => {
   it("카테고리/상태 한글 라벨을 제공한다", () => {
     expect(CS_CATEGORY_LABEL.CASH_DISPUTE).toBe("지급 분쟁");
-    expect(CS_CATEGORY_LABEL.COUPON_PAYMENT).toBe("쿠폰 결제/환불(레거시)");
+    // [17 Q6] 쿠폰 복권으로 "(레거시)" 접미 제거 — 현역 카테고리.
+    expect(CS_CATEGORY_LABEL.COUPON_PAYMENT).toBe("쿠폰 결제/환불");
     expect(CS_STATUS_LABEL.RESOLVED).toBe("완료");
   });
 });
