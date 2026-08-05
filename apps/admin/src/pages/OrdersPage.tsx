@@ -99,17 +99,17 @@ export function OrdersPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-start justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">주문 관리</h1>
           <p className="text-sm text-gray-500">주문 상태를 확인하고 분쟁을 중재해요.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <span className="text-xs text-gray-400">현재 페이지 기준</span>
           <button
             type="button"
             onClick={handleCsv}
-            className="h-8 rounded-button border border-gray-200 bg-white px-3 text-xs font-medium text-gray-600 hover:bg-gray-50"
+            className="min-h-8 rounded-button border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
             data-testid="orders-csv-button"
           >
             CSV
@@ -148,7 +148,7 @@ export function OrdersPage() {
             setPage(0);
           }}
           placeholder="현재 페이지 내 검색 (주소·공급업체·차량번호)"
-          className="h-9 w-72 rounded-button border border-gray-200 bg-white px-3 text-sm text-gray-800 outline-none focus:border-primary"
+          className="min-h-9 w-full rounded-button border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none focus:border-primary sm:w-72"
           data-testid="orders-search-input"
         />
         <input
@@ -236,7 +236,10 @@ export function OrdersPage() {
                       `${formatKg(o.requestedKg)} (예상)`
                     )}
                   </td>
-                  <td className="max-w-xs truncate px-4 py-3 text-gray-600">{o.pickupAddress}</td>
+                  {/* [03 레이아웃 강건성] table-layout:auto에선 td의 max-w가 무시된다 — 셀 안쪽 div로 자른다. */}
+                  <td className="px-4 py-3 text-gray-600">
+                    <div className="max-w-xs truncate">{o.pickupAddress}</div>
+                  </td>
                   <td className="px-4 py-3 text-gray-500">{new Date(o.createdAt).toLocaleString("ko-KR")}</td>
                   <td className="px-4 py-3">
                     <button
@@ -268,7 +271,7 @@ export function OrdersPage() {
               type="button"
               disabled={page === 0}
               onClick={() => setPage((p) => Math.max(0, p - 1))}
-              className="h-8 rounded-button border border-gray-200 bg-white px-3 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white"
+              className="min-h-8 rounded-button border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white"
               data-testid="orders-prev-page"
             >
               이전
@@ -280,7 +283,7 @@ export function OrdersPage() {
               type="button"
               disabled={!hasNextPage}
               onClick={() => setPage((p) => p + 1)}
-              className="h-8 rounded-button border border-gray-200 bg-white px-3 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white"
+              className="min-h-8 rounded-button border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white"
               data-testid="orders-next-page"
             >
               다음

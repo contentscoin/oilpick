@@ -69,18 +69,20 @@ export function AddressField({ value, onChange }: AddressFieldProps) {
         매장 주소
       </label>
 
-      <div style={{ display: "flex", gap: 8 }}>
+      {/* [M] flexWrap + input minWidth:0(+size 1) — 확대 시 버튼이 자연 개행되고 input이 행을 밀어내지 않는다. */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
         <input
           id="address-input"
           data-testid="address-input"
           type="text"
           required
+          size={1}
           placeholder="예: 서울특별시 강서구 화곡로 1"
           value={value.address}
           // 주소를 손으로 고치면 좌표는 다시 미확정(검색으로 재확정 필요) — 오염 방지.
           onChange={(e) => onChange({ address: e.target.value, lat: null, lng: null })}
           className={inputClassName}
-          style={{ ...inputStyle, flex: 1 }}
+          style={{ ...inputStyle, flex: 1, minWidth: 0 }}
         />
         <button
           type="button"
@@ -143,7 +145,8 @@ export function AddressField({ value, onChange }: AddressFieldProps) {
         {manualCoords ? "위/경도 직접 입력 닫기" : "위/경도 직접 입력(선택)"}
       </button>
       {manualCoords && (
-        <div style={{ display: "flex", gap: 8 }}>
+        // [M] 확대 시 두 입력이 자연 개행되게 wrap + minWidth:0(placeholder가 행을 밀어내지 않게).
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
           <input
             data-testid="address-lat-input"
             type="number"
@@ -153,7 +156,7 @@ export function AddressField({ value, onChange }: AddressFieldProps) {
             value={value.lat ?? ""}
             onChange={(e) => onChange({ ...value, lat: e.target.value === "" ? null : Number(e.target.value) })}
             className={inputClassName}
-            style={{ ...inputStyle, flex: 1, fontSize: 14 }}
+            style={{ ...inputStyle, flex: 1, minWidth: 0, fontSize: 14 }}
           />
           <input
             data-testid="address-lng-input"
@@ -164,7 +167,7 @@ export function AddressField({ value, onChange }: AddressFieldProps) {
             value={value.lng ?? ""}
             onChange={(e) => onChange({ ...value, lng: e.target.value === "" ? null : Number(e.target.value) })}
             className={inputClassName}
-            style={{ ...inputStyle, flex: 1, fontSize: 14 }}
+            style={{ ...inputStyle, flex: 1, minWidth: 0, fontSize: 14 }}
           />
         </div>
       )}

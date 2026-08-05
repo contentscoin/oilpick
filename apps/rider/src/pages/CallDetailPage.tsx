@@ -162,11 +162,12 @@ export function CallDetailPage() {
       >
         <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: surfaceDark.textOnDarkMuted }}>예상 매입 지급액</p>
         {/* [15] 콜을 열면 금액이 카운트업한다 — 수락 판단의 주인공 숫자. */}
-        <p style={{ margin: 0 }}>
+        {/* [M] 확대 시 fontSize를 폭에 맞춰 줄인다(clamp) — 금액 자릿수 중간 절단 금지. */}
+        <p style={{ margin: 0, width: "100%", minWidth: 0, textAlign: "center" }}>
           <NumberFlow
             value={estimateCash(call.requestedKg, call.snapshotPricePerKg)}
             format={(n) => formatKrw(Math.round(n))}
-            style={{ fontSize: 40, fontWeight: 800, letterSpacing: "-0.02em", color: surfaceDark.textOnDark }}
+            style={{ fontSize: "clamp(28px, 9vw, 40px)", fontWeight: 800, letterSpacing: "-0.02em", color: surfaceDark.textOnDark }}
           />
         </p>
         <p style={{ margin: 0, fontSize: 12, color: surfaceDark.textOnDarkMuted }}>현장 계량 기준으로 확정 · 현금 또는 포인트로 지급</p>

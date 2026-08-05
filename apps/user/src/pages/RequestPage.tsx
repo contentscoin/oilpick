@@ -8,7 +8,6 @@ import {
   QtyStepper,
   colors,
   elevation,
-  frameFixedStyle,
   gray,
   inputClassName,
   inputStyle,
@@ -188,7 +187,10 @@ export function RequestPage() {
   }
 
   return (
-    <main style={{ display: "flex", flexDirection: "column", gap: 20, padding: 20, paddingBottom: 184, maxWidth: 480, margin: "0 auto" }}>
+    // [M] 푸터를 fixed → 문서 흐름의 sticky로 전환 — 글자 확대로 푸터가 커져도 하드코딩된
+    // paddingBottom(구 184px)이 모자라 콘텐츠를 가리는 일이 없다. minHeight+푸터 marginTop:auto가
+    // 1x의 "바닥 고정" 외관을 유지한다.
+    <main style={{ display: "flex", flexDirection: "column", gap: 20, padding: "20px 20px 0", maxWidth: 480, margin: "0 auto", minHeight: "100vh" }}>
       {/* step>1이면 뒤로가 스텝 후퇴(라우트 이탈은 step 1에서만) — 기존 로직 유지. */}
       <PageHeader
         title="수거 요청"
@@ -201,13 +203,18 @@ export function RequestPage() {
         {([1, 2, 3] as Step[]).map((s) => {
           const activeOrDone = s <= step;
           return (
-            <div key={s} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+            <div key={s} style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+              {/* [M] 도트는 고정 width/height 대신 minWidth/minHeight — 확대된 숫자가 잘리지 않고,
+                  lineHeight:1 + padding + aspectRatio로 1x에선 동일한 24px 원을 유지한다. */}
               <span
                 aria-hidden
                 data-testid={`request-step-dot-${s}`}
                 style={{
-                  width: 24,
-                  height: 24,
+                  minWidth: 24,
+                  minHeight: 24,
+                  padding: 4,
+                  aspectRatio: "1",
+                  lineHeight: 1,
                   borderRadius: "50%",
                   display: "flex",
                   alignItems: "center",
@@ -220,7 +227,7 @@ export function RequestPage() {
               >
                 {s}
               </span>
-              <span style={{ fontSize: 12, fontWeight: s === step ? 700 : 500, color: s === step ? colors.primary.dark : colors.status.wait }}>
+              <span style={{ fontSize: 12, fontWeight: s === step ? 700 : 500, minWidth: 0, overflowWrap: "anywhere", textAlign: "center", color: s === step ? colors.primary.dark : colors.status.wait }}>
                 {STEP_LABELS[s]}
               </span>
             </div>
@@ -389,12 +396,18 @@ export function RequestPage() {
         </section>
       )}
 
-      {/* ① 전 스텝 공통 sticky 예상 수령액 푸터(수단 중립 — 08 G5-⑥). */}
+      {/* ① 전 스텝 공통 sticky 예상 수령액 푸터(수단 중립 — 08 G5-⑥).
+          [M] position:sticky(문서 흐름) — 좌우 -20 마진은 main 자체 패딩을 상쇄해 기존
+          fixed(프레임 전폭)와 동일한 풀블리드 폭을 유지한다(폭 확장 아님). */}
       <div
         data-testid="request-estimate-footer"
         style={{
-          ...frameFixedStyle,
+          position: "sticky",
           bottom: 0,
+          zIndex: 1,
+          marginTop: "auto",
+          marginLeft: -20,
+          marginRight: -20,
           backgroundColor: surface.card,
           borderTop: `1px solid ${surface.border}`,
           boxShadow: "0 -2px 12px rgba(0,0,0,0.05)",
@@ -409,6 +422,7 @@ export function RequestPage() {
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
+              flexWrap: "wrap",
               gap: 12,
               padding: "14px 16px",
               borderRadius: radius.card,
@@ -416,7 +430,7 @@ export function RequestPage() {
               boxShadow: elevation.heroDark,
             }}
           >
-            <span style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
+            <span style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0, overflow: "hidden" }}>
               <span style={{ fontSize: 13, color: surfaceDark.textOnDarkMuted }}>{footerLabel}</span>
               <span style={{ fontSize: 11, color: "rgba(255,255,255,0.42)" }}>현장 계량·상계 기준으로 확정돼요</span>
             </span>
@@ -426,7 +440,7 @@ export function RequestPage() {
               testId="request-estimate-cash"
               value={footerAmount}
               format={(n) => formatKrw(Math.round(n))}
-              style={{ fontSize: 24, fontWeight: 800, color: surfaceDark.textOnDark, whiteSpace: "nowrap" }}
+              style={{ fontSize: 24, fontWeight: 800, color: surfaceDark.textOnDark, whiteSpace: "nowrap", flexShrink: 0 }}
             />
           </div>
           <BigButton
@@ -456,9 +470,10 @@ export function RequestPage() {
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+    // [M] 확대 시 라벨/값이 자연스럽게 두 줄로 떨어지게 wrap — 값은 marginLeft:auto로 우측 정렬 유지.
+    <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
       <span style={{ fontSize: 14, color: colors.status.wait }}>{label}</span>
-      <span style={{ fontSize: 14, fontWeight: 600, textAlign: "right" }}>{value}</span>
+      <span style={{ fontSize: 14, fontWeight: 600, textAlign: "right", marginLeft: "auto" }}>{value}</span>
     </div>
   );
 }

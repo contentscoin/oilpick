@@ -114,7 +114,8 @@ export function WithdrawPage() {
             style={{ borderRadius: radius.card, padding: 16, backgroundColor: surface.card, border: `1px solid ${surface.border}` }}
           >
             <p style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>{bankAccount.bankName}</p>
-            <p style={{ margin: "4px 0 0", fontSize: 14 }}>{bankAccount.bankAccount}</p>
+            {/* [M] 계좌번호는 행을 밀어 넘치느니 어디서든 개행이 안전(overflowWrap anywhere) — 표시만이며 자릿수 오독 방지용 공백 삽입은 하지 않는다. */}
+            <p style={{ margin: "4px 0 0", fontSize: 14, overflowWrap: "anywhere", fontVariantNumeric: "tabular-nums" }}>{bankAccount.bankAccount}</p>
             <p style={{ margin: "4px 0 0", fontSize: 13, color: colors.status.wait }}>예금주 {bankAccount.bankHolder}</p>
             <button
               type="button"

@@ -40,7 +40,8 @@ export function BadgePage() {
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        justifyContent: "center",
+        // [M] justifyContent:center 대신 첫/끝 자식의 margin:auto로 중앙정렬 — 글자 확대로
+        // 내용이 뷰포트보다 커지면 auto 마진이 0으로 접혀 상단 잘림 없이 스크롤된다.
         gap: 20,
         padding: 24,
         background: gradient.brand,
@@ -50,6 +51,7 @@ export function BadgePage() {
       <div
         data-testid="badge-photo-placeholder"
         style={{
+          marginTop: "auto",
           width: 120,
           height: 120,
           borderRadius: "50%",
@@ -78,6 +80,8 @@ export function BadgePage() {
       <div
         data-testid="badge-qr-card"
         style={{
+          marginBottom: "auto",
+          maxWidth: "100%",
           backgroundColor: surface.card,
           borderRadius: radius.card,
           boxShadow: elevation.card,
@@ -88,7 +92,14 @@ export function BadgePage() {
         }}
       >
         {qrDataUrl ? (
-          <img data-testid="badge-qr-image" src={qrDataUrl} alt="라이더 인증 QR" width={240} height={240} />
+          <img
+            data-testid="badge-qr-image"
+            src={qrDataUrl}
+            alt="라이더 인증 QR"
+            width={240}
+            height={240}
+            style={{ width: "100%", maxWidth: 240, height: "auto" }}
+          />
         ) : (
           <div style={{ width: 240, height: 240 }} />
         )}

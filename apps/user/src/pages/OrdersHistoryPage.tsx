@@ -77,17 +77,18 @@ export function OrdersHistoryPage() {
                   gap: 6,
                 }}
               >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: 13, color: colors.status.wait }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 13, color: colors.status.wait, minWidth: 0 }}>
                     {new Date(order.createdAt).toLocaleDateString("ko-KR")}
                   </span>
                   <StatusBadge status={order.status} />
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: 14 }}>{formatKg(order.finalKg ?? order.requestedKg)}</span>
+                {/* [M] 확대 시 kg/금액이 자연스럽게 두 줄로 떨어지게 wrap — 금액 덩어리는 flexShrink:0으로 통째 유지. */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+                  <span style={{ fontSize: 14, minWidth: 0 }}>{formatKg(order.finalKg ?? order.requestedKg)}</span>
                   {/* 08 G5-⑦: 완료 주문은 확정 지급액 + 지급수단 칩(null=레거시 현금 간주). 레거시(supplier_point) 주문은 포인트 표기(레거시 렌더 분기). */}
                   {order.cashPaidAmount != null ? (
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
                       <PayoutMethodChip method={order.payoutMethod ?? "CASH"} />
                       <span
                         className="oilpick-tabular-nums"
@@ -98,7 +99,7 @@ export function OrdersHistoryPage() {
                     </span>
                   ) : (
                     order.supplierPoint != null && (
-                      <span className="oilpick-tabular-nums" style={{ fontSize: 16, fontWeight: 700, color: colors.accent.deep }}>
+                      <span className="oilpick-tabular-nums" style={{ fontSize: 16, fontWeight: 700, flexShrink: 0, color: colors.accent.deep }}>
                         {formatPoint(order.supplierPoint)}
                       </span>
                     )

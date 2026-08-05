@@ -110,11 +110,11 @@ export function MyPage() {
           onClick={toggleNotify}
           style={{ ...menuRowStyle, cursor: "pointer" }}
         >
-          <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2 }}>
+          <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2, minWidth: 0 }}>
             <span>콜 알림음</span>
             <span style={{ fontSize: 12, color: colors.status.wait }}>앱 사용 중 소리만 끕니다 · 배너·푸시는 유지</span>
           </span>
-          <span style={{ fontWeight: 700, color: notifyEnabled ? colors.primary.DEFAULT : colors.status.wait }}>
+          <span style={{ flexShrink: 0, fontWeight: 700, color: notifyEnabled ? colors.primary.DEFAULT : colors.status.wait }}>
             {notifyEnabled ? "켜짐" : "꺼짐"}
           </span>
         </button>

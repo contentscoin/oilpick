@@ -66,7 +66,7 @@ function SettlementQueueSection() {
 
   return (
     <section className="rounded-card bg-white p-6 shadow-card">
-      <div className="mb-4 flex items-center justify-between gap-2">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-lg font-semibold text-gray-900">보상 정산 큐</h2>
           <p className="text-xs text-gray-500">
@@ -121,7 +121,7 @@ function SettlementQueueSection() {
                       data-testid={`settle-button-${r.id}`}
                       onClick={() => handleSettle(r.id)}
                       disabled={busyId === r.id}
-                      className="h-8 rounded-button bg-primary px-3 text-xs font-semibold text-white hover:bg-primary-dark disabled:opacity-40"
+                      className="min-h-8 rounded-button bg-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary-dark disabled:opacity-40"
                     >
                       지급 완료
                     </button>
@@ -190,7 +190,7 @@ function RiderFunnelSection({ stats }: { stats: StatsQuery }) {
 
   return (
     <section className="rounded-card bg-white p-6 shadow-card">
-      <div className="mb-4 flex items-center justify-between gap-2">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-lg font-semibold text-gray-900">라이더별 추천 퍼널</h2>
           <p className="text-xs text-gray-500">
@@ -202,7 +202,7 @@ function RiderFunnelSection({ stats }: { stats: StatsQuery }) {
           data-testid="referral-csv-button"
           onClick={handleCsv}
           disabled={(rows ?? []).length === 0}
-          className="h-9 shrink-0 rounded-button border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+          className="min-h-9 shrink-0 rounded-button border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40"
         >
           CSV 내보내기
         </button>
@@ -274,14 +274,14 @@ function DailyTrendSection() {
 
   return (
     <section className="rounded-card bg-white p-6 shadow-card">
-      <div className="mb-4 flex items-center justify-between gap-2">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-semibold text-gray-900">일별 추이 (최근 30일)</h2>
         <button
           type="button"
           data-testid="referral-daily-csv-button"
           onClick={handleCsv}
           disabled={(rows ?? []).length === 0}
-          className="h-9 shrink-0 rounded-button border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+          className="min-h-9 shrink-0 rounded-button border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40"
         >
           CSV 내보내기
         </button>

@@ -90,7 +90,7 @@ export function DealerHomePage() {
         <p className="text-sm text-gray-500">내 소속 라이더 현황과 실적을 한눈에 확인해요.</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4" data-testid="dealer-kpi">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4" data-testid="dealer-kpi">
         <Kpi label="소속 라이더" value={`${total}명`} />
         <Kpi label="승인 완료" value={`${approved}명`} />
         <Kpi label="승인 대기" value={`${pending}명`} accent />
@@ -139,7 +139,7 @@ export function DealerHomePage() {
                 </div>
                 {/* [16 L9] verify_status별 4-decision 액션 — 서버(rider-verify)가 이미 허용하는
                     액션의 노출뿐(전이 유효성은 Edge/guard가 최종 판정). 파괴적 액션은 다이얼로그. */}
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   {r.verifyStatus === "PENDING" && (
                     <>
                       <button
@@ -263,11 +263,11 @@ function ActiveOrderRow({ order, phone }: { order: DealerActiveOrder; phone: str
       className="flex flex-col gap-2 rounded-card border border-gray-100 p-3 text-sm sm:flex-row sm:items-center sm:justify-between"
     >
       <div className="min-w-0">
-        <p className="flex items-center gap-2 font-medium text-gray-800">
+        <p className="flex flex-wrap items-center gap-2 font-medium text-gray-800">
           <span className={`rounded-pill px-2 py-0.5 text-xs font-semibold ${statusClass}`}>
             {ORDER_STATUS_LABEL[order.status]}
           </span>
-          {order.riderName}
+          <span className="min-w-0">{order.riderName}</span>
           {stale && (
             <span
               data-testid={`dealer-active-stale-${order.orderId}`}
@@ -297,9 +297,9 @@ function ActiveOrderRow({ order, phone }: { order: DealerActiveOrder; phone: str
 
 function Kpi({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
   return (
-    <div className="rounded-card bg-white p-5 shadow-card">
+    <div className="min-w-0 rounded-card bg-white p-5 shadow-card">
       <p className="text-sm text-gray-500">{label}</p>
-      <p className={`mt-1 text-2xl font-bold tabular-nums ${accent ? "text-accent-deep" : "text-gray-900"}`}>{value}</p>
+      <p className={`mt-1 text-xl font-bold tabular-nums ${accent ? "text-accent-deep" : "text-gray-900"}`}>{value}</p>
     </div>
   );
 }

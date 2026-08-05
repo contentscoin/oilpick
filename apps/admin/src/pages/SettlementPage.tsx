@@ -80,12 +80,12 @@ function WithdrawQueueSection() {
 
   return (
     <section className="rounded-card bg-white p-6 shadow-card">
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-semibold text-gray-900">출금 큐</h2>
         <button
           type="button"
           onClick={handleCsv}
-          className="h-8 rounded-button border border-gray-200 px-3 text-xs font-medium text-gray-600 hover:bg-gray-50"
+          className="min-h-8 shrink-0 rounded-button border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
           data-testid="withdraw-csv-button"
         >
           CSV
@@ -174,8 +174,8 @@ function WithdrawRowCard({ withdrawal, onProcessed }: { withdrawal: WithdrawalRo
       className="flex flex-col gap-2 rounded-card border border-gray-100 bg-white p-4 shadow-card"
       data-testid={`withdraw-row-${withdrawal.id}`}
     >
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0">
           <p className="font-semibold text-gray-900">
             {withdrawal.userName} · <span className="tabular-nums text-accent-deep">{formatPoint(withdrawal.amount)}</span>
           </p>
@@ -185,7 +185,7 @@ function WithdrawRowCard({ withdrawal, onProcessed }: { withdrawal: WithdrawalRo
           </p>
           {withdrawal.adminMemo && <p className="text-xs text-gray-500">메모: {withdrawal.adminMemo}</p>}
         </div>
-        <span className={`rounded-pill px-3 py-1 text-xs font-semibold ${statusColor}`}>
+        <span className={`shrink-0 rounded-pill px-3 py-1 text-xs font-semibold ${statusColor}`}>
           {WITHDRAW_STATUS_LABEL[withdrawal.status]}
         </span>
       </div>
@@ -198,7 +198,7 @@ function WithdrawRowCard({ withdrawal, onProcessed }: { withdrawal: WithdrawalRo
             type="button"
             disabled={busy}
             onClick={() => void process("APPROVED")}
-            className="h-9 rounded-button bg-primary px-3 text-sm font-semibold text-white disabled:opacity-60"
+            className="min-h-9 rounded-button bg-primary px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
             data-testid={`withdraw-approve-${withdrawal.id}`}
           >
             승인
@@ -216,7 +216,7 @@ function WithdrawRowCard({ withdrawal, onProcessed }: { withdrawal: WithdrawalRo
               <button
                 type="submit"
                 disabled={busy}
-                className="h-9 rounded-button bg-status-danger px-3 text-sm font-semibold text-white disabled:opacity-60"
+                className="min-h-9 rounded-button bg-status-danger px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
                 data-testid={`withdraw-reject-submit-${withdrawal.id}`}
               >
                 반려 확정
@@ -224,7 +224,7 @@ function WithdrawRowCard({ withdrawal, onProcessed }: { withdrawal: WithdrawalRo
               <button
                 type="button"
                 onClick={() => setRejectOpen(false)}
-                className="h-9 rounded-button border border-gray-200 px-3 text-sm font-medium text-gray-600"
+                className="min-h-9 rounded-button border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600"
               >
                 닫기
               </button>
@@ -233,7 +233,7 @@ function WithdrawRowCard({ withdrawal, onProcessed }: { withdrawal: WithdrawalRo
             <button
               type="button"
               onClick={() => setRejectOpen(true)}
-              className="h-9 rounded-button border border-status-danger px-3 text-sm font-semibold text-status-danger hover:bg-status-danger/5"
+              className="min-h-9 rounded-button border border-status-danger px-3 py-2 text-sm font-semibold text-status-danger hover:bg-status-danger/5"
               data-testid={`withdraw-reject-${withdrawal.id}`}
             >
               반려
@@ -248,7 +248,7 @@ function WithdrawRowCard({ withdrawal, onProcessed }: { withdrawal: WithdrawalRo
             type="button"
             disabled={busy}
             onClick={() => void process("PAID")}
-            className="h-9 rounded-button bg-primary px-3 text-sm font-semibold text-white disabled:opacity-60"
+            className="min-h-9 rounded-button bg-primary px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
             data-testid={`withdraw-paid-${withdrawal.id}`}
           >
             지급 완료(이체함)
@@ -282,7 +282,7 @@ function PickupStatsSection() {
       <h2 className="mb-1 text-lg font-semibold text-gray-900">수거 활동 추이 (최근 14일)</h2>
       <p className="mb-4 text-xs text-gray-500">현장 지급을 수단별로 나눠 봐요 — 포인트 지급이 늘면 출금 수요가 따라와요.</p>
 
-      <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <SummaryStat label="완료 건수" value={totals ? `${totals.count.toLocaleString("ko-KR")}건` : "-"} testId="pickup-total-count" />
         <SummaryStat label="수거 kg" value={totals ? formatKg(totals.kg) : "-"} testId="pickup-total-kg" />
         <SummaryStat label="현금 지급" value={totals ? formatKrw(totals.cash) : "-"} accent testId="pickup-total-cash" />
@@ -418,12 +418,12 @@ function PointLedgerSection() {
 
   return (
     <section className="rounded-card bg-white p-6 shadow-card">
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-semibold text-gray-900">포인트 원장 감사 (최근 100건)</h2>
         <button
           type="button"
           onClick={handleCsv}
-          className="h-8 rounded-button border border-gray-200 px-3 text-xs font-medium text-gray-600 hover:bg-gray-50"
+          className="min-h-8 shrink-0 rounded-button border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
           data-testid="point-ledger-csv-button"
         >
           CSV

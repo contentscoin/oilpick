@@ -42,7 +42,7 @@ export function DealerStatementPage() {
           아직 계정이 설정되지 않았어요. 본사에 문의해 주세요.
         </p>
       ) : (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4" data-testid="dealer-statement-summary">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4" data-testid="dealer-statement-summary">
           <StatCard label="사용한도" value={formatPoint(stmt.credit_limit)} />
           <StatCard label="미정산 사용액" value={formatPoint(stmt.usage)} accent={stmt.over_threshold} />
           <StatCard label="남은 여유" value={formatPoint(stmt.headroom)} />
@@ -57,7 +57,8 @@ export function DealerStatementPage() {
           아직 청구되지 않은 완료 주문이에요. 포인트 순액 합계가 위 미정산 사용액과 일치해요.
         </p>
         <div className="overflow-x-auto">
-          <table className="w-full whitespace-nowrap text-left text-sm" data-testid="dealer-unsettled-table">
+          {/* [03 레이아웃 강건성] 표 전체 nowrap 제거 — 글자 확대 시 셀 줄바꿈을 허용한다. */}
+          <table className="w-full text-left text-sm" data-testid="dealer-unsettled-table">
             <thead>
               <tr className="border-b border-gray-100 text-gray-500">
                 <th className="py-2 font-medium">주문</th>
@@ -102,7 +103,8 @@ export function DealerStatementPage() {
       <div className="rounded-card bg-white p-6 shadow-card">
         <h2 className="mb-4 text-lg font-semibold text-gray-900">청구 이력</h2>
         <div className="overflow-x-auto">
-          <table className="w-full whitespace-nowrap text-left text-sm" data-testid="dealer-statement-history">
+          {/* [03 레이아웃 강건성] 표 전체 nowrap 제거 — 글자 확대 시 셀 줄바꿈을 허용한다. */}
+          <table className="w-full text-left text-sm" data-testid="dealer-statement-history">
             <thead>
               <tr className="border-b border-gray-100 text-gray-500">
                 <th className="py-2 font-medium">상태</th>
@@ -158,7 +160,7 @@ function StatCard({ label, value, accent }: { label: string; value: string; acce
   return (
     <div className="rounded-card bg-white p-5 shadow-card">
       <p className="text-sm text-gray-500">{label}</p>
-      <p className={`mt-1 text-2xl font-bold tabular-nums ${accent ? "text-accent-deep" : "text-primary"}`}>{value}</p>
+      <p className={`mt-1 text-xl font-bold tabular-nums ${accent ? "text-accent-deep" : "text-primary"}`}>{value}</p>
     </div>
   );
 }

@@ -192,7 +192,7 @@ export function DevUiPage() {
       <section>
         {/* 08 G4-③: 지급수단 뱃지 — 주문 카드/상세/드로어 공용. */}
         <h2>PayoutMethodChip</h2>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
           <PayoutMethodChip method="CASH" />
           <PayoutMethodChip method="POINT" />
         </div>
@@ -386,7 +386,7 @@ export function DevUiPage() {
         </div>
         {/* 보조 캐릭터(방울 마스코트) — 로고와 별개의 친근한 캐릭터 에셋(선택). */}
         <h2 style={{ marginTop: 20 }}>Mascot (보조 캐릭터)</h2>
-        <div style={{ display: "flex", alignItems: "flex-end", gap: 16 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: 16 }}>
           <Mascot size={48} />
           <Mascot size={96} />
         </div>
@@ -408,11 +408,11 @@ export function DevUiPage() {
 
         <h2 style={{ marginTop: 20 }}>[15] 라이더 현장 지급액 바 — 변경 전 / 후</h2>
         <div style={{ display: "grid", gap: 12 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "12px 14px", borderRadius: radius.button, backgroundColor: colors.accent.light }}>
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "12px 14px", borderRadius: radius.button, backgroundColor: colors.accent.light }}>
             <span style={{ fontSize: 13, fontWeight: 600, color: colors.status.wait }}>점주에게 지급할 현금</span>
             <span className="oilpick-tabular-nums" style={{ fontSize: 20, fontWeight: 800, color: colors.accent.deep }}>43,800원</span>
           </div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: 16, borderRadius: radius.card, backgroundColor: surfaceDark.panel, boxShadow: elevation.heroDark }}>
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 8, padding: 16, borderRadius: radius.card, backgroundColor: surfaceDark.panel, boxShadow: elevation.heroDark }}>
             <span style={{ fontSize: 13, fontWeight: 600, color: surfaceDark.textOnDarkMuted }}>점주에게 지급할 현금</span>
             <NumberFlow value={43800} format={(n) => formatKrw(Math.round(n))} style={{ fontSize: 24, fontWeight: 800, color: surfaceDark.textOnDark }} />
           </div>
@@ -420,11 +420,11 @@ export function DevUiPage() {
 
         <h2 style={{ marginTop: 20 }}>[15] 수거요청 예상액 푸터 — 변경 전 / 후</h2>
         <div style={{ display: "grid", gap: 12 }}>
-          <div style={{ backgroundColor: surface.card, border: `1px solid ${surface.border}`, borderRadius: radius.card, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+          <div style={{ backgroundColor: surface.card, border: `1px solid ${surface.border}`, borderRadius: radius.card, padding: "12px 16px", display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "space-between", alignItems: "baseline" }}>
             <span style={{ fontSize: 14, color: colors.status.wait }}>예상 수령액</span>
             <span className="oilpick-tabular-nums" style={{ fontSize: 22, fontWeight: 800, color: colors.primary.dark }}>42,000원</span>
           </div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "14px 16px", borderRadius: radius.card, backgroundColor: surfaceDark.panel, boxShadow: elevation.heroDark }}>
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "14px 16px", borderRadius: radius.card, backgroundColor: surfaceDark.panel, boxShadow: elevation.heroDark }}>
             <span style={{ display: "flex", flexDirection: "column", gap: 3 }}>
               <span style={{ fontSize: 13, color: surfaceDark.textOnDarkMuted }}>예상 수령액</span>
               <span style={{ fontSize: 11, color: "rgba(255,255,255,0.42)" }}>현장 계량·상계 기준으로 확정돼요</span>
@@ -488,7 +488,7 @@ export function DevUiPage() {
 
         <h2 style={{ marginTop: 20 }}>[15] SwipeableRow (왼쪽으로 스와이프 · Tab으로도 도달)</h2>
         <SwipeableRow actionLabel="문의" onAction={() => {}}>
-          <div style={{ padding: "14px 16px", display: "flex", justifyContent: "space-between" }}>
+          <div style={{ padding: "14px 16px", display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "space-between" }}>
             <span style={{ fontWeight: 600 }}>계량 완료 정산</span>
             <span style={{ fontWeight: 700, color: colors.primary.DEFAULT }}>+42,000원</span>
           </div>

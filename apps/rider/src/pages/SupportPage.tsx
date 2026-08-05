@@ -104,7 +104,7 @@ export function SupportPage() {
             data-testid="support-category"
             value={category}
             onChange={(e) => setCategory(e.target.value as CsCategory)}
-            style={{ minHeight: 44, borderRadius: radius.button, border: `1px solid ${surface.border}`, padding: "0 12px", fontSize: 15 }}
+            style={{ width: "100%", maxWidth: "100%", minHeight: 44, borderRadius: radius.button, border: `1px solid ${surface.border}`, padding: "0 12px", fontSize: 15 }}
           >
             {CATEGORY_ORDER.map((c) => (
               <option key={c} value={c}>
@@ -145,7 +145,7 @@ export function SupportPage() {
             data-testid="support-order"
             value={orderId}
             onChange={(e) => setOrderId(e.target.value)}
-            style={{ minHeight: 44, borderRadius: radius.button, border: `1px solid ${surface.border}`, padding: "0 12px", fontSize: 15 }}
+            style={{ width: "100%", maxWidth: "100%", minHeight: 44, borderRadius: radius.button, border: `1px solid ${surface.border}`, padding: "0 12px", fontSize: 15 }}
           >
             <option value="">연결 안 함</option>
             {presetOrderId && !options.some((o) => o.id === presetOrderId) && (
@@ -189,7 +189,7 @@ export function SupportPage() {
               data-testid={`support-ticket-${t.id}`}
               style={{ borderRadius: radius.card, padding: 14, backgroundColor: surface.card, border: `1px solid ${surface.border}`, display: "flex", flexDirection: "column", gap: 6 }}
             >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                 <span style={{ fontSize: 12, color: colors.status.wait }}>{CS_CATEGORY_LABEL[t.category]}</span>
                 <span
                   data-testid={`support-ticket-status-${t.id}`}

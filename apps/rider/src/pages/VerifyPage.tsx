@@ -37,14 +37,15 @@ export function VerifyPage() {
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        justifyContent: "center",
+        // [M] justifyContent:center 대신 첫/끝 자식의 margin:auto로 중앙정렬 — 글자 확대로
+        // 내용이 뷰포트보다 커지면 auto 마진이 0으로 접혀 상단 잘림 없이 스크롤된다.
         gap: 16,
         minHeight: "100vh",
         padding: 24,
         textAlign: "center",
       }}
     >
-      <div style={{ fontSize: 56 }} aria-hidden>
+      <div style={{ fontSize: 56, marginTop: "auto" }} aria-hidden>
         {status === "REJECTED" ? "😥" : "⏳"}
       </div>
       {status === "REJECTED" ? (
@@ -55,7 +56,7 @@ export function VerifyPage() {
           {rider?.rejectReason && (
             <p style={{ margin: 0, fontSize: 14, color: colors.status.danger }}>{rider.rejectReason}</p>
           )}
-          <p style={{ margin: 0, fontSize: 14, color: colors.status.wait }}>
+          <p style={{ margin: 0, marginBottom: "auto", fontSize: 14, color: colors.status.wait }}>
             고객센터로 문의해주시면 도와드릴게요.
           </p>
         </>
@@ -64,7 +65,7 @@ export function VerifyPage() {
           <h1 data-testid="verify-pending-title" style={{ fontSize: 20, margin: 0 }}>
             서류를 심사하고 있어요
           </h1>
-          <p style={{ margin: 0, fontSize: 14, color: colors.status.wait }}>
+          <p style={{ margin: 0, marginBottom: "auto", fontSize: 14, color: colors.status.wait }}>
             승인이 완료되면 자동으로 콜 홈으로 이동해요.
           </p>
         </>

@@ -74,7 +74,8 @@ export function WalletPage() {
     boxShadow: elevation.card,
   } as const;
   const statLabelStyle = { fontSize: typeScale.caption, color: colors.status.wait } as const;
-  const statValueStyle = { fontSize: 20, fontWeight: 800, letterSpacing: "-0.01em" } as const;
+  // [M] minWidth:0 — 글자 확대 시 긴 금액이 스탯 칸을 밀어내지 않고 행 단위로 개행되게.
+  const statValueStyle = { fontSize: 20, fontWeight: 800, letterSpacing: "-0.01em", minWidth: 0 } as const;
 
   return (
     <main
@@ -114,7 +115,7 @@ export function WalletPage() {
             }
           />
           {/* 보류/이번 달 현금 스탯 페어 — 목업의 잔액 하단 2열. */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 8 }}>
             <div data-testid="wallet-held-stat" style={statCardStyle}>
               <span style={statLabelStyle}>지급 확정 대기</span>
               <span className="oilpick-tabular-nums" style={statValueStyle}>
@@ -201,6 +202,7 @@ export function WalletPage() {
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "space-between",
+                    flexWrap: "wrap",
                     gap: 12,
                     border: `1px solid ${surface.border}`,
                     borderRadius: radius.card,
@@ -209,7 +211,7 @@ export function WalletPage() {
                     boxShadow: elevation.card,
                   }}
                 >
-                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
                     <span style={{ fontSize: 13, color: colors.status.wait }}>
                       {new Date(receipt.receivedAt).toLocaleDateString("ko-KR")}
                     </span>

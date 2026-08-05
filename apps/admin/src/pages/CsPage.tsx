@@ -98,7 +98,10 @@ export function CsPage() {
                     {t.authorName}
                     <span className="ml-1 text-xs text-gray-500">({ROLE_LABEL[t.role]})</span>
                   </td>
-                  <td className="max-w-xs truncate px-4 py-3 text-gray-700">{t.title}</td>
+                  {/* [03 레이아웃 강건성] table-layout:auto에선 td의 max-w가 무시된다 — 셀 안쪽 div로 자른다. */}
+                  <td className="px-4 py-3 text-gray-700">
+                    <div className="max-w-xs truncate">{t.title}</div>
+                  </td>
                   <td className="px-4 py-3 text-gray-500">{formatRelativeTime(t.createdAt)}</td>
                   <td className="px-4 py-3">
                     <button

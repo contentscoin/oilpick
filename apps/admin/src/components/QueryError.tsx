@@ -19,7 +19,7 @@ export function QueryError({
       <button
         type="button"
         onClick={() => onRetry()}
-        className="h-8 rounded-button border border-gray-200 bg-white px-3 text-xs font-medium text-gray-600 hover:bg-gray-50"
+        className="min-h-8 rounded-button border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
         data-testid="query-error-retry"
       >
         다시 시도

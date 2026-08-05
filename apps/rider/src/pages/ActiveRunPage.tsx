@@ -283,7 +283,8 @@ function RunSwitcher({
               onClick={() => onSelect(r.id)}
               style={{
                 flexShrink: 0,
-                maxWidth: 200,
+                // [M] 글자 확대(textZoom) 시 상태+거리 칩이 고정 200px를 밀어내지 않게 상대 상한.
+                maxWidth: "min(260px, 70vw)",
                 textAlign: "left",
                 padding: "8px 12px",
                 borderRadius: radius.button,
@@ -295,7 +296,7 @@ function RunSwitcher({
                 cursor: "pointer",
               }}
             >
-              <span style={{ display: "flex", alignItems: "baseline", gap: 6, fontWeight: 700 }}>
+              <span style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: 6, fontWeight: 700 }}>
                 {/* 위치를 모르면 순서를 지어내지 않는다 — 뱃지는 position이 있을 때만. */}
                 {position && (
                   <span data-testid={`run-visit-badge-${r.id}`} aria-label={`권장 방문 순서 ${i + 1}번`}>
@@ -472,7 +473,7 @@ function AcceptedPanel({
         {pickupPoint ? "카카오맵으로 길안내" : "카카오맵에서 주소 검색"}
       </a>
       {pickupPoint && (
-        <div style={{ display: "flex", justifyContent: "center", gap: 18, fontSize: 13 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 18, fontSize: 13 }}>
           <a
             href={buildTmapRouteUrl(pickupAddress, pickupPoint)}
             data-testid="navigate-tmap"
@@ -533,7 +534,7 @@ function PayoutMethodSelect({
   disabled?: boolean;
 }) {
   return (
-    <div role="radiogroup" aria-label="지급 수단" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+    <div role="radiogroup" aria-label="지급 수단" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 8 }}>
       {PAYOUT_OPTIONS.map((option) => {
         const selected = value === option.value;
         return (
@@ -769,10 +770,10 @@ function ArrivedPanel({
         >
           <ClockIcon />
         </span>
-        <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: colors.primary.dark }}>
+        <p style={{ margin: 0, width: "100%", fontSize: 16, fontWeight: 700, color: colors.primary.dark }}>
           중재 확정 무게 {formatKg(finalKg)}
         </p>
-        <p style={{ margin: 0, fontSize: 14, color: colors.status.wait }}>
+        <p style={{ margin: 0, width: "100%", fontSize: 14, color: colors.status.wait }}>
           {arbitratedPoint
             ? `사장님이 확인하면 포인트 ${formatPoint(arbitratedAmount)}가 적립돼요 — 앱에서 확인을 요청하세요.`
             : `사장님께 현금 ${formatKrw(arbitratedAmount)}을 지급한 뒤 앱에서 수령 확인을 받아주세요.`}
@@ -804,14 +805,14 @@ function ArrivedPanel({
         >
           <ClockIcon />
         </span>
-        <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: colors.primary.dark }}>사장님 확인 대기</p>
+        <p style={{ margin: 0, width: "100%", fontSize: 16, fontWeight: 700, color: colors.primary.dark }}>사장님 확인 대기</p>
         <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
           <PayoutMethodChip method={submittedPayoutMethod ?? "CASH"} />
           <span className="oilpick-tabular-nums" style={{ fontSize: 14, color: gray[900], fontWeight: 600 }}>
             {formatKg(measuredKg)}
           </span>
         </span>
-        <p data-testid="measure-wait-copy" style={{ margin: 0, fontSize: 14, color: colors.status.wait }}>
+        <p data-testid="measure-wait-copy" style={{ margin: 0, width: "100%", fontSize: 14, color: colors.status.wait }}>
           {submittedPoint
             ? `사장님이 확인하면 포인트 ${formatPoint(submittedAmount)}가 적립돼요 — 확인을 요청하세요.`
             : `사장님께 현금 ${formatKrw(submittedAmount)}을 지급하고 앱에서 수령 확인을 요청하세요.`}
@@ -1013,6 +1014,7 @@ function ArrivedPanel({
     display: "flex",
     flexDirection: "column",
     gap: 4,
+    minWidth: 0,
     padding: 12,
     borderRadius: radius.button,
     backgroundColor: gray[50],
@@ -1037,6 +1039,7 @@ function ArrivedPanel({
           data-testid="measure-draft-restored"
           style={{
             display: "flex",
+            flexWrap: "wrap",
             alignItems: "center",
             justifyContent: "space-between",
             gap: 8,
@@ -1057,6 +1060,7 @@ function ArrivedPanel({
             data-testid="measure-draft-discard"
             onClick={() => void discardDraft()}
             style={{
+              flexShrink: 0,
               background: "none",
               border: "none",
               color: colors.primary.dark,
@@ -1092,7 +1096,7 @@ function ArrivedPanel({
 
         {/* [15] 목업의 총 무게 / 단가 2열 스탯. 입력한 kg와 주문 시점 시세 스냅샷을 나란히 둬
             "이 숫자 × 이 단가"가 아래 지급액이라는 계산이 눈에 보이게 한다. */}
-        <div data-testid="run-measure-stats" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+        <div data-testid="run-measure-stats" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(0, 1fr))", gap: 8 }}>
           <div style={measureStatStyle}>
             <span style={measureStatLabelStyle}>총 무게</span>
             <span className="oilpick-tabular-nums" style={measureStatValueStyle}>
@@ -1119,6 +1123,8 @@ function ArrivedPanel({
             data-testid="run-cash-payout"
             style={{
               display: "flex",
+              // [M] 글자 확대 시 라벨·금액이 한 줄에 안 들어가면 두 줄로 — 금액 자릿수는 자르지 않는다.
+              flexWrap: "wrap",
               alignItems: "center",
               justifyContent: "space-between",
               gap: 8,
@@ -1130,14 +1136,14 @@ function ArrivedPanel({
               boxShadow: elevation.heroDark,
             }}
           >
-            <span style={{ fontSize: 13, fontWeight: 600, color: surfaceDark.textOnDarkMuted }}>
+            <span style={{ minWidth: 0, fontSize: 13, fontWeight: 600, color: surfaceDark.textOnDarkMuted }}>
               {isPointSelected ? "점주에게 적립될 포인트" : "점주에게 지급할 현금"}
             </span>
             {/* [15] kg를 입력하는 동안 금액이 따라 움직인다 — 얼마를 지급할지가 실시간으로 보인다. */}
             <NumberFlow
               value={payoutAmount}
               format={(n) => (isPointSelected ? formatPoint(Math.round(n)) : formatKrw(Math.round(n)))}
-              style={{ fontSize: 24, fontWeight: 800, letterSpacing: "-0.01em", color: surfaceDark.textOnDark }}
+              style={{ minWidth: 0, flexShrink: 0, fontSize: 24, fontWeight: 800, letterSpacing: "-0.01em", color: surfaceDark.textOnDark }}
             />
           </div>
         )}
@@ -1165,15 +1171,15 @@ function ArrivedPanel({
             subLabel={snapshotFreshCanPrice != null ? `${formatKrw(purchaseAmount)} · 18L ${deliveredCans}통` : null}
           />
           <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingTop: 12, borderTop: `1px solid ${surface.border}` }}>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: colors.status.wait }}>
+            <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 4, fontSize: 13, color: colors.status.wait }}>
               <span>폐유 수령액</span>
               <span className="oilpick-tabular-nums">{formatKrw(payoutAmount)}</span>
             </div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: colors.status.wait }}>
+            <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 4, fontSize: 13, color: colors.status.wait }}>
               <span>새 기름 대금</span>
               <span className="oilpick-tabular-nums">− {formatKrw(purchaseAmount)}</span>
             </div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", paddingTop: 6, borderTop: `1px dashed ${surface.border}` }}>
+            <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "baseline", gap: 4, paddingTop: 6, borderTop: `1px dashed ${surface.border}` }}>
               <span style={{ fontSize: 14, fontWeight: 700, color: gray[900] }}>
                 {netAmount >= 0 ? "점주에게 지급" : "점주에게 받기"}
               </span>
@@ -1222,7 +1228,7 @@ function ArrivedPanel({
                 void addBarcode(barcodeInput);
               }
             }}
-            style={{ ...inputStyle, flex: 1 }}
+            style={{ ...inputStyle, flex: 1, minWidth: 0, width: "100%" }}
           />
           <button
             type="button"
@@ -1266,7 +1272,8 @@ function ArrivedPanel({
                   backgroundColor: gray[50],
                 }}
               >
-                <span className="oilpick-tabular-nums" style={{ fontSize: 13, color: gray[900] }}>
+                {/* 바코드는 금액이 아니라 임의 지점 개행 허용 — 행 넘침보다 낫다(M-태스크). */}
+                <span className="oilpick-tabular-nums" style={{ minWidth: 0, overflowWrap: "anywhere", fontSize: 13, color: gray[900] }}>
                   🏷️ {code}
                 </span>
                 <button
@@ -1429,10 +1436,10 @@ function CompletedPanel({
       >
         <CheckMarkIcon />
       </span>
-      <p style={{ margin: 0, fontSize: 18, fontWeight: 800, color: colors.primary.dark }}>
+      <p style={{ margin: 0, width: "100%", fontSize: 18, fontWeight: 800, color: colors.primary.dark }}>
         {net < 0 ? "거래 완료" : "수거 완료"}
       </p>
-      <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+      <span style={{ display: "inline-flex", flexWrap: "wrap", maxWidth: "100%", alignItems: "center", gap: 6 }}>
         <PayoutMethodChip method={payoutMethod ?? "CASH"} />
         <p className="oilpick-tabular-nums" style={{ margin: 0, fontSize: 15, color: gray[900] }}>
           {settlementText}
@@ -1595,7 +1602,7 @@ function CheckMarkIcon() {
  *  흰 배경 보조 버튼 위에서 흰 아이콘이 사라지는 것을 막는다. */
 function PhoneCtaIcon() {
   return (
-    <svg width={20} height={20} viewBox="0 0 24 24" fill="none" aria-hidden>
+    <svg width={20} height={20} viewBox="0 0 24 24" fill="none" aria-hidden style={{ flexShrink: 0 }}>
       <path
         d="M6.5 4h3l1.2 3.2-1.8 1.4a11 11 0 0 0 4.5 4.5l1.4-1.8L18.5 12.5V15.5c0 1-.8 1.8-1.8 1.7A13.5 13.5 0 0 1 4.8 5.8C4.7 4.8 5.5 4 6.5 4Z"
         stroke="currentColor"

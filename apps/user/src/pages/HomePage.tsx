@@ -254,7 +254,7 @@ export function HomePage() {
             gap: 12,
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
             <p
               data-testid="price-hero-label"
               style={{ margin: 0, fontSize: typeScale.label, fontWeight: 500, color: surfaceDark.textOnDarkMuted }}
@@ -273,6 +273,7 @@ export function HomePage() {
                 fontWeight: 600,
                 cursor: "pointer",
                 padding: 0,
+                flexShrink: 0,
               }}
             >
               시세 상세 &gt;
@@ -337,6 +338,8 @@ export function HomePage() {
                       marginLeft: "auto",
                       display: "inline-flex",
                       alignItems: "center",
+                      // [M] 확대 시 "· 전일 대비"가 pill 안에서 자연 개행되게(nowrap 없음 유지).
+                      flexWrap: "wrap",
                       gap: 4,
                       padding: "5px 10px",
                       borderRadius: radius.pill,
@@ -459,23 +462,24 @@ export function HomePage() {
             <span style={{ fontSize: typeScale.body, fontWeight: 600, color: colors.status.wait }}>이번 달 수령</span>
             <span aria-hidden style={{ color: gray[400], fontSize: typeScale.body }}>&gt;</span>
           </span>
-          <span style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, width: "100%" }}>
-            <span style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          {/* [M] 글자 확대 대응 — 1fr은 min-width:auto라 긴 금액이 컬럼을 밀어 넘친다. minmax(0,1fr)+minWidth:0으로 금액이 행 단위로 개행되게 한다. */}
+          <span style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 8, width: "100%" }}>
+            <span style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
               <span style={{ fontSize: typeScale.caption, color: colors.status.wait }}>💵 현금</span>
               <span
                 data-testid="monthly-cash-amount"
                 className="oilpick-tabular-nums"
-                style={{ fontSize: typeScale.title, fontWeight: 800, color: colors.status.done }}
+                style={{ fontSize: typeScale.title, fontWeight: 800, color: colors.status.done, minWidth: 0 }}
               >
                 {formatKrw(monthly?.cash ?? 0)}
               </span>
             </span>
-            <span style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <span style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
               <span style={{ fontSize: typeScale.caption, color: colors.status.wait }}>🪙 포인트</span>
               <span
                 data-testid="monthly-point-amount"
                 className="oilpick-tabular-nums"
-                style={{ fontSize: typeScale.title, fontWeight: 800, color: colors.accent.deep }}
+                style={{ fontSize: typeScale.title, fontWeight: 800, color: colors.accent.deep, minWidth: 0 }}
               >
                 {formatPoint(monthly?.point ?? 0)}
               </span>
@@ -485,7 +489,7 @@ export function HomePage() {
 
         {/* 최근 수거 이력 2건 */}
         <section data-testid="recent-orders" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
             <h2 style={{ fontSize: typeScale.body, margin: 0 }}>최근 수거 이력</h2>
             <button
               type="button"
@@ -517,6 +521,7 @@ export function HomePage() {
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "space-between",
+                      gap: 8,
                       textAlign: "left",
                       border: `1px solid ${surface.border}`,
                       borderRadius: radius.card,
@@ -526,7 +531,7 @@ export function HomePage() {
                       cursor: "pointer",
                     }}
                   >
-                    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
                       <span style={{ fontSize: 13, color: colors.status.wait }}>
                         {new Date(order.createdAt).toLocaleDateString("ko-KR")}
                       </span>

@@ -89,15 +89,18 @@ export function HistoryPage() {
                 gap: 6,
               }}
             >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: 6 }}>
                 <span style={{ fontSize: 13, color: colors.status.wait }}>
                   {new Date(order.createdAt).toLocaleDateString("ko-KR")}
                 </span>
-                <StatusBadge status={order.status} />
+                {/* [M] 뱃지는 줄어들지 않는다 — StatusBadge는 공용(style prop 없음)이라 래퍼로 고정. */}
+                <span style={{ display: "inline-flex", flexShrink: 0 }}>
+                  <StatusBadge status={order.status} />
+                </span>
               </div>
               <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: gray[900] }}>{order.pickupAddress}</p>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 14, color: colors.status.wait }}>
+              <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                <span style={{ minWidth: 0, fontSize: 14, color: colors.status.wait }}>
                   {/* 취소 주문은 final_kg가 없다 — 확정 무게가 있을 때만 표기. */}
                   {order.finalKg != null && (
                     <span className="oilpick-tabular-nums" style={{ color: gray[900] }}>{formatKg(order.finalKg)}</span>
@@ -108,7 +111,7 @@ export function HistoryPage() {
                 </span>
                 {/* 08 G6: 확정 지급액 + 지급수단 칩(null=레거시 현금 간주). */}
                 {order.cashPaidAmount != null && (
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ display: "inline-flex", flexShrink: 0, alignItems: "center", gap: 6 }}>
                     <PayoutMethodChip method={order.payoutMethod ?? "CASH"} />
                     <span
                       className="oilpick-tabular-nums"

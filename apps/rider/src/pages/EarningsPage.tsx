@@ -64,12 +64,13 @@ export function EarningsPage() {
                 💵 이번 달 현금 지급 · {stats?.cashCount ?? 0}건
               </p>
               {/* [15] 화면 진입·갱신 시 카운트업 — 접근성 트리에는 최종 금액만 노출된다. */}
-              <p style={{ margin: 0 }}>
+              {/* [M] 확대 시 fontSize를 폭에 맞춰 줄이고(clamp), 금액은 자릿수 중간 절단 없이 행 단위로만 개행. */}
+              <p style={{ margin: 0, minWidth: 0, overflowWrap: "normal" }}>
                 <NumberFlow
                   testId="monthly-cash-amount"
                   value={stats?.cash ?? 0}
                   format={(n) => formatKrw(Math.round(n))}
-                  style={{ fontSize: 32, fontWeight: 800, letterSpacing: "-0.02em", color: "#FFFFFF" }}
+                  style={{ fontSize: "clamp(24px, 8vw, 32px)", fontWeight: 800, letterSpacing: "-0.02em", color: "#FFFFFF" }}
                 />
               </p>
             </div>
@@ -78,22 +79,22 @@ export function EarningsPage() {
               <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.8)" }}>
                 🪙 이번 달 포인트 지급 · {stats?.pointCount ?? 0}건
               </p>
-              <p style={{ margin: 0 }}>
+              <p style={{ margin: 0, minWidth: 0, overflowWrap: "normal" }}>
                 <NumberFlow
                   testId="monthly-point-amount"
                   value={stats?.point ?? 0}
                   format={(n) => formatPoint(Math.round(n))}
-                  style={{ fontSize: 32, fontWeight: 800, letterSpacing: "-0.02em", color: "#FFFFFF" }}
+                  style={{ fontSize: "clamp(24px, 8vw, 32px)", fontWeight: 800, letterSpacing: "-0.02em", color: "#FFFFFF" }}
                 />
               </p>
             </div>
           </section>
 
           {/* 건수 / 수거량. */}
-          <section style={{ display: "flex", gap: 12 }}>
+          <section style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
             <div
               data-testid="monthly-count"
-              style={{ flex: 1, borderRadius: radius.card, padding: 16, backgroundColor: surface.card, border: `1px solid ${surface.border}`, boxShadow: elevation.card }}
+              style={{ flex: 1, minWidth: 0, borderRadius: radius.card, padding: 16, backgroundColor: surface.card, border: `1px solid ${surface.border}`, boxShadow: elevation.card }}
             >
               <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: colors.status.wait }}>이번 달 수거</p>
               <p className="oilpick-tabular-nums" style={{ margin: "6px 0 0", fontSize: 24, fontWeight: 800, letterSpacing: "-0.01em", color: colors.primary.DEFAULT }}>
@@ -103,7 +104,7 @@ export function EarningsPage() {
             </div>
             <div
               data-testid="monthly-kg"
-              style={{ flex: 1, borderRadius: radius.card, padding: 16, backgroundColor: surface.card, border: `1px solid ${surface.border}`, boxShadow: elevation.card }}
+              style={{ flex: 1, minWidth: 0, borderRadius: radius.card, padding: 16, backgroundColor: surface.card, border: `1px solid ${surface.border}`, boxShadow: elevation.card }}
             >
               <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: colors.status.wait }}>이번 달 수거량</p>
               <p className="oilpick-tabular-nums" style={{ margin: "6px 0 0", fontSize: 24, fontWeight: 800, letterSpacing: "-0.01em", color: colors.primary.DEFAULT }}>
@@ -137,12 +138,13 @@ export function EarningsPage() {
                     <details data-testid={`daily-payout-day-${d.day}`}>
                       <summary
                         className="oilpick-tabular-nums"
-                        style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, fontSize: 13, color: gray[800], cursor: "pointer", minHeight: 32, listStyle: "none" }}
+                        style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "baseline", gap: 8, fontSize: 13, color: gray[800], cursor: "pointer", minHeight: 32, listStyle: "none" }}
                       >
-                        <span style={{ whiteSpace: "nowrap" }}>
+                        {/* [M] nowrap 금지 — 글자 확대 시 좌측이 접히고 금액(우측)은 행 단위로만 개행된다. */}
+                        <span style={{ minWidth: 0 }}>
                           {formatDayLabel(d.day)} · {d.completedCount}건 · {formatKg(d.totalKg)}
                         </span>
-                        <span style={{ fontWeight: 700, textAlign: "right" }}>
+                        <span style={{ flexShrink: 0, fontWeight: 700, textAlign: "right" }}>
                           💵 {formatKrw(d.cashAmount)} · 🪙 {formatPoint(d.pointAmount)}
                         </span>
                       </summary>
@@ -155,7 +157,7 @@ export function EarningsPage() {
                             <span style={{ fontSize: 13, fontWeight: 600, color: gray[900], overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                               {o.pickupAddress}
                             </span>
-                            <span className="oilpick-tabular-nums" style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12, color: colors.status.wait }}>
+                            <span className="oilpick-tabular-nums" style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 8, fontSize: 12, color: colors.status.wait }}>
                               <span>
                                 {formatTimeLabel(o.completedAt)}
                                 {o.finalKg != null && ` · ${formatKg(o.finalKg)}`}

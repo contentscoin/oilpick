@@ -25,7 +25,7 @@ export function DealerPerformancePage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-start justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">소속 라이더 실적</h1>
           <p className="text-sm text-gray-500">지급 금액은 표시용 통계예요. 정산은 좌상이 자체적으로 진행해요.</p>
@@ -34,7 +34,7 @@ export function DealerPerformancePage() {
           type="button"
           data-testid="dealer-perf-csv"
           onClick={handleCsv}
-          className="rounded-button border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
+          className="shrink-0 rounded-button border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
         >
           CSV 내보내기
         </button>

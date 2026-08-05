@@ -87,7 +87,8 @@ export function ReferralsPage() {
         >
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             <span style={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.85)" }}>내 추천코드</span>
-            <span data-testid="referral-code-value" className="oilpick-tabular-nums" style={{ fontSize: 34, fontWeight: 800, letterSpacing: "0.08em" }}>
+            {/* [M] 코드는 금액이 아니라 임의 지점 개행 허용 + 폭 기준 clamp — 확대 시 잘림 방지. */}
+            <span data-testid="referral-code-value" className="oilpick-tabular-nums" style={{ fontSize: "clamp(22px, 9vw, 34px)", fontWeight: 800, letterSpacing: "0.08em", overflowWrap: "anywhere" }}>
               {codeData.code}
             </span>
           </div>
@@ -125,16 +126,17 @@ export function ReferralsPage() {
           <div data-testid="referral-stats-skeleton" style={{ borderRadius: radius.card, height: 96, backgroundColor: gray[100] }} />
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <div style={{ display: "flex", gap: 12 }}>
+            {/* [M] 고정 3분할 flex → minmax(0,1fr) grid — 글자 확대 시 셀이 행을 밀어내지 않는다. */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(0, 1fr))", gap: 12 }}>
               <StatCard testId="referral-signed-up" label="가입" value={`${signedUp}`} unit="명" />
               <StatCard testId="referral-activated" label="활성화" value={`${activated}`} unit="명" />
               <StatCard testId="referral-conversion" label="전환율" value={`${conversion}`} unit="%" />
             </div>
             <div
               data-testid="referral-reward"
-              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderRadius: radius.card, padding: 16, backgroundColor: surface.card, border: `1px solid ${surface.border}`, boxShadow: elevation.card }}
+              style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 8, borderRadius: radius.card, padding: 16, backgroundColor: surface.card, border: `1px solid ${surface.border}`, boxShadow: elevation.card }}
             >
-              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
                 <span style={{ fontSize: 13, fontWeight: 600, color: colors.status.wait }}>누적 추천 보상</span>
                 {/* [09 H8] 정산 분리 표기 — 정산 이력이 생기면 완료/대기를 보여준다. */}
                 <span data-testid="referral-reward-settle" style={{ fontSize: 12, color: colors.status.wait }}>
@@ -173,7 +175,7 @@ function StatCard({ testId, label, value, unit }: { testId: string; label: strin
   return (
     <div
       data-testid={testId}
-      style={{ flex: 1, borderRadius: radius.card, padding: 16, backgroundColor: surface.card, border: `1px solid ${surface.border}`, boxShadow: elevation.card }}
+      style={{ minWidth: 0, borderRadius: radius.card, padding: 16, backgroundColor: surface.card, border: `1px solid ${surface.border}`, boxShadow: elevation.card }}
     >
       <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: colors.status.wait }}>{label}</p>
       <p className="oilpick-tabular-nums" style={{ margin: "6px 0 0", fontSize: 24, fontWeight: 800, color: colors.primary.DEFAULT }}>

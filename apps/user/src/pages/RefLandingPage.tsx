@@ -52,9 +52,9 @@ export function RefLandingPage() {
     >
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {/* 브랜드 로크업 — 폐유(payou) 로고(제리캔+P) + 영문 부제(10-brand.md B1~B3). */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
           <PayouSymbol size={64} />
-          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
             <span style={{ fontSize: typeScale.title, fontWeight: 800, color: colors.primary.dark }}>
               폐유 <span style={{ fontSize: typeScale.caption, fontWeight: 700, color: colors.accent.deep }}>payou</span>
             </span>
@@ -90,7 +90,9 @@ export function RefLandingPage() {
         >
           <span style={{ fontSize: typeScale.caption, opacity: 0.9 }}>추천 코드 {validCode}</span>
           <strong style={{ fontSize: 22, fontWeight: 800 }}>
-            첫 수거 완료 시 {formatPoint(REFERRAL_SUPPLIER_BONUS)} 적립
+            {/* [M] 금액은 임의 지점 절단 금지 — 넘치면 금액 덩어리째 다음 줄로(문장은 자연 개행). */}
+            첫 수거 완료 시{" "}
+            <span style={{ overflowWrap: "normal", wordBreak: "keep-all" }}>{formatPoint(REFERRAL_SUPPLIER_BONUS)}</span> 적립
           </strong>
           <span style={{ fontSize: typeScale.caption, opacity: 0.9 }}>
             가입 후 첫 수거를 완료하면 추천 보너스가 지갑에 쌓여요(출금 가능).

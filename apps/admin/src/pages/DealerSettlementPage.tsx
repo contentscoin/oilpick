@@ -112,7 +112,7 @@ export function DealerSettlementPage() {
                     <td className="py-2 font-medium tabular-nums text-primary">{formatKrw(s.net_due)}</td>
                     <td className="py-2 text-gray-500">{formatRelativeTime(s.claimed_at)}</td>
                     <td className="py-2">
-                      <div className="flex gap-2">
+                      <div className="flex flex-wrap gap-2">
                         {s.status === "CLAIMED" && (
                           <>
                             <button
@@ -240,7 +240,7 @@ function DealerAccountCard({
             </span>
           )}
         </div>
-        <div className="flex items-center gap-4 text-sm">
+        <div className="flex flex-wrap items-center gap-4 text-sm">
           <span className="text-gray-500">
             사용 <b className="tabular-nums text-gray-900">{formatPoint(usage)}</b>
           </span>
@@ -259,13 +259,13 @@ function DealerAccountCard({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <NumField label="보증금(원)" value={deposit} onChange={(v) => { setDirty(true); setDeposit(v); setLimit(String(Math.round((Number(v) || 0) * 1.4))); }} testId={`deposit-${dealerId}`} />
         <NumField label="사용한도(P)" value={limit} onChange={(v) => { setDirty(true); setLimit(v); }} testId={`limit-${dealerId}`} />
         <NumField label="청구 임계(P)" value={threshold} onChange={(v) => { setDirty(true); setThreshold(v); }} testId={`threshold-${dealerId}`} />
         <NumField label="수수료율(bp)" value={feeBp} onChange={(v) => { setDirty(true); setFeeBp(v); }} testId={`fee-${dealerId}`} />
       </div>
-      <div className="mt-3 flex items-center gap-3">
+      <div className="mt-3 flex flex-wrap items-center gap-3">
         <button
           type="button"
           data-testid={`save-account-${dealerId}`}

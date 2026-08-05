@@ -85,9 +85,10 @@ function FreshOilPriceSection() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div className="rounded-card bg-white p-6 shadow-card">
           <p className="text-sm text-gray-500">현재 판매가(18L 1통)</p>
-          <p className="mt-1 text-4xl font-bold tabular-nums text-primary" data-testid="fresh-price-current">
+          <p className="mt-1 text-3xl font-bold tabular-nums text-primary" data-testid="fresh-price-current">
             {latest ? formatKrw(latest.pricePerCan) : "-"}
-            <span className="text-base font-medium">/통</span>
+            {/* [03 레이아웃 강건성] 단위는 별도 줄 — 글자 확대 시 값+단위 한 줄이 카드 폭을 밀어냈다. */}
+            <span className="block text-base font-medium">/통</span>
           </p>
           {latest && (
             <p className="mt-1 text-xs text-gray-500">{formatRelativeTime(latest.effectiveAt)} 갱신</p>
@@ -219,9 +220,10 @@ function OilPriceSection() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div className="rounded-card bg-white p-6 shadow-card">
           <p className="text-sm text-gray-500">현재 매입가</p>
-          <p className="mt-1 text-4xl font-bold tabular-nums text-primary">
+          <p className="mt-1 text-3xl font-bold tabular-nums text-primary">
             {latest ? formatKrw(latest.pricePerKg) : "-"}
-            <span className="text-base font-medium">/kg</span>
+            {/* [03 레이아웃 강건성] 단위는 별도 줄 — 글자 확대 시 값+단위 한 줄이 카드 폭을 밀어냈다. */}
+            <span className="block text-base font-medium">/kg</span>
           </p>
           {latest && (
             <p className="mt-1 text-xs text-gray-500">{formatRelativeTime(latest.effectiveAt)} 갱신</p>

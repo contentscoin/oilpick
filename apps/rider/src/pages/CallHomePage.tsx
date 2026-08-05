@@ -111,7 +111,7 @@ export function CallHomePage() {
 
   return (
     <main style={{ display: "flex", flexDirection: "column", gap: 20, padding: 20, maxWidth: 480, margin: "0 auto" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
         <h1 style={{ fontSize: 20, margin: "8px 0 0" }}>콜 홈</h1>
         <button
           type="button"
@@ -136,6 +136,7 @@ export function CallHomePage() {
           <span
             aria-hidden
             style={{
+              flexShrink: 0,
               width: 8,
               height: 8,
               borderRadius: "50%",
@@ -170,10 +171,11 @@ export function CallHomePage() {
             <div style={{ flex: 1, height: 92, borderRadius: radius.card, backgroundColor: gray[100] }} />
           </div>
         ) : (
-          <div style={{ display: "flex", gap: 12 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
             <div
               style={{
                 flex: 1,
+                minWidth: 0,
                 borderRadius: radius.card,
                 padding: 16,
                 backgroundColor: surface.card,
@@ -190,6 +192,7 @@ export function CallHomePage() {
             <div
               style={{
                 flex: 1,
+                minWidth: 0,
                 display: "flex",
                 flexDirection: "column",
                 justifyContent: "center",
@@ -227,10 +230,10 @@ export function CallHomePage() {
       )}
 
       <section style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
           <h2 style={{ fontSize: 16, margin: 0 }}>주변 콜</h2>
           {/* [16 L3 §3-4] 정렬 세그먼트 — 표시 순서만 바꾼다(배차 규칙 불변, 13 D7). */}
-          <div role="group" aria-label="콜 정렬" style={{ display: "flex", gap: 4 }}>
+          <div role="group" aria-label="콜 정렬" style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
             {(Object.keys(CALL_SORT_LABEL) as CallSort[]).map((key) => {
               const active = sort === key;
               return (

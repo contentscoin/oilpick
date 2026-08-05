@@ -108,14 +108,17 @@ function SupplierTable() {
                 <td className="px-4 py-3 font-medium text-gray-900">{s.storeName}</td>
                 <td className="px-4 py-3 text-gray-800">{s.displayName}</td>
                 <td className="px-4 py-3 tabular-nums text-gray-800">{s.bizNumber}</td>
-                <td className="max-w-xs truncate px-4 py-3 text-gray-600">{s.address}</td>
+                {/* [03 레이아웃 강건성] table-layout:auto에선 td의 max-w가 무시된다 — 셀 안쪽 div로 자른다. */}
+                <td className="px-4 py-3 text-gray-600">
+                  <div className="max-w-xs truncate">{s.address}</div>
+                </td>
                 <td className="px-4 py-3 tabular-nums text-gray-800">{s.phone}</td>
                 <td className="px-4 py-3 text-gray-500">{new Date(s.createdAt).toLocaleDateString("ko-KR")}</td>
                 <td className="px-4 py-3">
                   <button
                     type="button"
                     onClick={() => setAdjustTarget(s)}
-                    className="h-8 rounded-button border border-gray-200 px-3 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                    className="min-h-8 rounded-button border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
                     data-testid={`point-adjust-open-${s.id}`}
                   >
                     포인트 조정
