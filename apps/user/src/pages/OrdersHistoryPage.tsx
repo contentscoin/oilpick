@@ -5,7 +5,8 @@ import { formatKg, formatKrw, formatPoint } from "@oilpick/core";
 import { useSession } from "../hooks/useSession";
 import { useOrderHistory } from "../hooks/useOrderHistory";
 
-/** U10 "/orders" 과거 수거 이력. 페이지네이션(간단한 쪽 — 04-tasks.md T8 DoD). */
+/** U10 "/orders" 과거 판매 이력(구 "수거 이력" — 2026-08-05 CEO 지시로 유저 관점 표기 전환).
+ * 페이지네이션(간단한 쪽 — 04-tasks.md T8 DoD). */
 export function OrdersHistoryPage() {
   const navigate = useNavigate();
   const { session } = useSession();
@@ -31,7 +32,7 @@ export function OrdersHistoryPage() {
 
   return (
     <main style={{ display: "flex", flexDirection: "column", gap: 16, padding: 20, maxWidth: 560, margin: "0 auto" }}>
-      <PageHeader title="수거 이력" onBack={() => navigate("/")} backTestId="orders-history-back" />
+      <PageHeader title="판매 이력" onBack={() => navigate("/")} backTestId="orders-history-back" />
 
       {isLoading && (
         <div data-testid="orders-history-skeleton" style={{ height: 200, borderRadius: radius.card, backgroundColor: gray[100] }} />
@@ -53,7 +54,7 @@ export function OrdersHistoryPage() {
       )}
 
       {!isLoading && !loadFailed && items.length === 0 && (
-        <EmptyState title="아직 수거 이력이 없어요" description="첫 수거 요청을 보내보세요." />
+        <EmptyState title="아직 판매 이력이 없어요" description="첫 수거 요청을 보내보세요." />
       )}
 
       {!isLoading && !loadFailed && items.length > 0 && (

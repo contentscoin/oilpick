@@ -67,6 +67,7 @@ spacing: 4px 그리드. 터치 타깃 최소 48px. radius: 카드 16px, 버튼 1
   `PriceStatsRow`(기간 최고/최저/평균/등락률) 신설. `PayoutMethodChip`(현금/포인트 뱃지 — 주문 카드/
   상세/드로어 공용) 신설. `CallCard` 쿠폰 칩 제거(예상 매입 지급액 유지). `PointBalanceCard`/`LedgerList`
   point 변형 현역 복권(user 지갑).
+- **[O3 2026-08-05, CEO 지시]** `PhotoUploader` 사진 첨부 **기본 압축** — `lib/compressImage`(순수 헬퍼): canvas 리사이즈 최장변 1600px 상한(업스케일 금지) + JPEG 품질 0.8 재인코딩, EXIF 회전은 `createImageBitmap(imageOrientation:"from-image")` 지원 시 반영. 압축 실패/canvas 불가 환경은 **원본 업로드 폴백**(업로드 비차단). 압축본이 `PhotoAsset.file`에 실려 사용처(user/rider)는 API 무변경 자동 적용 — 압축 로직은 packages/ui 한 곳만(규칙 7, 앱별 중복 금지).
 
 ## 라우팅 & 화면 스펙
 
@@ -134,6 +135,8 @@ spacing: 4px 그리드. 터치 타깃 최소 48px. radius: 카드 16px, 버튼 1
 >   계약(payload `preferredTime` string) 무변경.
 > - **U6~U9 주문상세(`/orders/:id`)**: 상태 헤드라인 아래 "희망 시간" 행(`order-preferred-time`) 추가 —
 >   저장 문자열 그대로 표시(레거시 "지금"도 그대로, 가공 금지). 값 없으면 행 미렌더.
+
+> **O1 판매 이력 표기 [개정 2026-08-05, CEO 지시]** — apps/user 유저 노출 "수거 이력" 전량을 **"판매 이력"**으로 전환(유저 기준에서 수거가 아니라 판매가 맞다): **U10(`/orders`)** 페이지 타이틀·EmptyState("아직 판매 이력이 없어요"), **U3 홈** "최근 판매 이력" 섹션 헤더·빈 문구, 주문상세 이동 버튼("판매 이력 (보기)"). rider/admin의 "수거" 관점 표기, "수거 요청"·"수거지" 등 이력 외 용어, U11 지갑 "수령 이력"(지급 수령 맥락 — 별개 용어)은 불변.
 
 Realtime: `pickup_orders` 자기 행 UPDATE 구독으로 상태 자동 갱신 (폴링 금지).
 

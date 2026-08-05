@@ -40,7 +40,7 @@ describe("OrdersHistoryPage", () => {
     renderPage();
     const error = screen.getByTestId("query-error");
     expect(error).toHaveTextContent("불러오지 못했어요");
-    expect(screen.queryByText("아직 수거 이력이 없어요")).not.toBeInTheDocument();
+    expect(screen.queryByText("아직 판매 이력이 없어요")).not.toBeInTheDocument();
     fireEvent.click(screen.getByTestId("query-error-retry"));
     expect(refetch).toHaveBeenCalled();
   });

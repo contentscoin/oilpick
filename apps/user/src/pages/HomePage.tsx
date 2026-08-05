@@ -31,7 +31,7 @@ import { useProfile } from "../hooks/useProfile";
 /**
  * U3 홈 — 07 F8 전면 리디자인. **일별 시세 히어로가 주인공**.
  * 정보구조(위→아래): 헤더(로고+알림 벨/이력) → 다크 시세 히어로(현재가 40px 순백 + PriceChart 민트 +
- * 기간 토글) → 진행중 주문 카드 → 이번 달 현금 수령 요약 → 최근 수거 이력 2건 → 하단 fixed "수거 요청하기".
+ * 기간 토글) → 진행중 주문 카드 → 이번 달 현금 수령 요약 → 최근 판매 이력 2건 → 하단 fixed "수거 요청하기".
  * 구모델의 QtyStepper+예상포인트 섹션은 제거(RequestPage step1로 일원화, 07 F8).
  */
 
@@ -487,10 +487,10 @@ export function HomePage() {
           </span>
         </button>
 
-        {/* 최근 수거 이력 2건 */}
+        {/* 최근 판매 이력 2건 (구 "수거 이력" — 2026-08-05 CEO 지시 유저 관점 표기) */}
         <section data-testid="recent-orders" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-            <h2 style={{ fontSize: typeScale.body, margin: 0 }}>최근 수거 이력</h2>
+            <h2 style={{ fontSize: typeScale.body, margin: 0 }}>최근 판매 이력</h2>
             <button
               type="button"
               data-testid="recent-orders-more"
@@ -507,7 +507,7 @@ export function HomePage() {
               <div style={{ height: 64, borderRadius: radius.card, backgroundColor: gray[100] }} />
             </div>
           ) : recentOrders.length === 0 ? (
-            <p style={{ margin: 0, fontSize: typeScale.label, color: colors.status.wait }}>아직 수거 이력이 없어요.</p>
+            <p style={{ margin: 0, fontSize: typeScale.label, color: colors.status.wait }}>아직 판매 이력이 없어요.</p>
           ) : (
             <ul className="oilpick-stagger" style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
               {recentOrders.map((order) => (

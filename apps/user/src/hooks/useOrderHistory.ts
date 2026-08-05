@@ -18,7 +18,7 @@ export interface OrderHistoryItem {
 export const ORDER_HISTORY_PAGE_SIZE = 10;
 
 /**
- * U10 "/orders" 과거 수거 이력. 03-frontend.md: "무한 스크롤 리스트" — 04-tasks.md T8 DoD는
+ * U10 "/orders" 과거 판매 이력(유저 관점 표기 — 구 "수거 이력"). 03-frontend.md: "무한 스크롤 리스트" — 04-tasks.md T8 DoD는
  * "무한 스크롤 또는 페이지네이션 중 택1, 간단한 쪽으로"를 명시하므로 더 간단한 페이지네이션으로
  * 구현한다(무한 스크롤은 IntersectionObserver 등 추가 인프라가 필요해 상대적으로 복잡).
  */

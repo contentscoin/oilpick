@@ -108,7 +108,7 @@ export function OrderDetailPage() {
                 홈으로
               </BigButton>
               <BigButton variant="secondary" data-testid="order-notfound-history" onClick={() => navigate("/orders", { replace: true })}>
-                수거 이력 보기
+                판매 이력 보기
               </BigButton>
             </>
           }
@@ -452,7 +452,7 @@ export function OrderDetailPage() {
               onClick={() => navigate("/orders")}
               style={sheetActionStyle}
             >
-              수거 이력
+              판매 이력
             </button>
             <button
               type="button"

@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import { colors, radius } from "../tokens";
+import { canCompressImages, compressImage } from "../lib/compressImage";
 
 /** [15] 업로드 타일 안내 아이콘(카메라). 목업 04 계량 upload 타일. */
 function CameraIcon() {
@@ -24,6 +25,9 @@ function CameraIcon() {
  * "사진을 다녀도 photos: PhotoAsset[] (url + file/blob)를 상위로 콜백 전달"로 고정해
  * T12에서 내부 구현만 @capacitor/camera로 교체 가능하게 설계했다 — 이 컴포넌트를 쓰는
  * 화면(예: R4 계량 제출)은 onChange 콜백 시그니처가 바뀌지 않는 한 수정이 필요 없다.
+ *
+ * [O3 2026-08-05] 선택/촬영 결과는 lib/compressImage로 기본 압축(최장변 1600px + JPEG 0.8,
+ * EXIF 회전 반영)해 PhotoAsset.file에 싣는다. 압축 실패/불가 환경은 원본 폴백(업로드 비차단).
  */
 /** 목업 upload 타일 높이(2열 그리드 기준). */
 const TILE_HEIGHT = 82;
@@ -53,13 +57,26 @@ export interface PhotoUploaderProps {
 export function PhotoUploader({ photos, onChange, maxCount = 1, disabled, className }: PhotoUploaderProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
-  function handleFiles(fileList: FileList | null) {
-    if (!fileList || fileList.length === 0) return;
-    const added: PhotoAsset[] = Array.from(fileList).map((file) => ({
+  function appendFiles(files: Array<File | Blob>) {
+    const added: PhotoAsset[] = files.map((file) => ({
       url: URL.createObjectURL(file),
       file,
     }));
     onChange([...photos, ...added].slice(0, maxCount));
+  }
+
+  function handleFiles(fileList: FileList | null) {
+    if (!fileList || fileList.length === 0) return;
+    const files = Array.from(fileList);
+    // [O3] 업로드 전 기본 압축(최장변 1600px + JPEG 0.8) — PhotoAsset.file에 압축본이 실려
+    // 사용처(rider 서류/계량 사진 업로드)는 API 무변경으로 자동 적용된다. canvas 재인코딩이
+    // 불가한 환경(구형 WebView·jsdom)은 기존 동기 경로 그대로 원본을 전달한다(폴백 계약).
+    if (!canCompressImages()) {
+      appendFiles(files);
+      return;
+    }
+    // compressImage는 개별 실패 시 원본을 돌려주므로(내부 폴백) 여기서 reject는 발생하지 않는다.
+    void Promise.all(files.map((file) => compressImage(file))).then(appendFiles);
   }
 
   function removeAt(index: number) {

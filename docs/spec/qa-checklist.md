@@ -36,7 +36,7 @@
 | 수거 요청(U5, 08) | 18L 말통/10L/직접 kg 프리셋 → order-create | "현장 계량 기준 확정"·"예상 수령액"(수단 중립) 고지 | ✅ [단위] |
 | 주문 상태(U6~U9) | status 분기, Realtime 자동 갱신 | REQUESTED 취소, 무수락 자동취소 표시 | ✅ [단위] |
 | 계량 확인(08) | 사진 뷰어 + 확정 kg + **지급수단별 확인 카피**(현금 수령/포인트 적립) | [확인]/[이의신청] 분기. POINT면 CONFIRM과 원자 EARN 발행 | ✅ [단위 + pgTAP(EARN 멱등·CASH 무발행)] |
-| 이력(U10) | 페이지네이션 리스트 | 빈 상태 EmptyState | ✅ [단위] |
+| 판매 이력(U10 — 구 "수거 이력", O1 2026-08-05 표기 전환) | 페이지네이션 리스트, 타이틀 "판매 이력" | 빈 상태 EmptyState("아직 판매 이력이 없어요") | ✅ [단위] |
 | 지갑(U11, 08·09) | 잔액 히어로+[출금 신청] + **출금 진행 섹션**(withdrawals 본인 행, 상태 뱃지 4종·진행중 합계 병기·60초 폴링) + 포인트 내역(**REFERRAL "추천 보너스" 라벨**, **[더 보기] 50건씩**) + 수령 이력(PayoutMethodChip) + 스탯("출금 진행중"=REQUESTED+APPROVED 합, held>0만 "보류(레거시)") | 원장 없음 EmptyState, 최소액 미만 CTA 비활성, 출금 0건 섹션 미노출, 행수<limit [더 보기] 숨김 | ✅ [단위] |
 | 출금(U12, 08 부활) | 계좌 등록 + 금액(최소 1만P) → withdraw-request | 잔액 부족 400, 반려 시 WITHDRAW_CANCEL 복구 표시. 신청 후 상태 추적은 U11 출금 진행 섹션 | ✅ [단위 + pgTAP(신청→반려 왕복 잔액 원복)] |
 | 알림함(U14) | Realtime 구독 + 읽음 처리 | 알림 없음 EmptyState | ✅ [단위] |
@@ -97,6 +97,7 @@
 | **빈 상태** | 주요 리스트(이력/콜/알림/원장/큐/레퍼럴)에 EmptyState 또는 안내 | ✅ |
 | **로딩 스켈레톤** | 시세/잔액 카드·리스트는 스켈레톤(스피너 금지) | ✅ |
 | **쿼리 실패 표면화** | 실패를 빈 상태로 위장하지 않음 — QueryError/재시도 버튼(3앱) | ✅ [단위] |
+| **사진 업로드 압축(O3, 2026-08-05)** | `PhotoUploader` 첨부 시 `compressImage` 기본 적용(최장변 1600px + JPEG 0.8, EXIF 회전 반영) — 압축본이 PhotoAsset.file에 실려 user/rider 업로드 자동 적용. **압축 실패·canvas 불가 시 원본 업로드 폴백(업로드 비차단)** | ✅ [단위: 헬퍼(fitWithin·폴백 5종·압축 경로) + 컴포넌트(압축/폴백 양 경로)] / 실기기 촬영 원본 EXIF 회전 실측 🔴 |
 
 ---
 
@@ -136,17 +137,17 @@ T13에서 로컬 스택 advisor lint를 점검·수정했다(상세는 이력 �
 
 ---
 
-## 8. 자동 테스트 현황 (2026-08-02, 16 L 반영)
+## 8. 자동 테스트 현황 (2026-08-05, N·O 반영)
 
 `pnpm test` 전체 통과. (커밋 전 `pnpm lint && pnpm test && pnpm build` 필수)
 
 | 패키지 | 테스트 수 |
 |---|---|
 | @oilpick/core | 393 |
-| @oilpick/ui | 149 |
-| @oilpick/user | 152 |
-| @oilpick/rider | 132 |
-| @oilpick/admin | 124 |
+| @oilpick/ui | 165 |
+| @oilpick/user | 172 |
+| @oilpick/rider | 153 |
+| @oilpick/admin | 125 |
 
 DB 계층: pgTAP **17스위트 265 asserts**(`bash scripts/pgtap-local/run.sh` 전체 GREEN — 마이그레이션 50건).
 Deno: `_shared` 순수 헬퍼 테스트(std-assert·notifyDedupe 12·creditWatch 4).
