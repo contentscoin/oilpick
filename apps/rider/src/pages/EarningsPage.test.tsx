@@ -47,14 +47,51 @@ describe("EarningsPage — 플랫폼 정산 카드(16 L9 §6-2)", () => {
     expect(screen.getByTestId("my-payout-total")).toHaveTextContent("28,000P");
     expect(card).toHaveTextContent("오프라인 정산 대상 금액");
     expect(card).toHaveTextContent("지급 일정은 본사 안내");
-    // 일별 내역 접이식.
-    expect(screen.getByTestId("my-payout-days")).toHaveTextContent("2026-08-01");
   });
 
-  it("실적이 없으면 0P + 내역 접이식 미노출", () => {
+  it("실적이 없으면 0P", () => {
     renderPage();
     expect(screen.getByTestId("my-payout-total")).toHaveTextContent("0P");
-    expect(screen.queryByTestId("my-payout-days")).not.toBeInTheDocument();
+  });
+});
+
+describe("EarningsPage — 일별 지급 내역(현금·포인트 병기)", () => {
+  it("일별 행에 건수/kg + 현금·포인트 지급액을 병기한다", () => {
+    mockUseMyPayout.mockReturnValue({
+      data: {
+        days: [
+          { day: "2026-08-03", completedCount: 2, totalKg: 55, cashAmount: 30000, pointAmount: 0, pointSpentAmount: 0 },
+          { day: "2026-08-01", completedCount: 1, totalKg: 40, cashAmount: 0, pointAmount: 28000, pointSpentAmount: 0 },
+        ],
+        monthPointTotal: 28000,
+      },
+    });
+    renderPage();
+    const card = screen.getByTestId("daily-payout-card");
+    expect(card).toHaveTextContent("08.03 · 2건 · 55.0kg");
+    expect(card).toHaveTextContent("💵 30,000원 · 🪙 0P");
+    expect(card).toHaveTextContent("08.01 · 1건 · 40.0kg");
+    expect(card).toHaveTextContent("💵 0원 · 🪙 28,000P");
+    // 지갑 오해 차단 — 현금은 현장 지급 완료분임을 명시.
+    expect(card).toHaveTextContent("현금은 현장에서 지급받은 금액이에요");
+  });
+
+  it("상계 차액을 점주에게 지급한 날은 현금이 음수로 부호 보존된다(v_my_payout_daily 규약)", () => {
+    mockUseMyPayout.mockReturnValue({
+      data: {
+        days: [
+          { day: "2026-08-02", completedCount: 1, totalKg: 12, cashAmount: -3000, pointAmount: 0, pointSpentAmount: 0 },
+        ],
+        monthPointTotal: 0,
+      },
+    });
+    renderPage();
+    expect(screen.getByTestId("daily-payout-card")).toHaveTextContent("💵 -3,000원");
+  });
+
+  it("실적이 없으면 일별 내역 카드 미노출", () => {
+    renderPage();
+    expect(screen.queryByTestId("daily-payout-card")).not.toBeInTheDocument();
   });
 });
 
