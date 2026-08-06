@@ -11,6 +11,7 @@ const {
   mockSetRiderLimit,
   mockUseDealerActiveOrders,
   mockUseMyDealerAccount,
+  mockUseDealerCompletedTotals,
 } = vi.hoisted(() => ({
   mockUseMyRiders: vi.fn(),
   mockUseMyRiderStats: vi.fn(),
@@ -19,11 +20,14 @@ const {
   mockSetRiderLimit: vi.fn(),
   mockUseDealerActiveOrders: vi.fn(),
   mockUseMyDealerAccount: vi.fn(),
+  // [19 T10] 좌상 축 완료 총계 — KPI 건수·지급액의 진실(정산과 같은 축).
+  mockUseDealerCompletedTotals: vi.fn(),
 }));
 vi.mock("../hooks/useDealerScope", () => ({
   useMyRiders: () => mockUseMyRiders(),
   useMyRiderStats: () => mockUseMyRiderStats(),
   useDealerActiveOrders: () => mockUseDealerActiveOrders(),
+  useDealerCompletedTotals: () => mockUseDealerCompletedTotals(),
   // [18 R1·R5] 배분 모드/총 한도 — 크레딧 요약 배너·라이더별 배분 입력 노출을 가른다.
   useMyDealerAccount: () => mockUseMyDealerAccount(),
   useDealerScopeMutations: () => ({
@@ -50,6 +54,8 @@ describe("DealerHomePage (13 I4)", () => {
     mockUseMyRiders.mockReturnValue({ data: RIDERS, isLoading: false });
     mockUseMyRiderStats.mockReturnValue({ data: STATS });
     mockUseDealerActiveOrders.mockReturnValue({ data: [] });
+    // 좌상 축 총계 기본값 = 라이더 실적 합(STATS의 completed_count 3건)과 일치 → 고아분 0.
+    mockUseDealerCompletedTotals.mockReturnValue({ data: { orderCount: 3, netTotal: 60000 } });
     // [18 R1] 기본은 POOL(총량 공유) — 기존 단언들이 배분 입력 없이 그대로 통과한다.
     mockUseMyDealerAccount.mockReturnValue({
       data: { allocationMode: "POOL", creditLimit: 1000000, usage: 12000, headroom: 988000 },
@@ -100,6 +106,8 @@ describe("DealerHomePage — 4-decision 액션 완성(16 L9)", () => {
     mockUseMyRiders.mockReturnValue({ data: RIDERS, isLoading: false });
     mockUseMyRiderStats.mockReturnValue({ data: STATS });
     mockUseDealerActiveOrders.mockReturnValue({ data: [] });
+    // 좌상 축 총계 기본값 = 라이더 실적 합(STATS의 completed_count 3건)과 일치 → 고아분 0.
+    mockUseDealerCompletedTotals.mockReturnValue({ data: { orderCount: 3, netTotal: 60000 } });
     // [18 R1] 기본은 POOL(총량 공유) — 기존 단언들이 배분 입력 없이 그대로 통과한다.
     mockUseMyDealerAccount.mockReturnValue({
       data: { allocationMode: "POOL", creditLimit: 1000000, usage: 12000, headroom: 988000 },
@@ -153,6 +161,8 @@ describe("DealerHomePage — 진행중 운행 관제(16 L6)", () => {
     mockUseMyRiders.mockReturnValue({ data: RIDERS, isLoading: false });
     mockUseMyRiderStats.mockReturnValue({ data: STATS });
     mockUseDealerActiveOrders.mockReturnValue({ data: [] });
+    // 좌상 축 총계 기본값 = 라이더 실적 합(STATS의 completed_count 3건)과 일치 → 고아분 0.
+    mockUseDealerCompletedTotals.mockReturnValue({ data: { orderCount: 3, netTotal: 60000 } });
     // [18 R1] 기본은 POOL(총량 공유) — 기존 단언들이 배분 입력 없이 그대로 통과한다.
     mockUseMyDealerAccount.mockReturnValue({
       data: { allocationMode: "POOL", creditLimit: 1000000, usage: 12000, headroom: 988000 },
@@ -205,6 +215,8 @@ describe("DealerHomePage — 진행중 운행 관제(16 L6)", () => {
 
   it("진행중 운행이 없으면 빈 상태 문구 + 상태 변경 액션이 어디에도 없다(조회 전용, 13 D3)", () => {
     mockUseDealerActiveOrders.mockReturnValue({ data: [] });
+    // 좌상 축 총계 기본값 = 라이더 실적 합(STATS의 completed_count 3건)과 일치 → 고아분 0.
+    mockUseDealerCompletedTotals.mockReturnValue({ data: { orderCount: 3, netTotal: 60000 } });
     render(<DealerHomePage />);
     expect(screen.getByTestId("dealer-active-empty")).toBeInTheDocument();
   });
@@ -217,6 +229,8 @@ describe("DealerHomePage — 크레딧 배분(18 R5)", () => {
     mockUseMyRiders.mockReturnValue({ data: RIDERS, isLoading: false });
     mockUseMyRiderStats.mockReturnValue({ data: STATS });
     mockUseDealerActiveOrders.mockReturnValue({ data: [] });
+    // 좌상 축 총계 기본값 = 라이더 실적 합(STATS의 completed_count 3건)과 일치 → 고아분 0.
+    mockUseDealerCompletedTotals.mockReturnValue({ data: { orderCount: 3, netTotal: 60000 } });
     mockVerifyRider.mockResolvedValue({ ok: true });
     mockUnassign.mockResolvedValue({ ok: true });
     mockSetRiderLimit.mockResolvedValue({ ok: true });
@@ -260,5 +274,49 @@ describe("DealerHomePage — 크레딧 배분(18 R5)", () => {
     fireEvent.change(screen.getByTestId("rider-limit-input-r2"), { target: { value: "" } });
     fireEvent.click(screen.getByTestId("rider-limit-save-r2"));
     await waitFor(() => expect(mockSetRiderLimit).toHaveBeenCalledWith("r2", null));
+  });
+});
+
+// [19 T10] 좌상 데이터 ↔ 라이더 데이터 대사. 실적 목록은 "현 소속 라이더의 내 귀속분"이라
+// 재배정된 라이더의 내 귀속분이 빠진다 — KPI는 좌상 축(정산과 같은 축)을 진실로 쓰고 차이를 설명한다.
+describe("DealerHomePage — 좌상 축 대사(19 T10)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockUseMyRiders.mockReturnValue({ data: RIDERS, isLoading: false });
+    mockUseMyRiderStats.mockReturnValue({ data: STATS });
+    mockUseDealerActiveOrders.mockReturnValue({ data: [] });
+    mockUseMyDealerAccount.mockReturnValue({
+      data: { allocationMode: "POOL", creditLimit: 1000000, usage: 12000, headroom: 988000 },
+    });
+    mockUseDealerCompletedTotals.mockReturnValue({ data: { orderCount: 3, netTotal: 60000 } });
+  });
+
+  it("KPI 건수·지급액은 좌상 축 총계를 쓴다(라이더 행 합계가 아니라)", () => {
+    // 라이더 실적 합은 3건/60,000원인데 좌상 축은 5건/95,000원 — 좌상 축이 표시돼야 한다.
+    mockUseDealerCompletedTotals.mockReturnValue({ data: { orderCount: 5, netTotal: 95000 } });
+    render(<DealerHomePage />);
+    expect(screen.getByTestId("dealer-kpi-completed").textContent).toContain("5건");
+    expect(screen.getByTestId("dealer-kpi-paid").textContent).toContain("95,000");
+  });
+
+  it("두 축이 어긋나면 '전 소속 라이더 귀속분'으로 차이를 설명한다", () => {
+    mockUseDealerCompletedTotals.mockReturnValue({ data: { orderCount: 5, netTotal: 95000 } });
+    render(<DealerHomePage />);
+    // 5건 − 라이더 실적 합 3건 = 2건
+    expect(screen.getByTestId("dealer-kpi-completed").textContent).toContain("2건 포함");
+    expect(screen.getByTestId("dealer-orphan-note")).toHaveTextContent("2건");
+  });
+
+  it("두 축이 일치하면 차이 안내를 띄우지 않는다", () => {
+    render(<DealerHomePage />); // orderCount 3 === 라이더 실적 합 3
+    expect(screen.queryByTestId("dealer-orphan-note")).not.toBeInTheDocument();
+    expect(screen.getByTestId("dealer-kpi-completed").textContent).not.toContain("포함");
+  });
+
+  it("좌상 축 총계 로딩 전에는 라이더 실적 합으로 폴백한다(빈 화면 방지)", () => {
+    mockUseDealerCompletedTotals.mockReturnValue({ data: undefined });
+    render(<DealerHomePage />);
+    expect(screen.getByTestId("dealer-kpi-completed").textContent).toContain("3건");
+    expect(screen.queryByTestId("dealer-orphan-note")).not.toBeInTheDocument();
   });
 });

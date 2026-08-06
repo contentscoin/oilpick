@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { ARRIVED_STALE_MS, ORDER_STATUS_LABEL, formatKg } from "@oilpick/core";
 import {
   useDealerActiveOrders,
+  useDealerCompletedTotals,
   useMyRiders,
   useMyRiderStats,
   useMyDealerAccount,
@@ -53,6 +54,9 @@ export function DealerHomePage() {
   const { data: riders, isLoading } = useMyRiders();
   const { data: stats } = useMyRiderStats();
   const { data: activeOrders } = useDealerActiveOrders();
+  // [19 T10] 좌상 축(스냅샷) 총계 — KPI 건수·지급액의 진실. 라이더 행 합계는 현 소속분만이라
+  // 정산과 어긋난다(재배정된 라이더의 내 귀속분이 실적 목록에서 사라진다).
+  const { data: dealerTotals } = useDealerCompletedTotals();
   const { verifyRider, unassign, setRiderLimit } = useDealerScopeMutations();
   // [18 R1·R5] 내 좌상 계정 — 배분 모드·총 한도. 모드에 따라 라이더 행의 배분 입력이 갈린다.
   const { data: account } = useMyDealerAccount();
@@ -67,8 +71,13 @@ export function DealerHomePage() {
   // [19 T6] KPI를 인원수 축에서 실적·크레딧 축까지 넓힌다(19 §0 "누락 정보").
   // v_dealer_rider_stats는 completed_count·cash_paid·point_paid를 이미 주는데 화면에서
   // collected_kg·coupon_used_qty만 쓰고 있었다 — 남은 값을 마저 연결한다.
-  const completedCount = (stats ?? []).reduce((s, r) => s + r.completed_count, 0);
-  const paidTotal = (stats ?? []).reduce((s, r) => s + r.cash_paid + r.point_paid, 0);
+  // 현 소속 라이더의 내 귀속분 합(실적 목록과 같은 축).
+  const ridersCompleted = (stats ?? []).reduce((s, r) => s + r.completed_count, 0);
+  // 좌상 축 총계(정산과 같은 축). 아직 로딩 중이면 라이더 합으로 폴백한다.
+  const completedCount = dealerTotals?.orderCount ?? ridersCompleted;
+  const paidTotal = dealerTotals?.netTotal ?? (stats ?? []).reduce((s, r) => s + r.cash_paid + r.point_paid, 0);
+  // 두 축의 차이 = 전 소속(재배정된) 라이더가 내 소속으로 있는 동안 낸 주문. 정산에는 남아 있다.
+  const orphanCount = dealerTotals ? Math.max(0, dealerTotals.orderCount - ridersCompleted) : 0;
   const activeCount = activeOrders?.length ?? 0;
 
   // [19 T6] 소속 라이더 검색 — 인원이 늘면 평면 목록에서 특정 라이더를 못 찾는다.
@@ -119,12 +128,18 @@ export function DealerHomePage() {
         <StatCard label="소속 라이더" value={`${total}명`} sub={`승인 완료 ${approved}명`} />
         <StatCard label="승인 대기" value={`${pending}명`} tone={pending > 0 ? "accent" : "neutral"} />
         <StatCard label="진행중 운행" value={`${activeCount}건`} data-testid="dealer-kpi-active" />
-        <StatCard label="완료 주문" value={`${completedCount}건`} data-testid="dealer-kpi-completed" />
-        <StatCard label="누적 수거" value={formatKg(collectedKg)} />
+        {/* [19 T10] 건수·지급액은 좌상 축(정산과 같은 축). 전 소속 라이더 귀속분이 있으면 명시한다. */}
+        <StatCard
+          label="완료 주문"
+          value={`${completedCount}건`}
+          sub={orphanCount > 0 ? `전 소속 라이더 귀속분 ${orphanCount}건 포함` : undefined}
+          data-testid="dealer-kpi-completed"
+        />
+        <StatCard label="누적 수거" value={formatKg(collectedKg)} sub="현 소속 라이더분" />
         <StatCard
           label="누적 지급액"
           value={`${paidTotal.toLocaleString()}원`}
-          sub="현금 + 포인트 합계(표시용)"
+          sub="상계 순액 합계(정산 기준)"
           tone="accent"
           data-testid="dealer-kpi-paid"
         />
@@ -188,6 +203,13 @@ export function DealerHomePage() {
         <h2 className="mb-1 text-lg font-semibold text-gray-900">소속 라이더</h2>
         {/* [17 Q5] 쿠폰 사용은 조회 전용 실적 — 정산 무관 카피(17 C5, 좌상 오해 방지). */}
         <p className="mb-2 text-xs text-gray-500">쿠폰 사용은 플랫폼 실적 확인용이에요 — 정산과는 무관해요.</p>
+        {/* [19 T10] 축 설명 — 여기 실적은 "내 소속으로 있는 동안" 낸 몫이다(정산과 같은 축).
+            떠난 라이더의 내 귀속분은 이 목록에 없지만 정산에는 남는다 → 위 KPI가 그 차이를 표기한다. */}
+        {orphanCount > 0 && (
+          <p className="mb-2 text-xs text-gray-500" data-testid="dealer-orphan-note">
+            소속에서 빠진 라이더가 내 소속일 때 낸 주문 {orphanCount}건은 이 목록엔 없지만 정산에는 그대로 남아 있어요.
+          </p>
+        )}
 
         {/* [18 R1·R5 → 19 T6] 배분 모드 안내. 숫자(사용/한도/잔여)는 위 '크레딧 현황' 카드로 승격했고,
             여기엔 모드별 행동 안내만 남긴다(같은 값을 두 번 읽게 하지 않는다).
