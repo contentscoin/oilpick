@@ -20,6 +20,15 @@ export interface DealerRow {
   id: string;
   displayName: string;
   phone: string;
+  /**
+   * [18 R8] 크레딧 계정(dealer_accounts) 등록 여부. false면 크레딧 게이트가 아예 적용되지 않아
+   * 해당 좌상 소속 라이더가 POINT를 무제한 발행할 수 있다(18 X1) — 목록에 경고 배지로 노출한다.
+   */
+  hasAccount: boolean;
+  /** 등록된 총 사용한도(P). 계정 없으면 null. */
+  creditLimit: number | null;
+  /** [18 R1] 크레딧 배분 모드. 계정 없으면 기본 POOL로 취급. */
+  allocationMode: "POOL" | "PER_RIDER";
 }
 
 export interface AssignableRiderRow {
@@ -46,11 +55,30 @@ export function useDealers() {
         .eq("role", "dealer")
         .order("display_name", { ascending: true });
       if (error) throw error;
-      return (data ?? []).map((r) => ({
-        id: r.id as string,
-        displayName: (r.display_name as string) ?? "",
-        phone: (r.phone as string) ?? "",
-      }));
+      // [18 R8] 계정 등록 여부 — admin RLS로 전체 조회. 미등록 = 크레딧 무제한 경고 대상.
+      const { data: accounts } = await supabase
+        .from("dealer_accounts")
+        .select("dealer_id, credit_limit, allocation_mode");
+      const accountMap = new Map(
+        (accounts ?? []).map((a) => [
+          a.dealer_id as string,
+          {
+            creditLimit: (a.credit_limit as number) ?? 0,
+            allocationMode: ((a.allocation_mode as "POOL" | "PER_RIDER") ?? "POOL"),
+          },
+        ]),
+      );
+      return (data ?? []).map((r) => {
+        const account = accountMap.get(r.id as string);
+        return {
+          id: r.id as string,
+          displayName: (r.display_name as string) ?? "",
+          phone: (r.phone as string) ?? "",
+          hasAccount: account != null,
+          creditLimit: account?.creditLimit ?? null,
+          allocationMode: account?.allocationMode ?? ("POOL" as const),
+        };
+      });
     },
   });
 }

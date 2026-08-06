@@ -60,6 +60,7 @@ export function DealerSettlementPage() {
             key={d.id}
             dealerId={d.id}
             dealerName={d.displayName}
+            initialAllocMode={d.allocationMode}
             statement={stmtByDealer.get(d.id)}
             statementsPending={statementsPending}
             onClaim={() => handleClaim(`create-${d.id}`, { action: "create", dealerId: d.id })}
@@ -169,6 +170,7 @@ export function DealerSettlementPage() {
 function DealerAccountCard({
   dealerId,
   dealerName,
+  initialAllocMode,
   statement,
   statementsPending,
   onClaim,
@@ -176,6 +178,8 @@ function DealerAccountCard({
 }: {
   dealerId: string;
   dealerName: string;
+  /** [18 R1] 현재 배분 모드(dealer_accounts.allocation_mode). 계정 미설정이면 POOL. */
+  initialAllocMode: "POOL" | "PER_RIDER";
   statement: DealerStatement | undefined;
   /** v_dealer_statement 조회가 아직 진행 중인지. 로드 전 저장을 막기 위한 게이트. */
   statementsPending: boolean;
@@ -187,6 +191,8 @@ function DealerAccountCard({
   const [limit, setLimit] = useState(String(statement?.credit_limit ?? 0));
   const [threshold, setThreshold] = useState(String(statement?.claim_threshold ?? 5000000));
   const [feeBp, setFeeBp] = useState(String(statement?.fee_rate_bp ?? 0));
+  // [18 R1] 배분 모드는 dealers 쿼리(dealer_accounts)에서 온다 — statement 뷰에는 없는 컬럼.
+  const [allocMode, setAllocMode] = useState<"POOL" | "PER_RIDER">(initialAllocMode);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
 
@@ -203,6 +209,13 @@ function DealerAccountCard({
     setThreshold(String(statement.claim_threshold ?? 5000000));
     setFeeBp(String(statement.fee_rate_bp ?? 0));
   }, [statement, dirty]);
+
+  // [18 R1] 배분 모드도 같은 이유로 도착 시 동기화한다(dealers 쿼리가 늦게 오면 초기값 POOL이
+  // 박혀 저장 시 PER_RIDER 좌상을 POOL로 되돌릴 수 있다 — statement 동기화와 동일한 함정).
+  useEffect(() => {
+    if (dirty) return;
+    setAllocMode(initialAllocMode);
+  }, [initialAllocMode, dirty]);
 
   // 로드 중에는 저장 불가. 단 로드가 끝났는데 statement가 없는 경우는 "계정 미설정"(v_dealer_statement가
   // dealer_accounts와 INNER JOIN이라 행이 없음)이므로 최초 등록을 위해 저장을 허용해야 한다.
@@ -223,6 +236,7 @@ function DealerAccountCard({
       creditLimit: Number(limit) || 0,
       claimThreshold: Number(threshold) || 1,
       feeRateBp: Number(feeBp) || 0,
+      allocationMode: allocMode,
     });
     setSaving(false);
     setSaveMsg(result.ok ? "저장했어요." : result.message);
@@ -265,6 +279,31 @@ function DealerAccountCard({
         <NumField label="청구 임계(P)" value={threshold} onChange={(v) => { setDirty(true); setThreshold(v); }} testId={`threshold-${dealerId}`} />
         <NumField label="수수료율(bp)" value={feeBp} onChange={(v) => { setDirty(true); setFeeBp(v); }} testId={`fee-${dealerId}`} />
       </div>
+      {/* [18 R1] 배분 모드 — POOL(총량 공유·기존 동작) / PER_RIDER(라이더별 한도 배분).
+          PER_RIDER로 바꾸면 좌상이 관할 대시보드에서 라이더별 한도를 넣기 전까지 그 좌상 소속
+          라이더는 POINT 지급이 막힌다(미배분=0). 전환 시 좌상에게 배분을 안내해야 한다. */}
+      <div className="mt-3 flex flex-wrap items-center gap-2" data-testid={`alloc-mode-${dealerId}`}>
+        <span className="text-xs font-medium text-gray-600">크레딧 배분</span>
+        {(["POOL", "PER_RIDER"] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            data-testid={`alloc-mode-${m.toLowerCase()}-${dealerId}`}
+            onClick={() => { setDirty(true); setAllocMode(m); }}
+            className={`rounded-pill px-3 py-1 text-xs font-medium transition-colors ${
+              allocMode === m ? "bg-primary text-white shadow-card" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            {m === "POOL" ? "총량 공유" : "라이더별 배분"}
+          </button>
+        ))}
+        <span className="text-xs text-gray-400">
+          {allocMode === "PER_RIDER"
+            ? "좌상이 관할 대시보드에서 라이더별 한도를 배분해요(미배분 라이더는 POINT 지급 불가)."
+            : "소속 라이더가 총 한도를 선착순으로 함께 써요."}
+        </span>
+      </div>
+
       <div className="mt-3 flex flex-wrap items-center gap-3">
         <button
           type="button"

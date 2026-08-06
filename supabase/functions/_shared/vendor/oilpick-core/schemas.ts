@@ -352,7 +352,12 @@ var dealerCreateInputSchema = z.object({
   username: z.string().min(3).max(32).regex(/^[a-z0-9_]+$/, "\uC544\uC774\uB514\uB294 \uC601\uC18C\uBB38\uC790\xB7\uC22B\uC790\xB7\uBC11\uC904\uB9CC \uAC00\uB2A5\uD574\uC694."),
   password: z.string().min(8, "\uBE44\uBC00\uBC88\uD638\uB294 8\uC790 \uC774\uC0C1\uC774\uC5B4\uC57C \uD574\uC694."),
   displayName: z.string().min(1).max(40),
-  phone: z.string().min(1).max(20)
+  phone: z.string().min(1).max(20),
+  /**
+   * [18 R8] 초기 사용한도(P). 지정하면 dealer_accounts 행을 함께 생성한다. 생략하면 계정 행이
+   * 없어 크레딧 게이트가 미적용(무제한)이므로 admin 목록에 "한도 미설정" 경고가 뜬다(14 §10 #2).
+   */
+  creditLimit: z.number().int().min(0).optional()
 });
 var dealerCreateOutputSchema = z.object({
   dealerId: uuidSchema,
@@ -395,20 +400,43 @@ var dealerRiderStatsSchema = z.object({
   /** [17 Q5] 완료 주문 coupon_cost 합(뷰 append, null→0). 조회 전용 — 정산 무관(17 C5). */
   coupon_used_qty: z.number().int().nonnegative()
 });
+var dealerAllocModeSchema = z.enum(["POOL", "PER_RIDER"]);
 var dealerAccountSetInputSchema = z.object({
   dealerId: uuidSchema,
   depositAmount: z.number().int().min(0),
   creditLimit: z.number().int().min(0),
   claimThreshold: z.number().int().positive(),
-  feeRateBp: z.number().int().min(0).max(1e4)
+  feeRateBp: z.number().int().min(0).max(1e4),
   // 요율(bp, 1bp=0.01%). 초기 0
+  /** [18 R1] 생략 시 기존 값 유지(신규 행은 POOL). */
+  allocationMode: dealerAllocModeSchema.optional()
 });
 var dealerAccountSchema = z.object({
   dealer_id: uuidSchema,
   deposit_amount: z.number().int(),
   credit_limit: z.number().int(),
   claim_threshold: z.number().int(),
-  fee_rate_bp: z.number().int()
+  fee_rate_bp: z.number().int(),
+  allocation_mode: dealerAllocModeSchema.default("POOL")
+});
+var dealerRiderLimitSetInputSchema = z.object({
+  riderId: uuidSchema,
+  creditLimit: z.number().int().min(0).nullable()
+});
+var dealerRiderLimitSetOutputSchema = z.object({
+  riderId: uuidSchema,
+  creditLimit: z.number().int().nullable()
+});
+var riderCreditSchema = z.object({
+  rider_id: uuidSchema,
+  dealer_id: uuidSchema.nullable(),
+  allocation_mode: dealerAllocModeSchema.nullable(),
+  limit_amount: z.number().int().nullable(),
+  used: z.number().int(),
+  /** [18 R7] 제출했지만 점주 확인 전인 POINT 건의 예상 지급액(P). available에서 이미 차감돼 있다. */
+  reserved: z.number().int(),
+  available: z.number().int(),
+  is_unlimited: z.boolean()
 });
 var dealerClaimInputSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("create"), dealerId: uuidSchema }),
@@ -468,11 +496,14 @@ export {
   csTicketInputSchema,
   dealerAccountSchema,
   dealerAccountSetInputSchema,
+  dealerAllocModeSchema,
   dealerAssignInputSchema,
   dealerAssignOutputSchema,
   dealerClaimInputSchema,
   dealerCreateInputSchema,
   dealerCreateOutputSchema,
+  dealerRiderLimitSetInputSchema,
+  dealerRiderLimitSetOutputSchema,
   dealerRiderStatsSchema,
   dealerSettlementSchema,
   dealerSettlementStatusSchema,
@@ -519,6 +550,7 @@ export {
   referralStatsSchema,
   referralStatusSchema,
   resolveDisputePayloadSchema,
+  riderCreditSchema,
   riderLocationInputSchema,
   riderLocationOutputSchema,
   riderVerifyInputSchema,

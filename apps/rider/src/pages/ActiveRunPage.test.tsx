@@ -1,7 +1,8 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { ToastProvider } from "@oilpick/ui";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { RiderCredit } from "@oilpick/core";
 import type { OrderStatus } from "@oilpick/core";
 import { ActiveRunPage } from "./ActiveRunPage";
 import type { ActiveRun, ActiveRunSummary } from "../hooks/useActiveRun";
@@ -13,12 +14,18 @@ const { mockUseSession, mockUseActiveRun, mockInvoke, mockStorageFrom, mockUseAc
   mockInvoke: vi.fn(),
   mockStorageFrom: vi.fn(),
 }));
+// [18 R7] 크레딧 게이지/fail-fast 소스. 기본은 "한도 없음"(본사 직속) — 기존 단언 무영향.
+const { mockUseRiderCredit } = vi.hoisted(() => ({
+  mockUseRiderCredit: vi.fn((): { data: RiderCredit | null } => ({ data: null })),
+}));
 vi.mock("../hooks/useSession", () => ({ useSession: mockUseSession }));
 vi.mock("../hooks/useActiveRun", () => ({
   useActiveRun: mockUseActiveRun,
   useActiveRunSummaries: mockUseActiveRunSummaries,
 }));
 vi.mock("../hooks/useRiderLocationPusher", () => ({ useRiderLocationPusher: vi.fn() }));
+// [18 R7] 크레딧 게이지/fail-fast 소스. 기본은 "한도 없음"(본사 직속) — 기존 단언 무영향.
+vi.mock("../hooks/useRiderCredit", () => ({ useRiderCredit: () => mockUseRiderCredit() }));
 // [16 L3] 내 위치·경로 조회는 부가 기능 — 기본은 "없음"(칩·경로선 미표기 폴백 경로).
 const { mockUseGeolocation, mockUseDirections } = vi.hoisted(() => ({
   mockUseGeolocation: vi.fn(() => null as { lat: number; lng: number } | null),
@@ -56,6 +63,7 @@ function makeRun(overrides: Partial<ActiveRun> = {}): ActiveRun {
     orderKind: null,
     purchaseRequestedCans: null,
     snapshotFreshCanPrice: null,
+    deliveredCans: null,
     measuredKg: null,
     finalKg: null,
     photoUrls: [],
@@ -697,5 +705,168 @@ describe("ActiveRunPage — 현금으로 바꿔 다시 제출(N3, 08 P2 확장)"
   it("CASH 제출 대기 배너에는 원터치 버튼이 없다", () => {
     renderRun(makeRun({ status: "ARRIVED", measuredKg: 40, payoutMethod: "CASH" }));
     expect(screen.queryByTestId("cash-resubmit-button")).not.toBeInTheDocument();
+  });
+});
+
+// [18 R6·R7] 크레딧 게이지 + POINT 제출 fail-fast — 한도 초과 에러가 점주에게 도달하지 않게 막는다(18 X2).
+describe("ActiveRunPage — 포인트 지급 한도 게이지/fail-fast(18 R7)", () => {
+  afterEach(() => mockUseRiderCredit.mockReturnValue({ data: null }));
+
+  const CREDIT = (over: boolean) => ({
+    data: {
+      rider_id: "rider-1",
+      dealer_id: "d1",
+      allocation_mode: "PER_RIDER" as const,
+      limit_amount: 50000,
+      used: over ? 45000 : 10000,
+      reserved: 0,
+      available: over ? 5000 : 40000,
+      is_unlimited: false,
+    },
+  });
+
+  it("한도가 없으면(본사 직속) 게이지를 띄우지 않고 제출도 막지 않는다", () => {
+    mockUseRiderCredit.mockReturnValue({ data: null });
+    renderRun(makeRun({ status: "ARRIVED", measuredKg: null, finalKg: null }));
+    fireEvent.click(screen.getByTestId("payout-option-point"));
+    expect(screen.queryByTestId("measure-credit-gauge")).not.toBeInTheDocument();
+    expect(screen.getByTestId("submit-measure-button")).not.toBeDisabled();
+  });
+
+  it("POINT 선택 시 게이지를 띄우고, 잔여 안이면 제출 가능", () => {
+    mockUseRiderCredit.mockReturnValue(CREDIT(false));
+    renderRun(makeRun({ status: "ARRIVED", measuredKg: null, finalKg: null }));
+    fireEvent.change(screen.getByTestId("measured-kg-input"), { target: { value: "10" } }); // 10×1600 = 16,000
+    fireEvent.click(screen.getByTestId("payout-option-point"));
+    expect(screen.getByTestId("measure-credit-gauge")).toBeInTheDocument();
+    expect(screen.getByTestId("submit-measure-button")).not.toBeDisabled();
+  });
+
+  it("이번 건이 잔여 한도를 넘으면 제출을 잠그고 현금 전환을 안내한다", () => {
+    mockUseRiderCredit.mockReturnValue(CREDIT(true)); // 잔여 5,000
+    renderRun(makeRun({ status: "ARRIVED", measuredKg: null, finalKg: null }));
+    fireEvent.change(screen.getByTestId("measured-kg-input"), { target: { value: "10" } }); // 16,000 > 5,000
+    fireEvent.click(screen.getByTestId("payout-option-point"));
+    const submit = screen.getByTestId("submit-measure-button");
+    expect(submit).toBeDisabled();
+    expect(submit).toHaveTextContent("현금 지급으로 바꿔주세요");
+  });
+
+  it("현금(CASH)을 고르면 한도와 무관하게 제출할 수 있다", () => {
+    mockUseRiderCredit.mockReturnValue(CREDIT(true));
+    renderRun(makeRun({ status: "ARRIVED", measuredKg: null, finalKg: null }));
+    fireEvent.change(screen.getByTestId("measured-kg-input"), { target: { value: "10" } });
+    fireEvent.click(screen.getByTestId("payout-option-cash"));
+    expect(screen.queryByTestId("measure-credit-gauge")).not.toBeInTheDocument();
+    expect(screen.getByTestId("submit-measure-button")).not.toBeDisabled();
+  });
+});
+
+// [18 R7 리뷰 반영] 재제출 시 자기 건 예약분(reserved) 이중계산 방지 — 정상 재제출까지 막히면 안 된다.
+describe("ActiveRunPage — 재제출 시 예약분 이중계산 방지(18 R7)", () => {
+  afterEach(() => mockUseRiderCredit.mockReturnValue({ data: null }));
+
+  it("이미 POINT로 제출한 건을 재제출할 때, 그 건의 예약분은 잔여로 되돌려 계산한다", () => {
+    // 한도 50,000 / 확정 사용 40,000 / 예약 10,000(= 이 주문의 기존 제출분) → 서버 available은 0.
+    // 자기 건을 되돌리지 않으면 같은 금액 재제출조차 막힌다.
+    mockUseRiderCredit.mockReturnValue({
+      data: {
+        rider_id: "rider-1",
+        dealer_id: "d1",
+        allocation_mode: "PER_RIDER" as const,
+        limit_amount: 50000,
+        used: 40000,
+        reserved: 10000,
+        available: 0,
+        is_unlimited: false,
+      },
+    });
+    // measuredKg 6.25 × 1,600 = 10,000 — 기존 제출분과 동일 금액.
+    renderRun(makeRun({ status: "ARRIVED", measuredKg: 6.25, finalKg: null, payoutMethod: "POINT" }));
+    fireEvent.click(screen.getByTestId("measure-resubmit-button"));
+    fireEvent.change(screen.getByTestId("measured-kg-input"), { target: { value: "6.25" } });
+    fireEvent.click(screen.getByTestId("payout-option-point"));
+    expect(screen.getByTestId("submit-measure-button")).not.toBeDisabled();
+  });
+
+  it("되돌리는 예약분은 이 주문 몫만 — 다른 주문의 예약분까지 잔여로 복원하지 않는다", () => {
+    // reserved 30,000 중 이 주문 몫은 10,000(6.25kg×1,600, 구매 없음)뿐이다. 나머지 20,000은
+    // 다른 주문의 예약분이므로 잔여로 되살아나면 안 된다 → 이번 건 15,000은 막혀야 한다.
+    mockUseRiderCredit.mockReturnValue({
+      data: {
+        rider_id: "rider-1",
+        dealer_id: "d1",
+        allocation_mode: "PER_RIDER" as const,
+        limit_amount: 50000,
+        used: 20000,
+        reserved: 30000,
+        available: 0,
+        is_unlimited: false,
+      },
+    });
+    renderRun(makeRun({ status: "ARRIVED", measuredKg: 6.25, finalKg: null, payoutMethod: "POINT" }));
+    fireEvent.click(screen.getByTestId("measure-resubmit-button"));
+    fireEvent.change(screen.getByTestId("measured-kg-input"), { target: { value: "9.375" } }); // 15,000
+    fireEvent.click(screen.getByTestId("payout-option-point"));
+    expect(screen.getByTestId("submit-measure-button")).toBeDisabled();
+  });
+
+  it("이미 한도를 초과 예약한 상태(잔여 0으로 클램프)에서도 되돌림이 잔여를 부풀리지 않는다", () => {
+    // 한도 5,000 / 확정 사용 4,000 / 예약 3,000(이 주문 2,000 + 다른 주문 1,000).
+    // 서버 available은 max(5,000-4,000-3,000, 0) = 0으로 **잘려 있다**(원값 -2,000).
+    // 잘린 0에 이 주문 몫 2,000을 그대로 더하면 잔여가 2,000으로 부풀어 초과 제출이 통과한다.
+    // 실제 여유는 5,000-4,000-1,000(다른 주문) = 0이므로 어떤 금액도 막혀야 한다.
+    mockUseRiderCredit.mockReturnValue({
+      data: {
+        rider_id: "rider-1",
+        dealer_id: "d1",
+        allocation_mode: "PER_RIDER" as const,
+        limit_amount: 5000,
+        used: 4000,
+        reserved: 3000,
+        available: 0,
+        is_unlimited: false,
+      },
+    });
+    // 이 주문의 기제출 = 1.25kg × 1,600 = 2,000P.
+    renderRun(makeRun({ status: "ARRIVED", measuredKg: 1.25, finalKg: null, payoutMethod: "POINT" }));
+    fireEvent.click(screen.getByTestId("measure-resubmit-button"));
+    fireEvent.change(screen.getByTestId("measured-kg-input"), { target: { value: "1.25" } }); // 2,000P
+    fireEvent.click(screen.getByTestId("payout-option-point"));
+    expect(screen.getByTestId("submit-measure-button")).toBeDisabled();
+  });
+
+  it("구매 동반 재제출: 되돌리는 몫은 상계 후 순액 기준이다(수령액 총액이 아니라)", () => {
+    // 기제출 10kg×1,600=16,000 − 신유 1통 26,000 → 순액 음수 → 예약분 0. 되돌릴 몫이 없으므로
+    // 잔여 5,000을 넘는 이번 건(8,000)은 막혀야 한다. 수령액 16,000을 통째로 되돌리면 뚫린다.
+    mockUseRiderCredit.mockReturnValue({
+      data: {
+        rider_id: "rider-1",
+        dealer_id: "d1",
+        allocation_mode: "PER_RIDER" as const,
+        limit_amount: 50000,
+        used: 45000,
+        reserved: 0,
+        available: 5000,
+        is_unlimited: false,
+      },
+    });
+    renderRun(
+      makeRun({
+        status: "ARRIVED",
+        measuredKg: 10,
+        finalKg: null,
+        payoutMethod: "POINT",
+        orderKind: "MIXED",
+        purchaseRequestedCans: 1,
+        snapshotFreshCanPrice: 26000,
+        deliveredCans: 1,
+      }),
+    );
+    fireEvent.click(screen.getByTestId("measure-resubmit-button"));
+    fireEvent.change(screen.getByTestId("measured-kg-input"), { target: { value: "5" } }); // 8,000 − 26,000 < 0
+    fireEvent.click(screen.getByTestId("payout-option-point"));
+    // 순액이 음수면 지급이 아니라 청구라 한도를 소비하지 않는다 → 차단되지 않아야 한다.
+    expect(screen.getByTestId("submit-measure-button")).not.toBeDisabled();
   });
 });

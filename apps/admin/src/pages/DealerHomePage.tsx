@@ -4,6 +4,7 @@ import {
   useDealerActiveOrders,
   useMyRiders,
   useMyRiderStats,
+  useMyDealerAccount,
   useDealerScopeMutations,
   type DealerActiveOrder,
   type DealerRiderRow,
@@ -51,7 +52,12 @@ export function DealerHomePage() {
   const { data: riders, isLoading } = useMyRiders();
   const { data: stats } = useMyRiderStats();
   const { data: activeOrders } = useDealerActiveOrders();
-  const { verifyRider, unassign } = useDealerScopeMutations();
+  const { verifyRider, unassign, setRiderLimit } = useDealerScopeMutations();
+  // [18 R1·R5] 내 좌상 계정 — 배분 모드·총 한도. 모드에 따라 라이더 행의 배분 입력이 갈린다.
+  const { data: account } = useMyDealerAccount();
+  const allocatedTotal = (riders ?? []).reduce((sum, r) => sum + (r.creditLimit ?? 0), 0);
+  // 오버부킹(배분 합계 > 총 한도)은 저장은 허용하되 경고한다(18 R5) — 실제 지급은 총량 게이트가 막는다.
+  const allocatedOver = account != null && allocatedTotal > account.creditLimit;
 
   const total = riders?.length ?? 0;
   const approved = riders?.filter((r) => r.verifyStatus === "APPROVED").length ?? 0;
@@ -122,7 +128,39 @@ export function DealerHomePage() {
       <div className="rounded-card bg-white p-6 shadow-card">
         <h2 className="mb-1 text-lg font-semibold text-gray-900">소속 라이더</h2>
         {/* [17 Q5] 쿠폰 사용은 조회 전용 실적 — 정산 무관 카피(17 C5, 좌상 오해 방지). */}
-        <p className="mb-4 text-xs text-gray-500">쿠폰 사용은 플랫폼 실적 확인용이에요 — 정산과는 무관해요.</p>
+        <p className="mb-2 text-xs text-gray-500">쿠폰 사용은 플랫폼 실적 확인용이에요 — 정산과는 무관해요.</p>
+
+        {/* [18 R1·R5] 크레딧 배분 요약 — 모드별로 카피와 배분 입력 노출이 갈린다.
+            PER_RIDER: 배분 합계/총 한도(초과는 오버부킹 경고, 실제 지급은 2단 게이트가 막는다).
+            POOL: 총량 공유 안내(라이더별 입력 없음 — 값은 저장해 둘 수 있지만 지금은 무시된다). */}
+        {account && (
+          <div
+            data-testid="dealer-credit-summary"
+            className={`mb-4 rounded-card border p-3 text-xs ${
+              allocatedOver ? "border-danger/40 bg-danger/5 text-danger" : "border-gray-100 bg-gray-50 text-gray-600"
+            }`}
+          >
+            {account.allocationMode === "PER_RIDER" ? (
+              <>
+                <p className="font-semibold">라이더별 한도 배분 중</p>
+                <p className="mt-1">
+                  배분 합계 <b>{allocatedTotal.toLocaleString()}P</b> / 총 한도{" "}
+                  <b>{account.creditLimit.toLocaleString()}P</b> · 미정산 사용 {account.usage.toLocaleString()}P
+                  {allocatedOver && " · 배분 합계가 총 한도를 넘었어요(실제 지급은 총 한도에서 막혀요)"}
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="font-semibold">총량 공유 중(선착순)</p>
+                <p className="mt-1">
+                  소속 라이더가 총 한도 <b>{account.creditLimit.toLocaleString()}P</b>를 함께 써요 · 미정산 사용{" "}
+                  {account.usage.toLocaleString()}P · 잔여 {account.headroom.toLocaleString()}P. 라이더별로 나눠 주려면
+                  본사에 <b>라이더별 배분 모드</b> 전환을 요청하세요.
+                </p>
+              </>
+            )}
+          </div>
+        )}
         {isLoading ? (
           <p className="text-sm text-gray-500">불러오는 중...</p>
         ) : riders && riders.length > 0 ? (
@@ -142,6 +180,13 @@ export function DealerHomePage() {
                     {r.verifyStatus} · {r.phone ?? "연락처 없음"} ·{" "}
                     <span data-testid={`coupon-used-${r.id}`}>쿠폰 사용 {couponUsed.get(r.id) ?? 0}장</span>
                   </p>
+                  {/* [18 R5] 배분 모드일 때만 라이더별 한도 입력. 사용액을 함께 보여 남은 몫을 가늠하게 한다. */}
+                  {account?.allocationMode === "PER_RIDER" && (
+                    <RiderLimitField
+                      rider={r}
+                      onSave={(limit) => setRiderLimit(r.id, limit)}
+                    />
+                  )}
                 </div>
                 {/* [16 L9] verify_status별 4-decision 액션 — 서버(rider-verify)가 이미 허용하는
                     액션의 노출뿐(전이 유효성은 Edge/guard가 최종 판정). 파괴적 액션은 다이얼로그. */}
@@ -306,6 +351,77 @@ function Kpi({ label, value, accent = false }: { label: string; value: string; a
     <div className="min-w-0 rounded-card bg-white p-5 shadow-card">
       <p className="text-sm text-gray-500">{label}</p>
       <p className={`mt-1 text-xl font-bold tabular-nums ${accent ? "text-accent-deep" : "text-gray-900"}`}>{value}</p>
+    </div>
+  );
+}
+
+/**
+ * [18 R5] 라이더별 포인트 지급 한도 배분 입력(PER_RIDER 모드 전용).
+ * 비우면 배분 해제(null) — PER_RIDER에서는 0으로 취급돼 그 라이더는 POINT 지급을 할 수 없다.
+ * 저장은 dealer-rider-limit-set Edge(소속 검증 후 service_role RPC)만 통과한다 —
+ * rider_profiles.credit_limit은 guard_rider_verify가 직접 수정을 되돌린다(18 R9).
+ */
+function RiderLimitField({
+  rider,
+  onSave,
+}: {
+  rider: DealerRiderRow;
+  onSave: (limit: number | null) => Promise<{ ok: boolean; message?: string }>;
+}) {
+  const [value, setValue] = useState(rider.creditLimit == null ? "" : String(rider.creditLimit));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  const parsed = value.trim() === "" ? null : Number(value);
+  const invalid = parsed != null && (!Number.isInteger(parsed) || parsed < 0);
+  const dirty = (rider.creditLimit ?? null) !== parsed;
+
+  async function handleSave() {
+    if (invalid) {
+      setError("0 이상의 정수를 입력해주세요.");
+      return;
+    }
+    setError(null);
+    setBusy(true);
+    const result = await onSave(parsed);
+    setBusy(false);
+    if (!result.ok) {
+      setError(result.message ?? "저장에 실패했어요.");
+      return;
+    }
+    setSaved(true);
+  }
+
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2" data-testid={`rider-limit-field-${rider.id}`}>
+      <label className="text-xs text-gray-500" htmlFor={`rider-limit-${rider.id}`}>
+        지급 한도
+      </label>
+      <input
+        id={`rider-limit-${rider.id}`}
+        data-testid={`rider-limit-input-${rider.id}`}
+        inputMode="numeric"
+        placeholder="미배분"
+        value={value}
+        onChange={(e) => {
+          setValue(e.target.value);
+          setSaved(false);
+        }}
+        className="w-28 rounded-button border border-gray-200 px-2 py-1 text-sm tabular-nums"
+      />
+      <span className="text-xs text-gray-500 tabular-nums">P · 사용 {rider.creditUsed.toLocaleString()}P</span>
+      <button
+        type="button"
+        data-testid={`rider-limit-save-${rider.id}`}
+        disabled={busy || invalid || !dirty}
+        onClick={handleSave}
+        className="rounded-button border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+      >
+        {busy ? "저장 중…" : "저장"}
+      </button>
+      {saved && !dirty && <span className="text-xs text-primary">저장됨</span>}
+      {error && <span className="text-xs text-danger">{error}</span>}
     </div>
   );
 }

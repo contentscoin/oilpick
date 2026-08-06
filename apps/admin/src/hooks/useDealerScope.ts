@@ -14,6 +14,10 @@ export interface DealerRiderRow {
   phone: string | null;
   verifyStatus: string;
   isOnline: boolean;
+  /** [18 R2] 배분된 개인 한도(P). null=미배분(PER_RIDER 모드에서 0으로 취급). */
+  creditLimit: number | null;
+  /** [18 R6] 이 라이더의 미정산 POINT 사용액(P) — 배분 대비 소진 표시용. */
+  creditUsed: number;
 }
 
 const scopeKeys = {
@@ -29,7 +33,7 @@ export function useMyRiders() {
     queryFn: async (): Promise<DealerRiderRow[]> => {
       const { data, error } = await supabase
         .from("rider_profiles")
-        .select("id, verify_status, is_online")
+        .select("id, verify_status, is_online, credit_limit")
         .order("verify_status", { ascending: true });
       if (error) throw error;
       const rows = data ?? [];
@@ -40,12 +44,17 @@ export function useMyRiders() {
         .select("id, phone")
         .in("id", rows.map((r) => r.id as string));
       const phones = new Map((profs ?? []).map((p) => [p.id as string, (p.phone as string) ?? null]));
+      // [18 R6] 라이더별 사용액 — v_rider_credit(RLS: 소속 좌상 조회 허용). 배분 대비 소진 표시.
+      const { data: credits } = await supabase.from("v_rider_credit").select("rider_id, used");
+      const usedMap = new Map((credits ?? []).map((c) => [c.rider_id as string, (c.used as number) ?? 0]));
       return rows.map((r) => ({
         id: r.id as string,
         name: names.get(r.id as string) ?? (r.id as string).slice(0, 8),
         phone: phones.get(r.id as string) ?? null,
         verifyStatus: r.verify_status as string,
         isOnline: Boolean(r.is_online),
+        creditLimit: (r.credit_limit as number | null) ?? null,
+        creditUsed: usedMap.get(r.id as string) ?? 0,
       }));
     },
   });
@@ -153,5 +162,43 @@ export function useDealerScopeMutations() {
     return result;
   }
 
-  return { verifyRider, unassign };
+  /** [18 R2] 소속 라이더 개인 한도 배분(dealer-rider-limit-set). null=배분 해제. */
+  async function setRiderLimit(riderId: string, creditLimit: number | null) {
+    const result = await invokeEdgeFunction("dealer-rider-limit-set", { riderId, creditLimit });
+    if (result.ok) invalidate();
+    return result;
+  }
+
+  return { verifyRider, unassign, setRiderLimit };
+}
+
+/** [18 R1·R6] 내 좌상 계정(v_dealer_statement 1행) — 배분 모드·총 한도·잔여. RLS로 본인만. */
+export function useMyDealerAccount() {
+  return useQuery({
+    queryKey: ["dealer", "account"],
+    queryFn: async (): Promise<{
+      allocationMode: "POOL" | "PER_RIDER";
+      creditLimit: number;
+      usage: number;
+      headroom: number;
+    } | null> => {
+      const { data: stmt, error } = await supabase
+        .from("v_dealer_statement")
+        .select("credit_limit, usage, headroom")
+        .maybeSingle();
+      if (error) throw error;
+      if (!stmt) return null;
+      // allocation_mode는 dealer_accounts 본체에서(뷰 컬럼에 없음 — RLS: 본인+admin).
+      const { data: account } = await supabase
+        .from("dealer_accounts")
+        .select("allocation_mode")
+        .maybeSingle();
+      return {
+        allocationMode: ((account?.allocation_mode as "POOL" | "PER_RIDER") ?? "POOL"),
+        creditLimit: (stmt.credit_limit as number) ?? 0,
+        usage: (stmt.usage as number) ?? 0,
+        headroom: (stmt.headroom as number) ?? 0,
+      };
+    },
+  });
 }

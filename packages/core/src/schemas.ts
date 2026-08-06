@@ -635,6 +635,11 @@ export const dealerCreateInputSchema = z.object({
   password: z.string().min(8, "비밀번호는 8자 이상이어야 해요."),
   displayName: z.string().min(1).max(40),
   phone: z.string().min(1).max(20),
+  /**
+   * [18 R8] 초기 사용한도(P). 지정하면 dealer_accounts 행을 함께 생성한다. 생략하면 계정 행이
+   * 없어 크레딧 게이트가 미적용(무제한)이므로 admin 목록에 "한도 미설정" 경고가 뜬다(14 §10 #2).
+   */
+  creditLimit: z.number().int().min(0).optional(),
 });
 export type DealerCreateInput = z.infer<typeof dealerCreateInputSchema>;
 
@@ -703,12 +708,18 @@ export type DealerRiderStats = z.infer<typeof dealerRiderStatsSchema>;
 // ===== 좌상 정산 체인 (14 J3) =====
 
 /** dealer-account-set (admin): 좌상 보증금·한도·임계·요율 upsert. 금액은 정수(원/P). */
+/** [18 R1] 좌상 크레딧 배분 모드. POOL=총량 공유(선착순, 기존 동작) / PER_RIDER=라이더별 배분. */
+export const dealerAllocModeSchema = z.enum(["POOL", "PER_RIDER"]);
+export type DealerAllocMode = z.infer<typeof dealerAllocModeSchema>;
+
 export const dealerAccountSetInputSchema = z.object({
   dealerId: uuidSchema,
   depositAmount: z.number().int().min(0),
   creditLimit: z.number().int().min(0),
   claimThreshold: z.number().int().positive(),
   feeRateBp: z.number().int().min(0).max(10000), // 요율(bp, 1bp=0.01%). 초기 0
+  /** [18 R1] 생략 시 기존 값 유지(신규 행은 POOL). */
+  allocationMode: dealerAllocModeSchema.optional(),
 });
 export type DealerAccountSetInput = z.infer<typeof dealerAccountSetInputSchema>;
 
@@ -718,8 +729,39 @@ export const dealerAccountSchema = z.object({
   credit_limit: z.number().int(),
   claim_threshold: z.number().int(),
   fee_rate_bp: z.number().int(),
+  allocation_mode: dealerAllocModeSchema.default("POOL"),
 });
 export type DealerAccount = z.infer<typeof dealerAccountSchema>;
+
+/**
+ * [18 R2·R9] dealer-rider-limit-set — 라이더 개인 한도 배분(admin + 소속 좌상).
+ * creditLimit=null은 배분 해제(PER_RIDER 모드에서 0으로 취급 = 지급 불가).
+ */
+export const dealerRiderLimitSetInputSchema = z.object({
+  riderId: uuidSchema,
+  creditLimit: z.number().int().min(0).nullable(),
+});
+export type DealerRiderLimitSetInput = z.infer<typeof dealerRiderLimitSetInputSchema>;
+
+export const dealerRiderLimitSetOutputSchema = z.object({
+  riderId: uuidSchema,
+  creditLimit: z.number().int().nullable(),
+});
+export type DealerRiderLimitSetOutput = z.infer<typeof dealerRiderLimitSetOutputSchema>;
+
+/** [18 R6] v_rider_credit — 라이더 게이지바 소스(본인·소속 좌상·admin 조회). */
+export const riderCreditSchema = z.object({
+  rider_id: uuidSchema,
+  dealer_id: uuidSchema.nullable(),
+  allocation_mode: dealerAllocModeSchema.nullable(),
+  limit_amount: z.number().int().nullable(),
+  used: z.number().int(),
+  /** [18 R7] 제출했지만 점주 확인 전인 POINT 건의 예상 지급액(P). available에서 이미 차감돼 있다. */
+  reserved: z.number().int(),
+  available: z.number().int(),
+  is_unlimited: z.boolean(),
+});
+export type RiderCredit = z.infer<typeof riderCreditSchema>;
 
 /** dealer-claim (admin): 좌상 정산 청구 생성/정산/무효. create=dealerId, settle/void=settlementId. */
 export const dealerClaimInputSchema = z.discriminatedUnion("action", [

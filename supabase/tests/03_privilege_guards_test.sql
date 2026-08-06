@@ -120,12 +120,14 @@ select is(
   'service_role 전용 RPC 중 anon/authenticated가 EXECUTE 가능한 함수는 없어야 함');
 
 -- 신규 재무 RPC(J2/J3)는 service_role로는 여전히 호출 가능해야 한다(과잉 revoke 회귀 방지).
+-- [18 R2] fn_set_dealer_account은 배분 모드 파라미터가 붙어 7파라미터로 교체됐다(구 6파라미터 삭제).
 select ok(has_function_privilege('service_role','public.fn_settle_trade(uuid, uuid, text)','EXECUTE')
-      and has_function_privilege('service_role','public.fn_set_dealer_account(uuid, int, int, int, int, uuid)','EXECUTE')
+      and has_function_privilege('service_role','public.fn_set_dealer_account(uuid, int, int, int, int, uuid, dealer_alloc_mode)','EXECUTE')
+      and has_function_privilege('service_role','public.fn_set_rider_credit_limit(uuid, int, uuid)','EXECUTE')
       and has_function_privilege('service_role','public.fn_create_dealer_claim(uuid, uuid)','EXECUTE')
       and has_function_privilege('service_role','public.fn_settle_dealer_claim(uuid, uuid)','EXECUTE')
       and has_function_privilege('service_role','public.fn_void_dealer_claim(uuid, uuid)','EXECUTE'),
-          'service_role은 신유·좌상정산 RPC 5종 EXECUTE 가능');
+          'service_role은 신유·좌상정산 RPC 6종 EXECUTE 가능(18 R2 배분 RPC 포함)');
 
 -- RLS 헬퍼는 회수 대상이 아니다(회수하면 정책 평가가 42501로 실패 → 조회 전면 붕괴).
 select ok(has_function_privilege('authenticated','public.fn_current_role()','EXECUTE')

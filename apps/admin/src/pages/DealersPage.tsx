@@ -7,7 +7,9 @@ export function DealersPage() {
   const { data: riders } = useAssignableRiders();
   const { createDealer, assignRider, updateDealer } = useDealerMutations();
 
-  const [form, setForm] = useState({ username: "", password: "", displayName: "", phone: "" });
+  // [18 R8] creditLimit — 입력하면 좌상 생성과 동시에 크레딧 계정이 만들어져 한도 게이트가 켜진다.
+  // 비우면 계정 행이 없어 게이트가 통째로 건너뛰어지므로(무제한) 목록에 경고 배지가 뜬다.
+  const [form, setForm] = useState({ username: "", password: "", displayName: "", phone: "", creditLimit: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -16,14 +18,25 @@ export function DealersPage() {
     setError(null);
     setNotice(null);
     setBusy(true);
-    const result = await createDealer(form);
+    const { creditLimit, ...rest } = form;
+    const parsedLimit = creditLimit.trim() === "" ? undefined : Number(creditLimit);
+    if (parsedLimit != null && (!Number.isInteger(parsedLimit) || parsedLimit < 0)) {
+      setBusy(false);
+      setError("초기 한도는 0 이상의 정수로 입력해주세요.");
+      return;
+    }
+    const result = await createDealer({ ...rest, ...(parsedLimit != null ? { creditLimit: parsedLimit } : {}) });
     setBusy(false);
     if (!result.ok) {
       setError(result.message);
       return;
     }
-    setNotice(`좌상 '${form.displayName}' 계정을 만들었어요.`);
-    setForm({ username: "", password: "", displayName: "", phone: "" });
+    setNotice(
+      parsedLimit != null
+        ? `좌상 '${form.displayName}' 계정을 만들었어요(초기 한도 ${parsedLimit.toLocaleString()}P).`
+        : `좌상 '${form.displayName}' 계정을 만들었어요. 한도가 없으면 사용 제한이 적용되지 않아요 — 정산 화면에서 등록하세요.`,
+    );
+    setForm({ username: "", password: "", displayName: "", phone: "", creditLimit: "" });
   }
 
   const canSubmit = form.username.length >= 3 && form.password.length >= 8 && form.displayName.trim().length > 0;
@@ -67,6 +80,15 @@ export function DealersPage() {
             value={form.phone}
             onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
             className="rounded-button border border-gray-200 px-3 py-2 text-sm"
+          />
+          {/* [18 R8] 초기 사용한도(선택) — 비우면 크레딧 계정이 없어 한도 제한이 적용되지 않는다. */}
+          <input
+            data-testid="dealer-credit-limit"
+            inputMode="numeric"
+            placeholder="초기 사용한도(P, 선택 — 비우면 무제한)"
+            value={form.creditLimit}
+            onChange={(e) => setForm((f) => ({ ...f, creditLimit: e.target.value }))}
+            className="rounded-button border border-gray-200 px-3 py-2 text-sm tabular-nums"
           />
         </div>
         {error && <p data-testid="dealer-error" className="mt-3 text-sm text-danger">{error}</p>}
@@ -191,8 +213,23 @@ function DealerListItem({
   return (
     <li className="rounded-card border border-gray-100 px-3 py-2 text-sm" data-testid={`dealer-item-${dealer.id}`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="min-w-0 font-medium text-gray-800">{dealer.displayName}</span>
+        <span className="min-w-0 font-medium text-gray-800">
+          {dealer.displayName}
+          {/* [18 R8·X1] 크레딧 계정 미등록 = 게이트 미적용(무제한 POINT 발행). 온보딩 누락을 가시화한다. */}
+          {!dealer.hasAccount && (
+            <span
+              data-testid={`dealer-no-account-${dealer.id}`}
+              title="크레딧 계정이 없어 사용한도 제한이 적용되지 않아요. 정산 화면에서 한도를 등록하세요."
+              className="ml-2 rounded-pill bg-danger/10 px-2 py-0.5 text-xs font-semibold text-danger"
+            >
+              한도 미설정
+            </span>
+          )}
+        </span>
         <span className="flex items-center gap-3">
+          {dealer.creditLimit != null && (
+            <span className="text-xs tabular-nums text-gray-500">한도 {dealer.creditLimit.toLocaleString()}P</span>
+          )}
           <span className="text-gray-500">{dealer.phone}</span>
           <button
             type="button"

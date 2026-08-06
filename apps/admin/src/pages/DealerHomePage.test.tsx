@@ -3,23 +3,40 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DealerHomePage } from "./DealerHomePage";
 
 // 13 I4: 좌상 관할 대시보드 — 소속 라이더 목록·KPI·승인 액션.
-const { mockUseMyRiders, mockUseMyRiderStats, mockVerifyRider, mockUnassign, mockUseDealerActiveOrders } = vi.hoisted(() => ({
+const {
+  mockUseMyRiders,
+  mockUseMyRiderStats,
+  mockVerifyRider,
+  mockUnassign,
+  mockSetRiderLimit,
+  mockUseDealerActiveOrders,
+  mockUseMyDealerAccount,
+} = vi.hoisted(() => ({
   mockUseMyRiders: vi.fn(),
   mockUseMyRiderStats: vi.fn(),
   mockVerifyRider: vi.fn(),
   mockUnassign: vi.fn(),
+  mockSetRiderLimit: vi.fn(),
   mockUseDealerActiveOrders: vi.fn(),
+  mockUseMyDealerAccount: vi.fn(),
 }));
 vi.mock("../hooks/useDealerScope", () => ({
   useMyRiders: () => mockUseMyRiders(),
   useMyRiderStats: () => mockUseMyRiderStats(),
   useDealerActiveOrders: () => mockUseDealerActiveOrders(),
-  useDealerScopeMutations: () => ({ verifyRider: mockVerifyRider, unassign: mockUnassign }),
+  // [18 R1·R5] 배분 모드/총 한도 — 크레딧 요약 배너·라이더별 배분 입력 노출을 가른다.
+  useMyDealerAccount: () => mockUseMyDealerAccount(),
+  useDealerScopeMutations: () => ({
+    verifyRider: mockVerifyRider,
+    unassign: mockUnassign,
+    setRiderLimit: mockSetRiderLimit,
+  }),
 }));
 
+// [18 R2] creditLimit/creditUsed는 DealerRiderRow 필수 필드(배분 입력·소진 표시).
 const RIDERS = [
-  { id: "r1", name: "김라이더", phone: "010", verifyStatus: "PENDING", isOnline: false },
-  { id: "r2", name: "이라이더", phone: "011", verifyStatus: "APPROVED", isOnline: true },
+  { id: "r1", name: "김라이더", phone: "010", verifyStatus: "PENDING", isOnline: false, creditLimit: null, creditUsed: 0 },
+  { id: "r2", name: "이라이더", phone: "011", verifyStatus: "APPROVED", isOnline: true, creditLimit: 50000, creditUsed: 12000 },
 ];
 const STATS = [
   { rider_id: "r2", dealer_id: "d1", rider_name: "이라이더", verify_status: "APPROVED", is_online: true,
@@ -33,8 +50,13 @@ describe("DealerHomePage (13 I4)", () => {
     mockUseMyRiders.mockReturnValue({ data: RIDERS, isLoading: false });
     mockUseMyRiderStats.mockReturnValue({ data: STATS });
     mockUseDealerActiveOrders.mockReturnValue({ data: [] });
+    // [18 R1] 기본은 POOL(총량 공유) — 기존 단언들이 배분 입력 없이 그대로 통과한다.
+    mockUseMyDealerAccount.mockReturnValue({
+      data: { allocationMode: "POOL", creditLimit: 1000000, usage: 12000, headroom: 988000 },
+    });
     mockVerifyRider.mockResolvedValue({ ok: true });
     mockUnassign.mockResolvedValue({ ok: true });
+    mockSetRiderLimit.mockResolvedValue({ ok: true });
   });
 
   it("KPI 요약과 소속 라이더 목록을 렌더한다", () => {
@@ -78,8 +100,13 @@ describe("DealerHomePage — 4-decision 액션 완성(16 L9)", () => {
     mockUseMyRiders.mockReturnValue({ data: RIDERS, isLoading: false });
     mockUseMyRiderStats.mockReturnValue({ data: STATS });
     mockUseDealerActiveOrders.mockReturnValue({ data: [] });
+    // [18 R1] 기본은 POOL(총량 공유) — 기존 단언들이 배분 입력 없이 그대로 통과한다.
+    mockUseMyDealerAccount.mockReturnValue({
+      data: { allocationMode: "POOL", creditLimit: 1000000, usage: 12000, headroom: 988000 },
+    });
     mockVerifyRider.mockResolvedValue({ ok: true });
     mockUnassign.mockResolvedValue({ ok: true });
+    mockSetRiderLimit.mockResolvedValue({ ok: true });
   });
 
   it("PENDING: [반려]는 사유 없인 확정 불가, 사유 입력 후 REJECTED 호출", async () => {
@@ -126,8 +153,13 @@ describe("DealerHomePage — 진행중 운행 관제(16 L6)", () => {
     mockUseMyRiders.mockReturnValue({ data: RIDERS, isLoading: false });
     mockUseMyRiderStats.mockReturnValue({ data: STATS });
     mockUseDealerActiveOrders.mockReturnValue({ data: [] });
+    // [18 R1] 기본은 POOL(총량 공유) — 기존 단언들이 배분 입력 없이 그대로 통과한다.
+    mockUseMyDealerAccount.mockReturnValue({
+      data: { allocationMode: "POOL", creditLimit: 1000000, usage: 12000, headroom: 988000 },
+    });
     mockVerifyRider.mockResolvedValue({ ok: true });
     mockUnassign.mockResolvedValue({ ok: true });
+    mockSetRiderLimit.mockResolvedValue({ ok: true });
   });
 
   const BASE_ORDER = {
@@ -175,5 +207,57 @@ describe("DealerHomePage — 진행중 운행 관제(16 L6)", () => {
     mockUseDealerActiveOrders.mockReturnValue({ data: [] });
     render(<DealerHomePage />);
     expect(screen.getByTestId("dealer-active-empty")).toBeInTheDocument();
+  });
+});
+
+// [18 R1·R5] 크레딧 배분 — 모드별 요약 배너 + PER_RIDER에서만 라이더별 한도 입력.
+describe("DealerHomePage — 크레딧 배분(18 R5)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockUseMyRiders.mockReturnValue({ data: RIDERS, isLoading: false });
+    mockUseMyRiderStats.mockReturnValue({ data: STATS });
+    mockUseDealerActiveOrders.mockReturnValue({ data: [] });
+    mockVerifyRider.mockResolvedValue({ ok: true });
+    mockUnassign.mockResolvedValue({ ok: true });
+    mockSetRiderLimit.mockResolvedValue({ ok: true });
+  });
+
+  it("POOL 모드: 총량 공유 안내만 뜨고 라이더별 배분 입력은 없다", () => {
+    mockUseMyDealerAccount.mockReturnValue({
+      data: { allocationMode: "POOL", creditLimit: 1000000, usage: 12000, headroom: 988000 },
+    });
+    render(<DealerHomePage />);
+    expect(screen.getByTestId("dealer-credit-summary").textContent).toContain("총량 공유 중");
+    expect(screen.queryByTestId("rider-limit-field-r2")).not.toBeInTheDocument();
+  });
+
+  it("PER_RIDER 모드: 배분 합계/총 한도를 보여주고 라이더별 입력으로 한도를 저장한다", async () => {
+    mockUseMyDealerAccount.mockReturnValue({
+      data: { allocationMode: "PER_RIDER", creditLimit: 1000000, usage: 12000, headroom: 988000 },
+    });
+    render(<DealerHomePage />);
+    // 배분 합계 = r1(null→0) + r2(50,000)
+    expect(screen.getByTestId("dealer-credit-summary").textContent).toContain("50,000P");
+    fireEvent.change(screen.getByTestId("rider-limit-input-r2"), { target: { value: "70000" } });
+    fireEvent.click(screen.getByTestId("rider-limit-save-r2"));
+    await waitFor(() => expect(mockSetRiderLimit).toHaveBeenCalledWith("r2", 70000));
+  });
+
+  it("PER_RIDER 모드: 배분 합계가 총 한도를 넘으면 오버부킹 경고를 띄운다(저장 자체는 허용)", () => {
+    mockUseMyDealerAccount.mockReturnValue({
+      data: { allocationMode: "PER_RIDER", creditLimit: 10000, usage: 0, headroom: 10000 },
+    });
+    render(<DealerHomePage />);
+    expect(screen.getByTestId("dealer-credit-summary").textContent).toContain("총 한도를 넘었어요");
+  });
+
+  it("PER_RIDER 모드: 입력을 비우면 배분 해제(null)로 저장한다", async () => {
+    mockUseMyDealerAccount.mockReturnValue({
+      data: { allocationMode: "PER_RIDER", creditLimit: 1000000, usage: 0, headroom: 1000000 },
+    });
+    render(<DealerHomePage />);
+    fireEvent.change(screen.getByTestId("rider-limit-input-r2"), { target: { value: "" } });
+    fireEvent.click(screen.getByTestId("rider-limit-save-r2"));
+    await waitFor(() => expect(mockSetRiderLimit).toHaveBeenCalledWith("r2", null));
   });
 });

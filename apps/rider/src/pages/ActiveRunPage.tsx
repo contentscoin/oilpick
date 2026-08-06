@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   BigButton,
   CheckList,
+  CreditGaugeBar,
   EmptyState,
   MapView,
   NumberFlow,
@@ -39,6 +40,7 @@ import {
   type OrderKind,
   type OrderStatus,
   type PayoutMethod,
+  type RiderCredit,
   type PickupGeo,
   ORDER_STATUS_LABEL,
 } from "@oilpick/core";
@@ -50,6 +52,7 @@ import { useActiveRun, useActiveRunSummaries, type ActiveRunSummary } from "../h
 import { useDirections } from "../hooks/useDirections";
 import { useGeolocation, type GeoPosition } from "../hooks/useGeolocation";
 import { useRiderLocationPusher } from "../hooks/useRiderLocationPusher";
+import { useRiderCredit } from "../hooks/useRiderCredit";
 import { distanceKm } from "../lib/geo";
 import {
   clearDraft,
@@ -89,6 +92,8 @@ export function ActiveRunPage() {
   // [16 L3] 내 위치 1회 조회 — 전환기 거리·권장 순서(§3-3)와 경로 미리보기 origin(§3-1) 공용.
   // 권한 거부·실패 시 null: 거리 칩·경로선 미표기 폴백(운행 흐름은 그대로).
   const position = useGeolocation(true);
+  // [18 R7] 내 포인트 지급 한도 — ARRIVED 계량 패널의 POINT fail-fast/게이지에 쓴다.
+  const { data: credit, refetch: refetchCredit } = useRiderCredit(riderId);
 
   useRiderLocationPusher(Boolean(run));
 
@@ -154,6 +159,9 @@ export function ActiveRunPage() {
           orderKind={run.orderKind}
           purchaseRequestedCans={run.purchaseRequestedCans}
           snapshotFreshCanPrice={run.snapshotFreshCanPrice}
+          submittedDeliveredCans={run.deliveredCans}
+          credit={credit ?? null}
+          onCreditRefresh={() => void refetchCredit?.()}
         />
       )}
       {run.status === "DISPUTED" && (
@@ -627,6 +635,9 @@ function ArrivedPanel({
   orderKind,
   purchaseRequestedCans,
   snapshotFreshCanPrice,
+  submittedDeliveredCans,
+  credit,
+  onCreditRefresh,
 }: {
   orderId: string;
   /** [N5] 요청 kg(requested_kg) — 계량 입력 프리필. 0(신유 단독)이면 빈 값 유지. */
@@ -642,6 +653,12 @@ function ArrivedPanel({
   orderKind: OrderKind | null;
   purchaseRequestedCans: number | null;
   snapshotFreshCanPrice: number | null;
+  /** [18 R7] 기제출 배달 통수 — 재제출 시 이 주문의 예약분을 정확히 되돌리는 데 쓴다. */
+  submittedDeliveredCans: number | null;
+  /** [18 R7] 내 포인트 지급 한도(v_rider_credit). POINT 선택 시 fail-fast 판정에 쓴다. null=한도 없음. */
+  credit: RiderCredit | null;
+  /** [18 R7] 제출 성공 직후 크레딧 재조회 — 방금 제출분이 예약분에 즉시 반영되게 한다. */
+  onCreditRefresh?: () => void;
 }) {
   // [14 J2] 구매 동반(PURCHASE/MIXED)이면 현장 배달 통수를 입력받고 폐유 수령액과 상계한다.
   const purchaseInvolved = orderKind === "PURCHASE" || orderKind === "MIXED";
@@ -1129,6 +1146,9 @@ function ArrivedPanel({
         uploadedUrlsRef.current = {};
         setDraftRestoredAt(null);
         void clearDraft(orderId);
+        // [18 R7] 방금 제출분이 예약분(reserved)에 잡히도록 크레딧을 즉시 다시 읽는다.
+        // 이게 없으면 staleTime 창 동안 낡은 잔여로 다음 건이 통과하고, 그 실패는 점주가 본다.
+        onCreditRefresh?.();
       } else {
         lastSubmitFailedRef.current = true;
         showToast(result.message, { variant: "error" });
@@ -1167,6 +1187,33 @@ function ArrivedPanel({
   const purchaseAmount =
     purchaseInvolved && snapshotFreshCanPrice != null ? estimatePurchase(deliveredCans, snapshotFreshCanPrice) : 0;
   const netAmount = payoutAmount - purchaseAmount;
+
+  // [18 R7] 크레딧 fail-fast — POINT 지급으로 점주에게 실제 발행될 금액은 상계 후 순액(netAmount>0).
+  // 이 금액이 잔여 한도를 넘으면 서버(fn_settle_trade)가 점주 확인 시점에 거부한다(18 X2). 그 에러가
+  // 무관한 점주에게 도달하지 않도록 제출 자체를 여기서 막는다. 서버 게이트는 동시성 최종 방어선으로 유지.
+  const creditApplies = isPointSelected && credit != null && !credit.is_unlimited && credit.limit_amount != null;
+  const pendingPointAmount = netAmount > 0 ? netAmount : 0;
+  // 재제출이면 **이 주문의 기존 제출분이 이미 credit.reserved에 잡혀 있다** — 그대로 두면 같은 건을
+  // 두 번 세어 정상 재제출까지 막힌다. 이 주문 몫만 정확히 되돌린다: 뷰의 reserved 산식과 동일하게
+  // (기제출 measured_kg × 시세 − 기제출 통수 × 통당가), 음수는 0. 다른 주문의 예약분을 건드리지
+  // 않도록 **전체 reserved로 클램프하지 않는다**(그러면 남의 예약분까지 잔여로 복원된다).
+  const priorReserved =
+    submittedPayoutMethod === "POINT" && measuredKg != null
+      ? Math.max(
+          estimateCash(measuredKg, snapshotPricePerKg) -
+            (submittedDeliveredCans ?? 0) * (snapshotFreshCanPrice ?? 0),
+          0,
+        )
+      : 0;
+  // ⚠️ credit.available은 뷰가 **0으로 클램프한** 값이다(greatest(..., 0)). 여기에 priorReserved를
+  // 더하면 이미 한도를 넘긴 상태(원값 < 0)에서 잘려나간 초과분만큼 잔여가 부풀려져 fail-fast가
+  // 통째로 뚫린다. 클램프 이전 값에서 다시 계산한다 — limit/used/reserved는 뷰가 이미 내려준다.
+  const remainingReserved = Math.max((credit?.reserved ?? 0) - priorReserved, 0);
+  const effectiveAvailable = Math.max(
+    (credit?.limit_amount ?? 0) - (credit?.used ?? 0) - remainingReserved,
+    0,
+  );
+  const creditBlocked = creditApplies && pendingPointAmount > effectiveAvailable;
 
   return (
     <form data-testid="run-arrived-panel" onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -1259,6 +1306,19 @@ function ArrivedPanel({
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <span style={{ fontSize: 14, fontWeight: 600, color: gray[800] }}>지급 수단 (필수)</span>
           <PayoutMethodSelect value={payout} onChange={setPayout} disabled={submitting} />
+          {/* [18 R6·R7] POINT를 고른 순간 내 잔여 한도와 이번 건을 대조해 보여준다. 초과면
+              아래 제출 버튼이 잠기고 현금으로 유도한다(점주에게 에러가 가지 않게). */}
+          {creditApplies && (
+            <CreditGaugeBar
+              data-testid="measure-credit-gauge"
+              limitAmount={credit!.limit_amount}
+              used={credit!.used}
+              reserved={remainingReserved}
+              available={effectiveAvailable}
+              allocationMode={credit!.allocation_mode}
+              pendingAmount={pendingPointAmount}
+            />
+          )}
         </div>
 
         {/* 08 G6-③: 지급액 미리보기 — 수단별 라벨/단위 분기. 앰버(accent) 강조 배너. */}
@@ -1538,16 +1598,20 @@ function ArrivedPanel({
 
       {/* E8-③: 업로드 중에는 loading 스피너 문구("처리 중...") 대신 진행 카운트를 버튼에 노출한다
           (loading=true면 BigButton이 children을 숨기므로 disabled로만 잠근다). */}
+      {/* [18 R7] 한도 초과 상태에서는 제출을 잠근다 — 제출해봐야 점주 확인 단계에서 서버가 거부하고
+          그 에러를 점주가 보게 된다(18 X2). 현금 전환이 유일한 진행 경로임을 버튼 문구로 알린다. */}
       <BigButton
         type="submit"
         data-testid="submit-measure-button"
         loading={submitting && !uploadProgress}
-        disabled={submitting}
+        disabled={submitting || creditBlocked}
       >
         {uploadProgress ? (
           <span data-testid="upload-progress">
             사진 {uploadProgress.current}/{uploadProgress.total} 업로드 중
           </span>
+        ) : creditBlocked ? (
+          "한도 초과 — 현금 지급으로 바꿔주세요"
         ) : (
           "계량 제출 → 사장님 확인 요청"
         )}
