@@ -63,7 +63,8 @@
   확장). `AdminShell` 메뉴를 role 필터로 렌더:
   - admin: 기존 전체 + **좌상 관리**(`/dealers`).
   - dealer: **관할 대시보드**(`/`) · **소속 라이더**(`/my-riders`, 승인 액션 포함) · **실적**(`/performance`)만.
-- **/dealers**(admin): 좌상 목록·생성(dealer-create)·라이더 배정 UI(라이더 검색 → dealer-assign,
+- **/dealers**(admin): 좌상 목록·생성(dealer-create)·**수정(dealer-update — 아이디/비밀번호/상호/
+  연락처 인라인 폼, CEO 2026-08-06 보강. 02-api §20-2)**·라이더 배정 UI(라이더 검색 → dealer-assign,
   미배정 라이더 필터). 라이더 상세(기존 Users/Riders 화면)에 소속 좌상 표시+변경.
 - **dealer 화면**: 관할 대시보드(소속 라이더 진행중/오늘 완료/수거 kg — 기존 대시보드 훅 재사용,
   RLS가 범위 강제), 소속 라이더 목록(온라인/승인 상태·연락처 + **승인 버튼** rider-verify),

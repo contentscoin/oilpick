@@ -32,7 +32,8 @@ supabase link --project-ref <PROJECT_REF>
 supabase db push
 
 # Edge Functions 배포 — 08 withdraw-*/point-adjust 부활, 09 referral-code/attach/settle,
-# 11 M9-b directions, 13 dealer-create/dealer-assign, [17 Q2] coupon-* 6종 재복원
+# 11 M9-b directions, 13 dealer-create/dealer-assign(+dealer-update, 08 Q절 CEO 2026-08-06),
+# [17 Q2] coupon-* 6종 재복원
 # (coupon-purchase-intent/confirm/return·coupon-refund/adjust/price-set — return은
 # verify_jwt=false). verify_jwt 등은 supabase/config.toml을 따른다.
 supabase functions deploy

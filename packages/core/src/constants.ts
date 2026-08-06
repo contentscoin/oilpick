@@ -24,6 +24,9 @@ export const PAYOUT_METHOD_LABEL: Record<PayoutMethod, string> = {
 /** 최소 출금 포인트(P). 00-domain.md "포인트 원장 규칙". */
 export const MIN_WITHDRAW = 10000;
 
+/** 출금 신청 1회당 수수료(P). 08-payout-pivot.md Q1 — fn_request_withdraw의 v_fee와 동기. */
+export const WITHDRAW_FEE_POINT = 1000;
+
 /** 매칭 브로드캐스트 반경 단계(km). 00-domain.md "매칭 규칙" 1~2. */
 export const BROADCAST_RADII = [3, 7, 15] as const;
 

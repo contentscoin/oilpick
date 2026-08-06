@@ -34,6 +34,8 @@ export * from "./components/StatusHeadline";
 export * from "./components/DriverCard";
 export * from "./components/InfoStatCard";
 export * from "./components/LedgerList";
+// [08 Q] 지급·출금 세금/수수료 안내(부가세·3.3%·출금 수수료) — 정책 문구의 유일한 렌더 경로.
+export * from "./components/PayoutTaxNotice";
 export * from "./components/Mascot";
 // [14 §브랜드] 폐유 심볼/붓글씨 워드마크/락업 + 모바일 고정 프레임. 구 BrandMark는 PayouSymbol/Lockup으로 대체.
 export * from "./components/PayouSymbol";

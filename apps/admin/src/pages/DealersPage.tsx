@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { useDealers, useAssignableRiders, useDealerMutations } from "../hooks/useDealersAdmin";
+import { useDealers, useAssignableRiders, useDealerMutations, type DealerRow } from "../hooks/useDealersAdmin";
 
-/** 13 I3【admin】 좌상 관리 — 좌상 계정 생성 + 라이더 소속 배정. */
+/** 13 I3【admin】 좌상 관리 — 좌상 계정 생성·수정(아이디/비밀번호/상호/연락처) + 라이더 소속 배정. */
 export function DealersPage() {
   const { data: dealers, isLoading } = useDealers();
   const { data: riders } = useAssignableRiders();
-  const { createDealer, assignRider } = useDealerMutations();
+  const { createDealer, assignRider, updateDealer } = useDealerMutations();
 
   const [form, setForm] = useState({ username: "", password: "", displayName: "", phone: "" });
   const [busy, setBusy] = useState(false);
@@ -90,10 +90,7 @@ export function DealersPage() {
         ) : dealers && dealers.length > 0 ? (
           <ul className="flex flex-col gap-2" data-testid="dealer-list">
             {dealers.map((d) => (
-              <li key={d.id} className="flex flex-wrap items-center justify-between gap-2 rounded-card border border-gray-100 px-3 py-2 text-sm">
-                <span className="min-w-0 font-medium text-gray-800">{d.displayName}</span>
-                <span className="text-gray-500">{d.phone}</span>
-              </li>
+              <DealerListItem key={d.id} dealer={d} onUpdate={updateDealer} />
             ))}
           </ul>
         ) : (
@@ -135,5 +132,124 @@ export function DealersPage() {
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * 좌상 목록 행 + 인라인 수정 폼(13 I2 보강, CEO 2026-08-06 "좌상 정보수정 — 아이디·비번").
+ * [수정]을 열면 아이디/새 비밀번호/상호/연락처 입력 — 비워둔 항목은 변경하지 않는다(부분 수정).
+ * 아이디 변경은 로그인 email(<아이디>@oilpick.local) 재매핑, 비밀번호는 관리자 재설정이라
+ * 현재 비밀번호 없이 즉시 반영된다(dealer-update Edge).
+ */
+function DealerListItem({
+  dealer,
+  onUpdate,
+}: {
+  dealer: DealerRow;
+  onUpdate: (input: {
+    dealerId: string;
+    username?: string;
+    password?: string;
+    displayName?: string;
+    phone?: string;
+  }) => Promise<{ ok: boolean; message?: string }>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({ username: "", password: "", displayName: "", phone: "" });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  function openEdit() {
+    setForm({ username: "", password: "", displayName: dealer.displayName, phone: dealer.phone });
+    setError(null);
+    setNotice(null);
+    setEditing(true);
+  }
+
+  async function handleSave() {
+    setError(null);
+    const username = form.username.trim() || undefined;
+    const password = form.password || undefined;
+    const displayName = form.displayName.trim() && form.displayName.trim() !== dealer.displayName ? form.displayName.trim() : undefined;
+    const phone = form.phone.trim() && form.phone.trim() !== dealer.phone ? form.phone.trim() : undefined;
+    if (!username && !password && !displayName && !phone) {
+      setError("수정할 항목을 하나 이상 입력해주세요.");
+      return;
+    }
+    setBusy(true);
+    const result = await onUpdate({ dealerId: dealer.id, username, password, displayName, phone });
+    setBusy(false);
+    if (!result.ok) {
+      setError(result.message ?? "수정에 실패했어요.");
+      return;
+    }
+    setNotice("수정했어요. 변경한 아이디/비밀번호로 다시 로그인해야 해요.");
+    setEditing(false);
+  }
+
+  return (
+    <li className="rounded-card border border-gray-100 px-3 py-2 text-sm" data-testid={`dealer-item-${dealer.id}`}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="min-w-0 font-medium text-gray-800">{dealer.displayName}</span>
+        <span className="flex items-center gap-3">
+          <span className="text-gray-500">{dealer.phone}</span>
+          <button
+            type="button"
+            data-testid={`dealer-edit-button-${dealer.id}`}
+            onClick={() => (editing ? setEditing(false) : openEdit())}
+            className="rounded-button border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50"
+          >
+            {editing ? "닫기" : "수정"}
+          </button>
+        </span>
+      </div>
+      {notice && !editing && <p data-testid={`dealer-update-notice-${dealer.id}`} className="mt-2 text-xs text-primary">{notice}</p>}
+      {editing && (
+        <div className="mt-3 flex flex-col gap-2 border-t border-gray-100 pt-3">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <input
+              data-testid={`dealer-edit-username-${dealer.id}`}
+              placeholder="새 아이디(비우면 유지)"
+              value={form.username}
+              onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))}
+              className="rounded-button border border-gray-200 px-3 py-2 text-sm"
+            />
+            <input
+              data-testid={`dealer-edit-password-${dealer.id}`}
+              type="password"
+              placeholder="새 비밀번호(비우면 유지, 8자 이상)"
+              value={form.password}
+              onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+              className="rounded-button border border-gray-200 px-3 py-2 text-sm"
+            />
+            <input
+              data-testid={`dealer-edit-name-${dealer.id}`}
+              placeholder="상호/이름"
+              value={form.displayName}
+              onChange={(e) => setForm((f) => ({ ...f, displayName: e.target.value }))}
+              className="rounded-button border border-gray-200 px-3 py-2 text-sm"
+            />
+            <input
+              data-testid={`dealer-edit-phone-${dealer.id}`}
+              placeholder="연락처"
+              value={form.phone}
+              onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+              className="rounded-button border border-gray-200 px-3 py-2 text-sm"
+            />
+          </div>
+          {error && <p data-testid={`dealer-update-error-${dealer.id}`} className="text-xs text-danger">{error}</p>}
+          <button
+            type="button"
+            data-testid={`dealer-update-save-${dealer.id}`}
+            disabled={busy || (form.password.length > 0 && form.password.length < 8)}
+            onClick={handleSave}
+            className="self-start rounded-button bg-primary px-3 py-1.5 text-xs font-semibold text-white shadow-card disabled:opacity-50"
+          >
+            {busy ? "저장 중…" : "저장"}
+          </button>
+        </div>
+      )}
+    </li>
   );
 }

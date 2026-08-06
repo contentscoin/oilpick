@@ -9,7 +9,7 @@ create type order_status as enum ('REQUESTED','ACCEPTED','ARRIVED','PICKED_UP','
 -- [08 P3·P4] 포인트 복권 — 현역: EARN(POINT 지급수단 적립)/WITHDRAW_REQUEST/WITHDRAW_CANCEL/ADJUST.
 -- [09 H5] REFERRAL(추천 활성화 시 점주 보너스, +부호·출금 가능) 추가(실 DDL: 20260715000003 alter type add value).
 -- 레거시 전용(신규 발행 없음): HOLD/RELEASE(구모델 수거비), PURCHASE(미래 예약).
-create type ledger_type as enum ('EARN','HOLD','RELEASE','WITHDRAW_REQUEST','WITHDRAW_CANCEL','ADJUST','PURCHASE','REFERRAL','TRADE_PURCHASE'); -- [14 J2] TRADE_PURCHASE=신유 대금 포인트 차감(음수). PURCHASE(쇼핑몰 결제)와 별개
+create type ledger_type as enum ('EARN','HOLD','RELEASE','WITHDRAW_REQUEST','WITHDRAW_CANCEL','ADJUST','PURCHASE','REFERRAL','TRADE_PURCHASE','WITHDRAW_FEE'); -- [14 J2] TRADE_PURCHASE=신유 대금 포인트 차감(음수). PURCHASE(쇼핑몰 결제)와 별개. [08 Q1] WITHDRAW_FEE=출금 수수료(-1,000P, 신청 시)
 create type order_kind as enum ('PICKUP','PURCHASE','MIXED'); -- [14 J2] 주문 종류. null=레거시=PICKUP
 create type dealer_settlement_status as enum ('CLAIMED','SETTLED','VOID'); -- [14 J3] 좌상 정산 청구 상태
 -- [09 H2] 라이더 추천 상태(SIGNED_UP=가입, ACTIVATED=첫 수거 완료·보너스 발행, CANCELLED)
@@ -357,9 +357,10 @@ from coupon_ledger group by rider_id;
 --   coalesce(payout_method,'CASH')='POINT'면 같은 트랜잭션에서 fn_post_ledger(supplier,'EARN',
 --   cash_paid_amount, order_id) 발행 — 포인트 복권의 유일한 적립 경로. 멱등은 point_ledger
 --   unique(order_id, entry_type, user_id). ACCEPT/CANCEL의 쿠폰 분기는 전환기 잔존 주문 전용 보존(08 P1).
--- 출금 RPC 복권(08 P4 — 기존 정의 그대로 현역): fn_request_withdraw(20260704000007, user 단위
---   FOR UPDATE 직렬화·최소 10,000P·WITHDRAW_REQUEST(-)+withdrawals insert 원자) /
---   fn_process_withdraw(20260704000008, REQUESTED→APPROVED→PAID / REJECTED 시 WITHDRAW_CANCEL(+) 복구).
+-- 출금 RPC 복권(08 P4) + 수수료 개정(08 Q1 — 20260806000002): fn_request_withdraw(user 단위
+--   FOR UPDATE 직렬화·최소 10,000P·available ≥ amount+1,000 →
+--   WITHDRAW_REQUEST(-amount)+WITHDRAW_FEE(-1,000)+withdrawals insert(fee 스냅샷) 원자) /
+--   fn_process_withdraw(REQUESTED→APPROVED→PAID / REJECTED 시 WITHDRAW_CANCEL(+amount+fee) 전액 복구).
 
 -- ===== 쿠폰 구매 확정·환불 RPC [07 F4] — 실 정의는 supabase/migrations/20260709000005_rpc_purchase.sql =====
 -- PG 결제(토스페이먼츠) 경로. 둘 다 SECURITY DEFINER + search_path=public + revoke all/grant service_role.
@@ -416,6 +417,7 @@ create table withdrawals (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references profiles(id),
   amount int not null check (amount >= 10000),
+  fee int not null default 0, -- [08 Q1] 신청 시점 출금 수수료 스냅샷(현행 1,000P). 반려 복구 = amount+fee
   status withdraw_status not null default 'REQUESTED',
   bank_name text not null, bank_account text not null, bank_holder text not null,
   admin_memo text,
