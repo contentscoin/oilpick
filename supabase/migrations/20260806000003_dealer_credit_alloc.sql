@@ -103,29 +103,35 @@ left join dealer_accounts da on da.dealer_id = rp.dealer_id
 left join lateral (
   select
     coalesce(sum(o.net_amount) filter (where o.status = 'COMPLETED'), 0)::int as used,
+    -- kg는 fn_settle_trade와 **같은 식**(coalesce(final_kg, measured_kg))을 써야 한다. 중재
+    -- (RESOLVE_DISPUTE)는 status를 ARRIVED로 되돌리며 final_kg를 기록하지만 measured_kg는 그대로
+    -- 두므로, measured_kg만 보면 실제 지급액과 어긋난 금액을 예약하게 된다.
     coalesce(sum(greatest(
-      round(o.measured_kg * o.snapshot_price_per_kg)::int
+      round(coalesce(o.final_kg, o.measured_kg) * o.snapshot_price_per_kg)::int
         - coalesce(o.delivered_cans, 0) * coalesce(o.snapshot_fresh_can_price, 0), 0
-    )) filter (where o.status = 'ARRIVED' and o.measured_kg is not null), 0)::int as reserved
+    )) filter (where o.status = 'ARRIVED' and coalesce(o.final_kg, o.measured_kg) is not null), 0)::int as reserved
   from pickup_orders o
   where o.rider_id = rp.id
     and o.dealer_id = rp.dealer_id
     and o.dealer_settlement_id is null
     and o.payout_method = 'POINT'
-    and (o.status = 'COMPLETED' or (o.status = 'ARRIVED' and o.measured_kg is not null))
+    and (o.status = 'COMPLETED' or (o.status = 'ARRIVED' and coalesce(o.final_kg, o.measured_kg) is not null))
 ) mine on true
 left join lateral (
   select
     coalesce(sum(o.net_amount) filter (where o.status = 'COMPLETED'), 0)::int as used,
+    -- kg는 fn_settle_trade와 **같은 식**(coalesce(final_kg, measured_kg))을 써야 한다. 중재
+    -- (RESOLVE_DISPUTE)는 status를 ARRIVED로 되돌리며 final_kg를 기록하지만 measured_kg는 그대로
+    -- 두므로, measured_kg만 보면 실제 지급액과 어긋난 금액을 예약하게 된다.
     coalesce(sum(greatest(
-      round(o.measured_kg * o.snapshot_price_per_kg)::int
+      round(coalesce(o.final_kg, o.measured_kg) * o.snapshot_price_per_kg)::int
         - coalesce(o.delivered_cans, 0) * coalesce(o.snapshot_fresh_can_price, 0), 0
-    )) filter (where o.status = 'ARRIVED' and o.measured_kg is not null), 0)::int as reserved
+    )) filter (where o.status = 'ARRIVED' and coalesce(o.final_kg, o.measured_kg) is not null), 0)::int as reserved
   from pickup_orders o
   where o.dealer_id = rp.dealer_id
     and o.dealer_settlement_id is null
     and o.payout_method = 'POINT'
-    and (o.status = 'COMPLETED' or (o.status = 'ARRIVED' and o.measured_kg is not null))
+    and (o.status = 'COMPLETED' or (o.status = 'ARRIVED' and coalesce(o.final_kg, o.measured_kg) is not null))
 ) pool on true
 -- 가시성(뷰가 소유자 권한으로 도므로 여기서 직접 강제한다 — RLS 대체가 아니라 등가 표현).
 where rp.id = (select auth.uid())

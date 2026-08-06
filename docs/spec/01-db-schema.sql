@@ -168,7 +168,9 @@ create table dealer_accounts (
 -- [18 R2] 크레딧 소비 게이트는 2단: ① 좌상 총량(모드 무관 항상) → ② PER_RIDER면 라이더 개인
 --   한도(rider_profiles.credit_limit, null=0). 초과 시 각각 DEALER_LIMIT_EXCEEDED /
 --   RIDER_LIMIT_EXCEEDED. 두 검사 모두 좌상 단위 advisory xact lock 안에서 수행(fn_settle_trade).
--- [18 R6] 라이더 가시성 뷰 v_rider_credit(security_invoker) — rider_id, dealer_id, allocation_mode,
+-- [18 R6] 라이더 가시성 뷰 v_rider_credit(**security_invoker=false — 소유자 권한 + 본문 술어**.
+--   invoker로 두면 라이더가 dealer_accounts를 못 읽어 조인이 붕괴하고 POOL 집계가 본인 주문만
+--   세므로 뷰가 통째로 무의미해진다) — rider_id, dealer_id, allocation_mode,
 --   limit_amount, used, available, is_unlimited. 라이더 본인·소속 좌상·admin이 기존 RLS로 조회.
 
 -- 정산 청구(원장). 주문 귀속=pickup_orders.dealer_settlement_id 스탬핑(날짜범위 아님).

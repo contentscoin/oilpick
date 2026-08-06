@@ -1205,7 +1205,14 @@ function ArrivedPanel({
           0,
         )
       : 0;
-  const effectiveAvailable = (credit?.available ?? 0) + priorReserved;
+  // ⚠️ credit.available은 뷰가 **0으로 클램프한** 값이다(greatest(..., 0)). 여기에 priorReserved를
+  // 더하면 이미 한도를 넘긴 상태(원값 < 0)에서 잘려나간 초과분만큼 잔여가 부풀려져 fail-fast가
+  // 통째로 뚫린다. 클램프 이전 값에서 다시 계산한다 — limit/used/reserved는 뷰가 이미 내려준다.
+  const remainingReserved = Math.max((credit?.reserved ?? 0) - priorReserved, 0);
+  const effectiveAvailable = Math.max(
+    (credit?.limit_amount ?? 0) - (credit?.used ?? 0) - remainingReserved,
+    0,
+  );
   const creditBlocked = creditApplies && pendingPointAmount > effectiveAvailable;
 
   return (
@@ -1306,7 +1313,7 @@ function ArrivedPanel({
               data-testid="measure-credit-gauge"
               limitAmount={credit!.limit_amount}
               used={credit!.used}
-              reserved={Math.max((credit!.reserved ?? 0) - priorReserved, 0)}
+              reserved={remainingReserved}
               available={effectiveAvailable}
               allocationMode={credit!.allocation_mode}
               pendingAmount={pendingPointAmount}

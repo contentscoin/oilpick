@@ -811,6 +811,31 @@ describe("ActiveRunPage — 재제출 시 예약분 이중계산 방지(18 R7)",
     expect(screen.getByTestId("submit-measure-button")).toBeDisabled();
   });
 
+  it("이미 한도를 초과 예약한 상태(잔여 0으로 클램프)에서도 되돌림이 잔여를 부풀리지 않는다", () => {
+    // 한도 5,000 / 확정 사용 4,000 / 예약 3,000(이 주문 2,000 + 다른 주문 1,000).
+    // 서버 available은 max(5,000-4,000-3,000, 0) = 0으로 **잘려 있다**(원값 -2,000).
+    // 잘린 0에 이 주문 몫 2,000을 그대로 더하면 잔여가 2,000으로 부풀어 초과 제출이 통과한다.
+    // 실제 여유는 5,000-4,000-1,000(다른 주문) = 0이므로 어떤 금액도 막혀야 한다.
+    mockUseRiderCredit.mockReturnValue({
+      data: {
+        rider_id: "rider-1",
+        dealer_id: "d1",
+        allocation_mode: "PER_RIDER" as const,
+        limit_amount: 5000,
+        used: 4000,
+        reserved: 3000,
+        available: 0,
+        is_unlimited: false,
+      },
+    });
+    // 이 주문의 기제출 = 1.25kg × 1,600 = 2,000P.
+    renderRun(makeRun({ status: "ARRIVED", measuredKg: 1.25, finalKg: null, payoutMethod: "POINT" }));
+    fireEvent.click(screen.getByTestId("measure-resubmit-button"));
+    fireEvent.change(screen.getByTestId("measured-kg-input"), { target: { value: "1.25" } }); // 2,000P
+    fireEvent.click(screen.getByTestId("payout-option-point"));
+    expect(screen.getByTestId("submit-measure-button")).toBeDisabled();
+  });
+
   it("구매 동반 재제출: 되돌리는 몫은 상계 후 순액 기준이다(수령액 총액이 아니라)", () => {
     // 기제출 10kg×1,600=16,000 − 신유 1통 26,000 → 순액 음수 → 예약분 0. 되돌릴 몫이 없으므로
     // 잔여 5,000을 넘는 이번 건(8,000)은 막혀야 한다. 수령액 16,000을 통째로 되돌리면 뚫린다.

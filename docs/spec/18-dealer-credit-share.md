@@ -107,3 +107,4 @@ pgTAP `21_dealer_credit_alloc_test.sql`: POOL 모드 기존 동작 회귀 / PER_
 | R5 | 좌상 배분 UI + admin 경고·모드 토글 | ✅ |
 | R6 | 게이트 + PR | ✅ |
 | R7 | **머지 전 적대적 리뷰**(5관점 × 반증 검증, 20 에이전트) — 확정 결함 6건 수정: v_rider_credit invoker 붕괴(핵심)·POOL 과소집계·예약분 미반영·사용액 분모 불일치·RPC default 누락·초기 한도 UI 미연결. 뷰 검증을 실제 롤 시점으로 전환 | ✅ |
+| R8 | **최종 상태 재검증**(보안경계·reserved 정합성·배포안전, 12 에이전트) — 확정 2건 수정: ① 프런트가 **0으로 클램프된** available에 재제출 되돌림을 더해 한도 초과 예약 상태에서 fail-fast가 뚫리던 산술 오류(limit−used−남은예약으로 재계산) ② reserved가 measured_kg만 써서 중재(final_kg) 건의 예약액이 실제 지급액과 어긋나던 문제(fn_settle_trade와 동일하게 coalesce(final_kg, measured_kg)) | ✅ |
