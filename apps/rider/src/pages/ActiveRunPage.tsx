@@ -159,6 +159,7 @@ export function ActiveRunPage() {
           orderKind={run.orderKind}
           purchaseRequestedCans={run.purchaseRequestedCans}
           snapshotFreshCanPrice={run.snapshotFreshCanPrice}
+          submittedDeliveredCans={run.deliveredCans}
           credit={credit ?? null}
           onCreditRefresh={() => void refetchCredit?.()}
         />
@@ -634,6 +635,7 @@ function ArrivedPanel({
   orderKind,
   purchaseRequestedCans,
   snapshotFreshCanPrice,
+  submittedDeliveredCans,
   credit,
   onCreditRefresh,
 }: {
@@ -651,6 +653,8 @@ function ArrivedPanel({
   orderKind: OrderKind | null;
   purchaseRequestedCans: number | null;
   snapshotFreshCanPrice: number | null;
+  /** [18 R7] 기제출 배달 통수 — 재제출 시 이 주문의 예약분을 정확히 되돌리는 데 쓴다. */
+  submittedDeliveredCans: number | null;
   /** [18 R7] 내 포인트 지급 한도(v_rider_credit). POINT 선택 시 fail-fast 판정에 쓴다. null=한도 없음. */
   credit: RiderCredit | null;
   /** [18 R7] 제출 성공 직후 크레딧 재조회 — 방금 제출분이 예약분에 즉시 반영되게 한다. */
@@ -1190,11 +1194,16 @@ function ArrivedPanel({
   const creditApplies = isPointSelected && credit != null && !credit.is_unlimited && credit.limit_amount != null;
   const pendingPointAmount = netAmount > 0 ? netAmount : 0;
   // 재제출이면 **이 주문의 기존 제출분이 이미 credit.reserved에 잡혀 있다** — 그대로 두면 같은 건을
-  // 두 번 세어 정상 재제출까지 막힌다. 기존 제출분을 잔여에 되돌려 준다(구매 상계분을 알 수 없어
-  // 폐유 수령액 기준 근사 — reserved를 넘지 않게 클램프해 과대 복원은 막는다).
+  // 두 번 세어 정상 재제출까지 막힌다. 이 주문 몫만 정확히 되돌린다: 뷰의 reserved 산식과 동일하게
+  // (기제출 measured_kg × 시세 − 기제출 통수 × 통당가), 음수는 0. 다른 주문의 예약분을 건드리지
+  // 않도록 **전체 reserved로 클램프하지 않는다**(그러면 남의 예약분까지 잔여로 복원된다).
   const priorReserved =
     submittedPayoutMethod === "POINT" && measuredKg != null
-      ? Math.min(estimateCash(measuredKg, snapshotPricePerKg), credit?.reserved ?? 0)
+      ? Math.max(
+          estimateCash(measuredKg, snapshotPricePerKg) -
+            (submittedDeliveredCans ?? 0) * (snapshotFreshCanPrice ?? 0),
+          0,
+        )
       : 0;
   const effectiveAvailable = (credit?.available ?? 0) + priorReserved;
   const creditBlocked = creditApplies && pendingPointAmount > effectiveAvailable;

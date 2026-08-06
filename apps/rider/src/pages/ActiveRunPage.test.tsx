@@ -63,6 +63,7 @@ function makeRun(overrides: Partial<ActiveRun> = {}): ActiveRun {
     orderKind: null,
     purchaseRequestedCans: null,
     snapshotFreshCanPrice: null,
+    deliveredCans: null,
     measuredKg: null,
     finalKg: null,
     photoUrls: [],
@@ -785,6 +786,62 @@ describe("ActiveRunPage — 재제출 시 예약분 이중계산 방지(18 R7)",
     fireEvent.click(screen.getByTestId("measure-resubmit-button"));
     fireEvent.change(screen.getByTestId("measured-kg-input"), { target: { value: "6.25" } });
     fireEvent.click(screen.getByTestId("payout-option-point"));
+    expect(screen.getByTestId("submit-measure-button")).not.toBeDisabled();
+  });
+
+  it("되돌리는 예약분은 이 주문 몫만 — 다른 주문의 예약분까지 잔여로 복원하지 않는다", () => {
+    // reserved 30,000 중 이 주문 몫은 10,000(6.25kg×1,600, 구매 없음)뿐이다. 나머지 20,000은
+    // 다른 주문의 예약분이므로 잔여로 되살아나면 안 된다 → 이번 건 15,000은 막혀야 한다.
+    mockUseRiderCredit.mockReturnValue({
+      data: {
+        rider_id: "rider-1",
+        dealer_id: "d1",
+        allocation_mode: "PER_RIDER" as const,
+        limit_amount: 50000,
+        used: 20000,
+        reserved: 30000,
+        available: 0,
+        is_unlimited: false,
+      },
+    });
+    renderRun(makeRun({ status: "ARRIVED", measuredKg: 6.25, finalKg: null, payoutMethod: "POINT" }));
+    fireEvent.click(screen.getByTestId("measure-resubmit-button"));
+    fireEvent.change(screen.getByTestId("measured-kg-input"), { target: { value: "9.375" } }); // 15,000
+    fireEvent.click(screen.getByTestId("payout-option-point"));
+    expect(screen.getByTestId("submit-measure-button")).toBeDisabled();
+  });
+
+  it("구매 동반 재제출: 되돌리는 몫은 상계 후 순액 기준이다(수령액 총액이 아니라)", () => {
+    // 기제출 10kg×1,600=16,000 − 신유 1통 26,000 → 순액 음수 → 예약분 0. 되돌릴 몫이 없으므로
+    // 잔여 5,000을 넘는 이번 건(8,000)은 막혀야 한다. 수령액 16,000을 통째로 되돌리면 뚫린다.
+    mockUseRiderCredit.mockReturnValue({
+      data: {
+        rider_id: "rider-1",
+        dealer_id: "d1",
+        allocation_mode: "PER_RIDER" as const,
+        limit_amount: 50000,
+        used: 45000,
+        reserved: 0,
+        available: 5000,
+        is_unlimited: false,
+      },
+    });
+    renderRun(
+      makeRun({
+        status: "ARRIVED",
+        measuredKg: 10,
+        finalKg: null,
+        payoutMethod: "POINT",
+        orderKind: "MIXED",
+        purchaseRequestedCans: 1,
+        snapshotFreshCanPrice: 26000,
+        deliveredCans: 1,
+      }),
+    );
+    fireEvent.click(screen.getByTestId("measure-resubmit-button"));
+    fireEvent.change(screen.getByTestId("measured-kg-input"), { target: { value: "5" } }); // 8,000 − 26,000 < 0
+    fireEvent.click(screen.getByTestId("payout-option-point"));
+    // 순액이 음수면 지급이 아니라 청구라 한도를 소비하지 않는다 → 차단되지 않아야 한다.
     expect(screen.getByTestId("submit-measure-button")).not.toBeDisabled();
   });
 });

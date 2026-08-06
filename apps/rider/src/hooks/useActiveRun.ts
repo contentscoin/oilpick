@@ -28,6 +28,8 @@ export interface ActiveRun {
   /** [14 J2] 신청 신유 통수·통당가 스냅샷 — deliveredCans 프리필·상계 미리보기. */
   purchaseRequestedCans: number | null;
   snapshotFreshCanPrice: number | null;
+  /** [18 R7] 기제출 현장 배달 통수 — 재제출 시 이 주문의 예약분(reserved)을 정확히 되돌리는 데 쓴다. */
+  deliveredCans: number | null;
   measuredKg: number | null;
   /** 확정(중재 반영) 무게. 07 §1-3: RESOLVE_DISPUTE가 기록하면 ARRIVED 복귀 + 재제출 불가 마킹. */
   finalKg: number | null;
@@ -109,6 +111,7 @@ function mapRow(row: {
     orderKind: row.order_kind,
     purchaseRequestedCans: row.purchase_requested_cans,
     snapshotFreshCanPrice: row.snapshot_fresh_can_price,
+    deliveredCans: row.delivered_cans ?? null,
     measuredKg: row.measured_kg,
     finalKg: row.final_kg,
     photoUrls: row.photo_urls ?? [],
