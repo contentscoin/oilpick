@@ -768,7 +768,14 @@ create policy p_profiles_read_own_riders on profiles for select using (fn_dealer
 create policy p_referrals_read_by_dealer on referrals for select using (fn_dealer_owns_rider(referrer_rider_id));
 create policy p_profiles_read_my_dealer on profiles for select using (id = (select dealer_id from rider_profiles where id = auth.uid())); -- I5 라이더→소속 좌상 상호
 -- v_dealer_rider_stats(security_invoker): 라이더별 완료수·수거kg·현금/포인트 지급합·레퍼럴 실적(표시용 통계, 정산 아님).
--- [17 Q5] + coupon_used_qty(완료 주문 coupon_cost 합, null→0) 끝에 append — 현행 정의는 20260805000001이 단일 진실(파일 끝 절 참조).
+-- [17 Q5] + coupon_used_qty(완료 주문 coupon_cost 합, null→0) 끝에 append.
+-- [19 T10] **귀속 축**(20260806000005이 현행 단일 진실): 집계는
+--   `o.rider_id = rp.id and o.dealer_id is not distinct from rp.dealer_id`
+--   = pickup_orders.dealer_id 스냅샷 ∩ rider_profiles.dealer_id 현 소속 — 정산(v_dealer_statement)·
+--   크레딧(v_rider_credit)과 **같은 축**이다. 이 필터가 없던 시절엔 축을 RLS가 우연히 대신해
+--   좌상 시점과 admin 시점의 값이 달랐다(admin은 라이더 전 생애 실적을 현 소속 좌상에 계상). 19 §5.
+--   `=`가 아니라 `is not distinct from`인 이유: 본사 직속(dealer_id null) 라이더의 실적이
+--   null 비교로 통째로 증발하는 것을 막는다.
 
 -- ===== 함수 EXECUTE 권한 [14 J4] (20260724000010_rpc_execute_lockdown.sql) =====
 -- Supabase는 `alter default privileges in schema public grant execute on functions to anon,
