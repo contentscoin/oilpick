@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { OrderDetailDrawer } from "./OrderDetailDrawer";
 import type { AdminOrderDetail, AdminOrderEvent } from "../hooks/useOrdersAdmin";
@@ -41,6 +42,19 @@ function makeOrder(overrides: Partial<AdminOrderDetail> = {}): AdminOrderDetail 
     cashPaidAmount: null,
     completedAt: null,
     refunded: false,
+    // [19 T8] 데이터 연결 보강 필드 기본값(좌상·정산·신유·순액·도착·바코드).
+    riderVehicle: "12가3456",
+    dealerId: null,
+    dealerName: null,
+    dealerSettlementId: null,
+    settlementStatus: null,
+    purchaseRequestedCans: null,
+    snapshotFreshCanPrice: null,
+    purchaseAmount: null,
+    netAmount: null,
+    arrivedAt: null,
+    acceptedAt: null,
+    barcodeCount: 0,
     ...overrides,
   };
 }
@@ -49,7 +63,9 @@ const NO_EVENTS: AdminOrderEvent[] = [];
 
 function renderDrawer(order: AdminOrderDetail, onMutated = vi.fn()) {
   render(
-    <OrderDetailDrawer order={order} events={NO_EVENTS} isLoading={false} onClose={vi.fn()} onMutated={onMutated} />,
+    <MemoryRouter>
+      <OrderDetailDrawer order={order} events={NO_EVENTS} isLoading={false} onClose={vi.fn()} onMutated={onMutated} />
+    </MemoryRouter>,
   );
   return { onMutated };
 }
@@ -100,7 +116,9 @@ describe("모달/드로어 a11y", () => {
   it("role=dialog·aria-modal을 노출하고 Escape 키로 닫힌다", () => {
     const onClose = vi.fn();
     render(
-      <OrderDetailDrawer order={makeOrder()} events={NO_EVENTS} isLoading={false} onClose={onClose} onMutated={vi.fn()} />,
+      <MemoryRouter>
+        <OrderDetailDrawer order={makeOrder()} events={NO_EVENTS} isLoading={false} onClose={onClose} onMutated={vi.fn()} />
+      </MemoryRouter>,
     );
     const drawer = screen.getByTestId("order-drawer");
     expect(drawer).toHaveAttribute("role", "dialog");
@@ -242,5 +260,68 @@ describe("RESOLVE_DISPUTE 카피 교정 (07 §1-3)", () => {
     fireEvent.change(screen.getByTestId("resolve-dispute-final-kg"), { target: { value: "24" } });
     fireEvent.submit(screen.getByTestId("resolve-dispute-submit"));
     expect(await screen.findByText("이미 처리된 주문이에요.")).toBeInTheDocument();
+  });
+});
+
+// [19 T8] 데이터 연결 누락 6종 보강 — 좌상·정산청구·신유·상계 순액·도착시각·바코드.
+describe("주문 상세 데이터 연결 (19 T8)", () => {
+  it("좌상 미귀속·미정산 주문은 '본사 직속'과 '미정산'으로 표기한다", () => {
+    renderDrawer(makeOrder({ disputeReason: null }));
+    expect(screen.getByTestId("order-dealer")).toHaveTextContent("본사 직속");
+    expect(screen.getByTestId("order-settlement")).toHaveTextContent("미정산");
+  });
+
+  it("귀속 좌상과 정산 청구 상태를 표기한다", () => {
+    renderDrawer(
+      makeOrder({
+        disputeReason: null,
+        dealerId: "dealer-1",
+        dealerName: "좌상갑",
+        dealerSettlementId: "settle-1",
+        settlementStatus: "SETTLED",
+      }),
+    );
+    expect(screen.getByTestId("order-dealer")).toHaveTextContent("좌상갑");
+    expect(screen.getByTestId("order-settlement")).toHaveTextContent("SETTLED");
+  });
+
+  it("구매 동반 주문에만 신유 통수·대금을 노출한다", () => {
+    renderDrawer(makeOrder({ disputeReason: null }));
+    expect(screen.queryByTestId("order-purchase-cans")).not.toBeInTheDocument();
+
+    renderDrawer(
+      makeOrder({
+        disputeReason: null,
+        orderKind: "MIXED",
+        purchaseRequestedCans: 3,
+        deliveredCans: 2,
+        snapshotFreshCanPrice: 40000,
+        purchaseAmount: 80000,
+      }),
+    );
+    expect(screen.getAllByTestId("order-purchase-cans")[0]).toHaveTextContent("3통 / 2통");
+    expect(screen.getAllByTestId("order-purchase-amount")[0]).toHaveTextContent("80,000원");
+  });
+
+  it("상계 순액이 음수면 '점주 지불'로 표기한다(14 J2)", () => {
+    renderDrawer(makeOrder({ disputeReason: null, netAmount: -12000, payoutMethod: "CASH" }));
+    expect(screen.getByTestId("order-net-amount")).toHaveTextContent("점주 지불");
+  });
+
+  it("등록 바코드가 있으면 유통이력 링크를, 없으면 '없음'을 보여준다", () => {
+    renderDrawer(makeOrder({ disputeReason: null, barcodeCount: 0 }));
+    expect(screen.getByTestId("order-barcode-count")).toHaveTextContent("없음");
+
+    renderDrawer(makeOrder({ disputeReason: null, barcodeCount: 3 }));
+    const link = screen.getAllByTestId("order-trace-link")[0];
+    expect(link).toHaveTextContent("3개");
+    expect(link).toHaveAttribute("href", "/traceability?order=order-1");
+  });
+
+  it("라이더는 이름 + 차량번호로 표기한다(차량번호를 이름 자리에 넣던 표기 교정)", () => {
+    renderDrawer(makeOrder({ disputeReason: null }));
+    const rider = screen.getByTestId("order-rider-name");
+    expect(rider).toHaveTextContent("김라이더");
+    expect(rider).toHaveTextContent("12가3456");
   });
 });

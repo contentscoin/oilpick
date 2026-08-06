@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { ARRIVED_STALE_MS, ORDER_STATUS_LABEL } from "@oilpick/core";
+import { useMemo, useState } from "react";
+import { ARRIVED_STALE_MS, ORDER_STATUS_LABEL, formatKg } from "@oilpick/core";
 import {
   useDealerActiveOrders,
   useMyRiders,
@@ -9,6 +9,7 @@ import {
   type DealerActiveOrder,
   type DealerRiderRow,
 } from "../hooks/useDealerScope";
+import { Badge, Button, Card, EmptyState, Gauge, PageHeader, SearchInput, StatCard, TextInput } from "../components/ui";
 
 /**
  * [16 L9 §6-1] 라이더 관리 액션 다이얼로그 — rider-verify가 이미 지원하는 4-decision
@@ -63,6 +64,23 @@ export function DealerHomePage() {
   const approved = riders?.filter((r) => r.verifyStatus === "APPROVED").length ?? 0;
   const pending = riders?.filter((r) => r.verifyStatus === "PENDING").length ?? 0;
   const collectedKg = (stats ?? []).reduce((s, r) => s + Number(r.collected_kg), 0);
+  // [19 T6] KPI를 인원수 축에서 실적·크레딧 축까지 넓힌다(19 §0 "누락 정보").
+  // v_dealer_rider_stats는 completed_count·cash_paid·point_paid를 이미 주는데 화면에서
+  // collected_kg·coupon_used_qty만 쓰고 있었다 — 남은 값을 마저 연결한다.
+  const completedCount = (stats ?? []).reduce((s, r) => s + r.completed_count, 0);
+  const paidTotal = (stats ?? []).reduce((s, r) => s + r.cash_paid + r.point_paid, 0);
+  const activeCount = activeOrders?.length ?? 0;
+
+  // [19 T6] 소속 라이더 검색 — 인원이 늘면 평면 목록에서 특정 라이더를 못 찾는다.
+  const [riderKeyword, setRiderKeyword] = useState("");
+  const filteredRiders = useMemo(() => {
+    const k = riderKeyword.trim().toLowerCase();
+    if (!k) return riders ?? [];
+    return (riders ?? []).filter((r) =>
+      [r.name, r.phone ?? "", r.verifyStatus].some((v) => v.toLowerCase().includes(k)),
+    );
+  }, [riders, riderKeyword]);
+  const statsById = useMemo(() => new Map((stats ?? []).map((s) => [s.rider_id, s])), [stats]);
   // [16 L6] 라이더 전화 CTA — 현 소속 라이더의 연락처(useMyRiders — p_profiles_read_own_riders).
   // 전 소속(재배정) 라이더는 맵에 없어 CTA 미렌더(PII 최소화, 뷰 표시명 폴백과 동일 원칙).
   const riderPhones = new Map((riders ?? []).map((r) => [r.id, r.phone]));
@@ -94,17 +112,58 @@ export function DealerHomePage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">관할 대시보드</h1>
-        <p className="text-sm text-gray-500">내 소속 라이더 현황과 실적을 한눈에 확인해요.</p>
+      <PageHeader title="관할 대시보드" description="내 소속 라이더 현황과 실적을 한눈에 확인해요." />
+
+      {/* [19 T6] KPI 6종 — 인원(3) + 운영(진행중) + 실적(완료·수거kg). 크레딧은 아래 전용 카드. */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3" data-testid="dealer-kpi">
+        <StatCard label="소속 라이더" value={`${total}명`} sub={`승인 완료 ${approved}명`} />
+        <StatCard label="승인 대기" value={`${pending}명`} tone={pending > 0 ? "accent" : "neutral"} />
+        <StatCard label="진행중 운행" value={`${activeCount}건`} data-testid="dealer-kpi-active" />
+        <StatCard label="완료 주문" value={`${completedCount}건`} data-testid="dealer-kpi-completed" />
+        <StatCard label="누적 수거" value={formatKg(collectedKg)} />
+        <StatCard
+          label="누적 지급액"
+          value={`${paidTotal.toLocaleString()}원`}
+          sub="현금 + 포인트 합계(표시용)"
+          tone="accent"
+          data-testid="dealer-kpi-paid"
+        />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4" data-testid="dealer-kpi">
-        <Kpi label="소속 라이더" value={`${total}명`} />
-        <Kpi label="승인 완료" value={`${approved}명`} />
-        <Kpi label="승인 대기" value={`${pending}명`} accent />
-        <Kpi label="누적 수거" value={`${collectedKg.toFixed(1)}kg`} />
-      </div>
+      {/* [19 T6] 크레딧 현황 — 지금까지 소속 라이더 카드 안에 텍스트로만 있던 값을 게이지로 승격. */}
+      {account && (
+        <Card
+          title="크레딧 현황"
+          description={
+            account.allocationMode === "PER_RIDER"
+              ? "라이더별로 나눠 준 한도 안에서 포인트가 지급돼요."
+              : "소속 라이더가 총 한도를 함께 써요(선착순)."
+          }
+          data-testid="dealer-credit-card"
+        >
+          <Gauge
+            used={account.usage}
+            limit={account.creditLimit}
+            label={
+              <>
+                <span>
+                  미정산 사용 {account.usage.toLocaleString()}P / 총 한도 {account.creditLimit.toLocaleString()}P
+                </span>
+                <span className="tabular-nums">잔여 {account.headroom.toLocaleString()}P</span>
+              </>
+            }
+          />
+          {account.allocationMode === "PER_RIDER" && (
+            <p
+              className={`mt-2 text-xs ${allocatedOver ? "font-semibold text-status-danger" : "text-gray-500"}`}
+              data-testid="dealer-alloc-summary"
+            >
+              배분 합계 {allocatedTotal.toLocaleString()}P
+              {allocatedOver && " — 총 한도를 넘었어요(실제 지급은 총 한도에서 막혀요)"}
+            </p>
+          )}
+        </Card>
+      )}
 
       {/* [16 L6] 진행중 운행 관제 — 감지(지연 배지)→개입(전화)이 화면 안에서 닫힌다. */}
       <div className="rounded-card bg-white p-6 shadow-card" data-testid="dealer-active-orders">
@@ -125,61 +184,89 @@ export function DealerHomePage() {
         )}
       </div>
 
-      <div className="rounded-card bg-white p-6 shadow-card">
+      <div className="rounded-card bg-white p-4 shadow-card sm:p-6">
         <h2 className="mb-1 text-lg font-semibold text-gray-900">소속 라이더</h2>
         {/* [17 Q5] 쿠폰 사용은 조회 전용 실적 — 정산 무관 카피(17 C5, 좌상 오해 방지). */}
         <p className="mb-2 text-xs text-gray-500">쿠폰 사용은 플랫폼 실적 확인용이에요 — 정산과는 무관해요.</p>
 
-        {/* [18 R1·R5] 크레딧 배분 요약 — 모드별로 카피와 배분 입력 노출이 갈린다.
-            PER_RIDER: 배분 합계/총 한도(초과는 오버부킹 경고, 실제 지급은 2단 게이트가 막는다).
-            POOL: 총량 공유 안내(라이더별 입력 없음 — 값은 저장해 둘 수 있지만 지금은 무시된다). */}
+        {/* [18 R1·R5 → 19 T6] 배분 모드 안내. 숫자(사용/한도/잔여)는 위 '크레딧 현황' 카드로 승격했고,
+            여기엔 모드별 행동 안내만 남긴다(같은 값을 두 번 읽게 하지 않는다).
+            ※ 이전 구현의 border-danger/bg-danger/text-danger는 프리셋에 없는 색이라 통째로 죽어
+            있었다 — status-danger로 교정(19 §0). */}
         {account && (
           <div
             data-testid="dealer-credit-summary"
             className={`mb-4 rounded-card border p-3 text-xs ${
-              allocatedOver ? "border-danger/40 bg-danger/5 text-danger" : "border-gray-100 bg-gray-50 text-gray-600"
+              allocatedOver
+                ? "border-status-danger/40 bg-status-danger/5 text-status-danger"
+                : "border-gray-100 bg-gray-50 text-gray-600"
             }`}
           >
             {account.allocationMode === "PER_RIDER" ? (
               <>
                 <p className="font-semibold">라이더별 한도 배분 중</p>
                 <p className="mt-1">
-                  배분 합계 <b>{allocatedTotal.toLocaleString()}P</b> / 총 한도{" "}
-                  <b>{account.creditLimit.toLocaleString()}P</b> · 미정산 사용 {account.usage.toLocaleString()}P
-                  {allocatedOver && " · 배분 합계가 총 한도를 넘었어요(실제 지급은 총 한도에서 막혀요)"}
+                  아래에서 라이더별 지급 한도를 정하세요. 한도가 없는 라이더는 포인트 지급을 할 수 없어요.
+                  {allocatedOver && " 배분 합계가 총 한도를 넘었어요(실제 지급은 총 한도에서 막혀요)."}
                 </p>
               </>
             ) : (
               <>
                 <p className="font-semibold">총량 공유 중(선착순)</p>
                 <p className="mt-1">
-                  소속 라이더가 총 한도 <b>{account.creditLimit.toLocaleString()}P</b>를 함께 써요 · 미정산 사용{" "}
-                  {account.usage.toLocaleString()}P · 잔여 {account.headroom.toLocaleString()}P. 라이더별로 나눠 주려면
-                  본사에 <b>라이더별 배분 모드</b> 전환을 요청하세요.
+                  소속 라이더가 총 한도를 함께 써요. 라이더별로 나눠 주려면 본사에 <b>라이더별 배분 모드</b> 전환을
+                  요청하세요.
                 </p>
               </>
             )}
           </div>
         )}
+
+        {/* [19 T6] 라이더 검색 */}
+        <div className="mb-3">
+          <SearchInput
+            value={riderKeyword}
+            onValueChange={setRiderKeyword}
+            label="라이더 검색 (이름·연락처·상태)"
+            className="w-full sm:w-72"
+            data-testid="dealer-rider-search"
+          />
+        </div>
+
         {isLoading ? (
           <p className="text-sm text-gray-500">불러오는 중...</p>
-        ) : riders && riders.length > 0 ? (
+        ) : filteredRiders.length > 0 ? (
           <ul className="flex flex-col gap-2" data-testid="dealer-rider-list">
-            {riders.map((r) => (
+            {filteredRiders.map((r) => (
               <li
                 key={r.id}
                 data-testid={`dealer-rider-${r.id}`}
                 className="flex flex-col gap-2 rounded-card border border-gray-100 p-3 text-sm sm:flex-row sm:items-center sm:justify-between"
               >
-                <div>
-                  <p className="font-medium text-gray-800">
-                    {r.name}
-                    {r.isOnline && <span className="ml-2 rounded-pill bg-primary-light px-2 py-0.5 text-xs text-primary">온라인</span>}
+                <div className="min-w-0">
+                  <p className="flex flex-wrap items-center gap-2 font-medium text-gray-800">
+                    <span className="min-w-0">{r.name}</span>
+                    {r.isOnline && <Badge tone="primary">온라인</Badge>}
                   </p>
-                  <p className="text-xs text-gray-500">
-                    {r.verifyStatus} · {r.phone ?? "연락처 없음"} ·{" "}
+                  <p className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-gray-500">
+                    <span>{r.verifyStatus}</span>
+                    <span>{r.phone ?? "연락처 없음"}</span>
                     <span data-testid={`coupon-used-${r.id}`}>쿠폰 사용 {couponUsed.get(r.id) ?? 0}장</span>
                   </p>
+                  {/* [19 T6] 라이더별 실적 — v_dealer_rider_stats가 이미 주던 완료건·수거kg·지급액을
+                      화면에 마저 연결한다(지금까지 쿠폰 수치만 쓰고 나머지는 버려졌다). */}
+                  {statsById.get(r.id) && (
+                    <p
+                      className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-gray-500"
+                      data-testid={`rider-stats-${r.id}`}
+                    >
+                      <span>완료 {statsById.get(r.id)!.completed_count}건</span>
+                      <span>수거 {formatKg(Number(statsById.get(r.id)!.collected_kg))}</span>
+                      <span>
+                        지급 {(statsById.get(r.id)!.cash_paid + statsById.get(r.id)!.point_paid).toLocaleString()}원
+                      </span>
+                    </p>
+                  )}
                   {/* [18 R5] 배분 모드일 때만 라이더별 한도 입력. 사용액을 함께 보여 남은 몫을 가늠하게 한다. */}
                   {account?.allocationMode === "PER_RIDER" && (
                     <RiderLimitField
@@ -193,58 +280,39 @@ export function DealerHomePage() {
                 <div className="flex flex-wrap gap-2">
                   {r.verifyStatus === "PENDING" && (
                     <>
-                      <button
-                        type="button"
-                        data-testid={`approve-${r.id}`}
-                        onClick={() => verifyRider(r.id, "APPROVED")}
-                        className="rounded-button bg-primary px-3 py-1.5 text-sm font-medium text-white shadow-card"
-                      >
+                      <Button variant="primary" size="sm" data-testid={`approve-${r.id}`} onClick={() => verifyRider(r.id, "APPROVED")}>
                         승인
-                      </button>
-                      <button
-                        type="button"
-                        data-testid={`reject-${r.id}`}
-                        onClick={() => openAction("reject", r)}
-                        className="rounded-button border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100"
-                      >
+                      </Button>
+                      <Button size="sm" data-testid={`reject-${r.id}`} onClick={() => openAction("reject", r)}>
                         반려
-                      </button>
+                      </Button>
                     </>
                   )}
                   {r.verifyStatus === "APPROVED" && (
-                    <button
-                      type="button"
-                      data-testid={`suspend-${r.id}`}
-                      onClick={() => openAction("suspend", r)}
-                      className="rounded-button border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100"
-                    >
+                    <Button size="sm" data-testid={`suspend-${r.id}`} onClick={() => openAction("suspend", r)}>
                       정지
-                    </button>
+                    </Button>
                   )}
                   {r.verifyStatus === "SUSPENDED" && (
-                    <button
-                      type="button"
-                      data-testid={`reinstate-${r.id}`}
-                      onClick={() => verifyRider(r.id, "REINSTATED")}
-                      className="rounded-button bg-primary px-3 py-1.5 text-sm font-medium text-white shadow-card"
-                    >
+                    <Button variant="primary" size="sm" data-testid={`reinstate-${r.id}`} onClick={() => verifyRider(r.id, "REINSTATED")}>
                       정지 해제
-                    </button>
+                    </Button>
                   )}
-                  <button
-                    type="button"
-                    data-testid={`unassign-${r.id}`}
-                    onClick={() => openAction("unassign", r)}
-                    className="rounded-button border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-500 hover:bg-gray-100"
-                  >
+                  <Button size="sm" variant="ghost" data-testid={`unassign-${r.id}`} onClick={() => openAction("unassign", r)}>
                     소속 해제
-                  </button>
+                  </Button>
                 </div>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-gray-500">소속 라이더가 없어요. 본사에 배정을 요청하거나 라이더를 모집해 배정하세요.</p>
+          <EmptyState
+            title={riderKeyword ? "조건에 맞는 라이더가 없어요." : "소속 라이더가 없어요."}
+            description={
+              riderKeyword ? "검색어를 지우면 전체 목록으로 돌아가요." : "본사에 배정을 요청하거나 라이더를 모집해 배정하세요."
+            }
+            data-testid="dealer-rider-empty"
+          />
         )}
       </div>
 
@@ -346,15 +414,6 @@ function ActiveOrderRow({ order, phone }: { order: DealerActiveOrder; phone: str
   );
 }
 
-function Kpi({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
-  return (
-    <div className="min-w-0 rounded-card bg-white p-5 shadow-card">
-      <p className="text-sm text-gray-500">{label}</p>
-      <p className={`mt-1 text-xl font-bold tabular-nums ${accent ? "text-accent-deep" : "text-gray-900"}`}>{value}</p>
-    </div>
-  );
-}
-
 /**
  * [18 R5] 라이더별 포인트 지급 한도 배분 입력(PER_RIDER 모드 전용).
  * 비우면 배분 해제(null) — PER_RIDER에서는 0으로 취급돼 그 라이더는 POINT 지급을 할 수 없다.
@@ -398,7 +457,7 @@ function RiderLimitField({
       <label className="text-xs text-gray-500" htmlFor={`rider-limit-${rider.id}`}>
         지급 한도
       </label>
-      <input
+      <TextInput
         id={`rider-limit-${rider.id}`}
         data-testid={`rider-limit-input-${rider.id}`}
         inputMode="numeric"
@@ -408,20 +467,14 @@ function RiderLimitField({
           setValue(e.target.value);
           setSaved(false);
         }}
-        className="w-28 rounded-button border border-gray-200 px-2 py-1 text-sm tabular-nums"
+        className="w-28 tabular-nums"
       />
       <span className="text-xs text-gray-500 tabular-nums">P · 사용 {rider.creditUsed.toLocaleString()}P</span>
-      <button
-        type="button"
-        data-testid={`rider-limit-save-${rider.id}`}
-        disabled={busy || invalid || !dirty}
-        onClick={handleSave}
-        className="rounded-button border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40"
-      >
+      <Button size="sm" data-testid={`rider-limit-save-${rider.id}`} disabled={busy || invalid || !dirty} onClick={handleSave}>
         {busy ? "저장 중…" : "저장"}
-      </button>
+      </Button>
       {saved && !dirty && <span className="text-xs text-primary">저장됨</span>}
-      {error && <span className="text-xs text-danger">{error}</span>}
+      {error && <span className="text-xs text-status-danger">{error}</span>}
     </div>
   );
 }

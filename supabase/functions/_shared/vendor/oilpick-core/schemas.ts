@@ -377,6 +377,29 @@ var dealerUpdateOutputSchema = z.object({
   /** 수정 후 로그인 아이디(변경 없으면 기존 값). */
   username: z.string()
 });
+var userUpdateInputSchema = z.object({
+  userId: uuidSchema,
+  /** profiles — 공통. */
+  displayName: z.string().min(1).max(40).optional(),
+  phone: z.string().min(1).max(20).optional(),
+  /** supplier_profiles — role='supplier'일 때만 적용. */
+  storeName: z.string().min(1).max(60).optional(),
+  bizNumber: z.string().min(1).max(20).optional(),
+  address: z.string().min(1).max(200).optional(),
+  /** rider_profiles — role='rider'일 때만 적용. */
+  vehicleNumber: z.string().min(1).max(20).optional(),
+  recyclerName: z.string().max(60).nullable().optional(),
+  recyclerContact: z.string().max(40).nullable().optional()
+}).refine(
+  (v) => v.displayName != null || v.phone != null || v.storeName != null || v.bizNumber != null || v.address != null || v.vehicleNumber != null || v.recyclerName !== void 0 || v.recyclerContact !== void 0,
+  { message: "\uC218\uC815\uD560 \uD56D\uBAA9\uC744 \uD558\uB098 \uC774\uC0C1 \uC785\uB825\uD574\uC8FC\uC138\uC694." }
+);
+var userUpdateOutputSchema = z.object({
+  userId: uuidSchema,
+  role: z.enum(["supplier", "rider"]),
+  /** 실제로 갱신된 필드명 목록(감사·UI 안내용). */
+  updated: z.array(z.string())
+});
 var dealerAssignInputSchema = z.object({
   riderId: uuidSchema,
   dealerId: uuidSchema.nullable()
@@ -558,6 +581,8 @@ export {
   submitMeasurePayloadSchema,
   supplierProfileUpdateSchema,
   supplierSignupInputSchema,
+  userUpdateInputSchema,
+  userUpdateOutputSchema,
   withdrawProcessInputSchema,
   withdrawProcessOutputSchema,
   withdrawRequestInputSchema,

@@ -31,7 +31,7 @@ const STATUS_FILTERS: Array<{ value: string; label: string }> = [
  * 03-frontend.md apps/admin "/orders": "테이블(상태 필터) → 상세 드로어(이벤트 타임라인, 사진).
  * DISPUTED 건: RESOLVE_DISPUTE 폼(finalKg 입력). CANCEL 버튼".
  * 07 F10-⑤·⑥: 드로어에 쿠폰/현금/귀책 취소/FORCE_COMPLETE(OrderDetailDrawer 참조), 주문 CSV 내보내기.
- * 06 E10-①: 텍스트 검색(주소/공급업체 상호/라이더 차량번호) + created_at 날짜 범위 필터.
+ * 06 E10-①: 텍스트 검색(주소/공급업체 상호/라이더명·차량번호) + created_at 날짜 범위 필터.
  * 05 폴리시 패스: 서버 페이지네이션(50건, 이전/다음) + 컬럼 정렬(요청일/예상 kg).
  */
 export function OrdersPage() {
@@ -50,14 +50,17 @@ export function OrdersPage() {
   // 초기 로드 실패만 에러 UI로 — 백그라운드 refetch 실패는 캐시된 화면을 유지한다(TanStack v5는 error에도 data 보존).
   const loadFailed = isError && data === undefined;
 
-  // 06 E10-①: 텍스트 검색은 클라이언트 필터(소문자 includes) — 상호/차량번호는 fetchNameMaps가
+  // 06 E10-①: 텍스트 검색은 클라이언트 필터(소문자 includes) — 상호/라이더명/차량번호는 fetchNameMaps가
   // 클라이언트에서 join한 값이라 서버 ilike로는 검색할 수 없다(DoD: RLS/뷰 변경 없음).
   // 페이지네이션 도입 후에도 검색 범위는 현재 페이지 rows다.
   const keyword = searchText.trim().toLowerCase();
   const filteredOrders = (orders ?? []).filter(
     (o) =>
       !keyword ||
-      [o.pickupAddress, o.supplierName, o.riderName ?? ""].some((v) => v.toLowerCase().includes(keyword)),
+      // [19 T8] 차량번호도 검색 축에 포함 — 현장에서 차량번호로 주문을 되짚는 실사용을 지원한다.
+      [o.pickupAddress, o.supplierName, o.riderName ?? "", o.riderVehicle ?? ""].some((v) =>
+        v.toLowerCase().includes(keyword),
+      ),
   );
 
   // 같은 컬럼 재클릭 시 asc/desc 토글, 다른 컬럼 클릭 시 그 컬럼 desc로 시작.
@@ -81,12 +84,13 @@ export function OrdersPage() {
   // 05 폴리시 패스: 서버 페이지네이션 도입 후에도 현재 페이지 rows 기준 동작을 유지한다(버튼 옆 캡션 참조).
   function handleCsv() {
     const csv = toCsv(
-      ["주문ID", "상태", "공급업체", "라이더", "예상kg", "계량kg", "확정kg", "주소", "생성일"],
+      ["주문ID", "상태", "공급업체", "라이더", "차량번호", "예상kg", "계량kg", "확정kg", "주소", "생성일"],
       filteredOrders.map((o) => [
         o.id,
         ORDER_STATUS_LABEL[o.status] ?? o.status,
         o.supplierName,
         o.riderName,
+        o.riderVehicle,
         o.requestedKg,
         o.measuredKg,
         o.finalKg,
@@ -147,7 +151,7 @@ export function OrdersPage() {
             setSearchText(e.target.value);
             setPage(0);
           }}
-          placeholder="현재 페이지 내 검색 (주소·공급업체·차량번호)"
+          placeholder="현재 페이지 내 검색 (주소·공급업체·라이더·차량번호)"
           className="min-h-9 w-full rounded-button border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none focus:border-primary sm:w-72"
           data-testid="orders-search-input"
         />
@@ -224,7 +228,13 @@ export function OrdersPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-gray-800">{o.supplierName}</td>
-                  <td className="px-4 py-3 text-gray-800">{o.riderName ?? "-"}</td>
+                  {/* [19 T8] 이름 + 차량번호(보조) — 차량번호를 이름 자리에 출력하던 표기 교정. */}
+                  <td className="px-4 py-3 text-gray-800">
+                    <div className="min-w-0">
+                      <span>{o.riderName ?? "-"}</span>
+                      {o.riderVehicle && <span className="ml-1 text-xs text-gray-500">{o.riderVehicle}</span>}
+                    </div>
+                  </td>
                   <td className="px-4 py-3 tabular-nums text-gray-800">
                     {o.finalKg !== null ? (
                       `${formatKg(o.finalKg)} (확정)`

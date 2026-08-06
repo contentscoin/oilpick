@@ -225,6 +225,13 @@ create table pickup_items (
 create index idx_pickup_items_order on pickup_items (order_id);
 create index idx_pickup_items_barcode on pickup_items (barcode);
 -- RLS: read = admin + 주문 당사자(supplier/rider). write 정책 없음(service_role RPC만).
+-- [19 T2] 유통이력 뷰 2종(20260806000004, 둘 다 security_invoker=true — 기저 RLS 위임):
+--   v_barcode_trace   : 회수 이벤트 1건=1행. pickup_items에 주문/매장/라이더/좌상/정산 연결.
+--                       정렬 축 seen_at = coalesce(captured_at, created_at).
+--   v_barcode_summary : 바코드 1개=1행 집계(pickup_count·order_count·rider_count·
+--                       first/last_seen_at·last_order_id·last_rider_id).
+--   가시성: admin=전체, 점주/라이더=자기 주문분, **좌상=0행**(pickup_items 읽기 정책 없음 —
+--   유통이력 메뉴는 admin 전용. 좌상 확장은 19 §4 보류 과제).
 
 -- ===== 포인트 원장 (append-only) =====
 -- [08 P3·P4] 현역 복권 — POINT 지급수단의 EARN(fn_transition_order CONFIRM_MEASURE/FORCE_COMPLETE),

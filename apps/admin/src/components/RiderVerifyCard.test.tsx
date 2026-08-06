@@ -33,6 +33,10 @@ function makeRider(overrides: Partial<AdminRiderRow> = {}): AdminRiderRow {
     docPermitUrl: "u/permit.jpg",
     recyclerName: "한빛자원",
     recyclerContact: "02-000-0000",
+    // [19 T4] 소속 좌상·개인 한도(회원 관리 누락 연결 보강)
+    dealerId: null,
+    dealerName: null,
+    creditLimit: null,
     isOnline: false,
     createdAt: "2026-07-09T00:00:00.000Z",
     ...overrides,

@@ -236,8 +236,9 @@ describe("DealerHomePage — 크레딧 배분(18 R5)", () => {
       data: { allocationMode: "PER_RIDER", creditLimit: 1000000, usage: 12000, headroom: 988000 },
     });
     render(<DealerHomePage />);
-    // 배분 합계 = r1(null→0) + r2(50,000)
-    expect(screen.getByTestId("dealer-credit-summary").textContent).toContain("50,000P");
+    // 배분 합계 = r1(null→0) + r2(50,000). [19 T6]에서 숫자는 '크레딧 현황' 카드로 모았다
+    // (dealer-credit-summary에는 모드별 행동 안내만 남는다 — 같은 값을 두 번 읽게 하지 않는다).
+    expect(screen.getByTestId("dealer-alloc-summary").textContent).toContain("50,000P");
     fireEvent.change(screen.getByTestId("rider-limit-input-r2"), { target: { value: "70000" } });
     fireEvent.click(screen.getByTestId("rider-limit-save-r2"));
     await waitFor(() => expect(mockSetRiderLimit).toHaveBeenCalledWith("r2", 70000));

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { ORDER_STATUS_LABEL, formatKg, formatKrw, formatPoint, formatRelativeTime, type OrderFault } from "@oilpick/core";
 import type { AdminOrderDetail, AdminOrderEvent } from "../hooks/useOrdersAdmin";
 import { useEscapeClose, useInitialFocus } from "../hooks/useEscapeClose";
@@ -185,7 +186,11 @@ export function OrderDetailDrawer({ order, events, isLoading, onClose, onMutated
               </div>
               <div>
                 <p className="text-xs text-gray-500">라이더</p>
-                <p className="font-medium text-gray-800">{order.riderName ?? "미배정"}</p>
+                {/* [19 T8] 이름(display_name) + 차량번호 보조 표기 — 차량번호를 이름 자리에 넣던 표기 교정. */}
+                <p className="font-medium text-gray-800" data-testid="order-rider-name">
+                  {order.riderName ?? "미배정"}
+                  {order.riderVehicle && <span className="ml-1 text-xs text-gray-500">{order.riderVehicle}</span>}
+                </p>
               </div>
               <div>
                 <p className="text-xs text-gray-500">예상 kg</p>
@@ -243,6 +248,77 @@ export function OrderDetailDrawer({ order, events, isLoading, onClose, onMutated
                   </p>
                 </div>
               )}
+              {/* [19 T8] 신유 구매(14 J2) — 구매 동반 주문에서만. 신청/실배달 통수와 대금·상계 순액. */}
+              {(order.orderKind === "PURCHASE" || order.orderKind === "MIXED") && (
+                <>
+                  <div>
+                    <p className="text-xs text-gray-500">신유 통수(신청/배달)</p>
+                    <p className="font-medium tabular-nums text-gray-800" data-testid="order-purchase-cans">
+                      {order.purchaseRequestedCans ?? 0}통 / {order.deliveredCans ?? "-"}통
+                      {order.snapshotFreshCanPrice != null && (
+                        <span className="ml-1 text-xs text-gray-500">
+                          (통당 {formatKrw(order.snapshotFreshCanPrice)})
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">신유 대금</p>
+                    <p className="font-medium tabular-nums text-gray-800" data-testid="order-purchase-amount">
+                      {order.purchaseAmount !== null ? formatKrw(order.purchaseAmount) : "-"}
+                    </p>
+                  </div>
+                </>
+              )}
+              {order.netAmount !== null && (
+                <div>
+                  <p className="text-xs text-gray-500">상계 순액</p>
+                  <p
+                    className={`font-bold tabular-nums ${order.netAmount < 0 ? "text-status-danger" : "text-accent-deep"}`}
+                    data-testid="order-net-amount"
+                  >
+                    {order.payoutMethod === "POINT" ? formatPoint(order.netAmount) : formatKrw(order.netAmount)}
+                    <span className="ml-1 text-xs font-normal text-gray-500">
+                      {order.netAmount < 0 ? "(점주 지불)" : "(점주 수령)"}
+                    </span>
+                  </p>
+                </div>
+              )}
+              {/* [19 T8] 좌상 귀속(14 J3 ACCEPT 스냅샷) + 정산 청구 상태 — 지금까지 상세에 없던 축. */}
+              <div>
+                <p className="text-xs text-gray-500">귀속 좌상</p>
+                <p className="font-medium text-gray-800" data-testid="order-dealer">
+                  {order.dealerName ?? (order.dealerId ? order.dealerId.slice(0, 8) : "본사 직속")}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">정산 청구</p>
+                <p className="font-medium text-gray-800" data-testid="order-settlement">
+                  {order.dealerSettlementId ? (order.settlementStatus ?? "청구됨") : "미정산"}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">현장 도착</p>
+                <p className="font-medium text-gray-800" data-testid="order-arrived-at">
+                  {order.arrivedAt ? new Date(order.arrivedAt).toLocaleString("ko-KR") : "-"}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">등록 바코드</p>
+                <p className="font-medium text-gray-800" data-testid="order-barcode-count">
+                  {order.barcodeCount > 0 ? (
+                    <Link
+                      to={`/traceability?order=${order.id}`}
+                      className="text-primary underline underline-offset-2"
+                      data-testid="order-trace-link"
+                    >
+                      {order.barcodeCount}개 · 유통이력 보기
+                    </Link>
+                  ) : (
+                    "없음"
+                  )}
+                </p>
+              </div>
               <div className="border-t border-gray-50 pt-3 sm:col-span-2">
                 <p className="text-xs text-gray-500">수거 주소</p>
                 <p className="text-sm text-gray-700">{order.pickupAddress}</p>

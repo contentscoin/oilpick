@@ -15,18 +15,26 @@ import type { OrderStatus } from "@oilpick/core";
 async function fetchNameMaps(): Promise<{
   supplierNames: Map<string, string>;
   riderNames: Map<string, string>;
+  riderVehicles: Map<string, string>;
 }> {
-  const [suppliersRes, ridersRes] = await Promise.all([
+  const [suppliersRes, ridersRes, profilesRes] = await Promise.all([
     supabase.from("supplier_profiles").select("id, store_name"),
     supabase.from("rider_profiles").select("id, vehicle_number"),
+    // [19 T8] 라이더 표시명 — 지금까지 vehicle_number를 "라이더" 자리에 출력해 차량번호가
+    // 이름처럼 보였다(19 §0 데이터 연결 오류). 이름은 profiles.display_name이 진실이고
+    // 차량번호는 보조 표기로 내린다.
+    supabase.from("profiles").select("id, display_name").eq("role", "rider"),
   ]);
   const supplierNames = new Map<string, string>(
     (suppliersRes.data ?? []).map((s) => [s.id as string, s.store_name as string]),
   );
-  const riderNames = new Map<string, string>(
+  const riderVehicles = new Map<string, string>(
     (ridersRes.data ?? []).map((r) => [r.id as string, r.vehicle_number as string]),
   );
-  return { supplierNames, riderNames };
+  const riderNames = new Map<string, string>(
+    (profilesRes.data ?? []).map((p) => [p.id as string, p.display_name as string]),
+  );
+  return { supplierNames, riderNames, riderVehicles };
 }
 
 export interface AdminOrderRow {
@@ -36,6 +44,8 @@ export interface AdminOrderRow {
   supplierName: string;
   riderId: string | null;
   riderName: string | null;
+  /** [19 T8] 라이더 차량번호 — 이름 옆 보조 표기(이름 자리에 차량번호를 넣던 표기 교정). */
+  riderVehicle: string | null;
   requestedKg: number;
   measuredKg: number | null;
   finalKg: number | null;
@@ -45,9 +55,9 @@ export interface AdminOrderRow {
   pickupAddress: string;
   createdAt: string;
   /**
-   * 07 F12-⑤: ARRIVED 진입 시각(order_events to_status='ARRIVED'의 최신 시각). pickup_orders에는
-   * arrived_at 컬럼이 없어(init.sql) 이벤트에서 조회한다. ARRIVED가 아니거나 이벤트가 없으면 null.
-   * 24h 초과 체류 하이라이트(교착 조기 감지, 07 §1-3)의 기준 타임스탬프.
+   * 07 F12-⑤: ARRIVED 진입 시각. 24h 초과 체류 하이라이트(교착 조기 감지, 07 §1-3)의 기준.
+   * [19 T8] pickup_orders.arrived_at(14 J1 신설 1급 컬럼)에서 직접 읽는다 — 컬럼이 생긴 뒤로도
+   * order_events를 재조회하던 죽은 경로를 제거했다(페이지당 추가 쿼리 1회도 함께 사라진다).
    */
   arrivedAt: string | null;
 }
@@ -104,7 +114,9 @@ export async function fetchAdminOrders(
   const from = page * ADMIN_ORDERS_PAGE_SIZE;
   let q = supabase
     .from("pickup_orders")
-    .select("id, status, supplier_id, rider_id, requested_kg, measured_kg, final_kg, pickup_address, created_at, order_kind, delivered_cans")
+    .select(
+      "id, status, supplier_id, rider_id, requested_kg, measured_kg, final_kg, pickup_address, created_at, order_kind, delivered_cans, arrived_at",
+    )
     .order(sort.column, { ascending: sort.ascending })
     // 동률(같은 kg·같은 시각)에서 페이지 간 행 중복/누락이 없도록 id로 순서를 고정한다.
     .order("id", { ascending: true })
@@ -119,27 +131,11 @@ export async function fetchAdminOrders(
   if (dateTo) {
     q = q.lt("created_at", dateToExclusiveBoundaryIso(dateTo));
   }
-  const [{ data, error }, { supplierNames, riderNames }] = await Promise.all([q, fetchNameMaps()]);
+  const [{ data, error }, { supplierNames, riderNames, riderVehicles }] = await Promise.all([q, fetchNameMaps()]);
   if (error) throw error;
   const fetched = data ?? [];
   const hasNextPage = fetched.length > ADMIN_ORDERS_PAGE_SIZE;
   const rows = fetched.slice(0, ADMIN_ORDERS_PAGE_SIZE);
-
-  // 07 F12-⑤: ARRIVED 주문의 진입 시각을 order_events에서 조회(pickup_orders엔 arrived_at 없음).
-  // ARRIVED 행이 있을 때만 추가 조회한다. 같은 주문에 ARRIVE 이벤트가 여러 개면 최신을 취한다.
-  const arrivedIds = rows.filter((r) => r.status === "ARRIVED").map((r) => r.id);
-  const arrivedAtMap = new Map<string, string>();
-  if (arrivedIds.length > 0) {
-    const { data: evs } = await supabase
-      .from("order_events")
-      .select("order_id, created_at")
-      .eq("to_status", "ARRIVED")
-      .in("order_id", arrivedIds)
-      .order("created_at", { ascending: false });
-    for (const ev of evs ?? []) {
-      if (!arrivedAtMap.has(ev.order_id)) arrivedAtMap.set(ev.order_id, ev.created_at);
-    }
-  }
 
   return {
     rows: rows.map((row) => ({
@@ -149,6 +145,7 @@ export async function fetchAdminOrders(
       supplierName: supplierNames.get(row.supplier_id) ?? row.supplier_id.slice(0, 8),
       riderId: row.rider_id,
       riderName: row.rider_id ? (riderNames.get(row.rider_id) ?? row.rider_id.slice(0, 8)) : null,
+      riderVehicle: row.rider_id ? (riderVehicles.get(row.rider_id) ?? null) : null,
       requestedKg: Number(row.requested_kg),
       measuredKg: row.measured_kg !== null ? Number(row.measured_kg) : null,
       finalKg: row.final_kg !== null ? Number(row.final_kg) : null,
@@ -156,7 +153,8 @@ export async function fetchAdminOrders(
       deliveredCans: row.delivered_cans !== null && row.delivered_cans !== undefined ? Number(row.delivered_cans) : null,
       pickupAddress: row.pickup_address,
       createdAt: row.created_at,
-      arrivedAt: arrivedAtMap.get(row.id) ?? null,
+      // ARRIVED가 아니면 하이라이트 대상이 아니라 null로 눌러 둔다(기존 동작 유지).
+      arrivedAt: row.status === "ARRIVED" ? ((row.arrived_at as string | null) ?? null) : null,
     })),
     hasNextPage,
   };
@@ -231,7 +229,8 @@ export function useAdminOrderEvents(orderId: string | undefined) {
   });
 }
 
-// arrivedAt은 목록 하이라이트(07 F12-⑤) 전용이라 상세에는 포함하지 않는다(드로어는 24h 하이라이트 미사용).
+// 목록의 arrivedAt은 ARRIVED 하이라이트(07 F12-⑤) 전용이라 그 상태에서만 채워진다. 상세는
+// [19 T8]에서 도착 시각을 정보로 표시하므로 상태와 무관하게 원본 값을 다시 싣는다(Omit 후 재선언).
 export interface AdminOrderDetail extends Omit<AdminOrderRow, "arrivedAt"> {
   measuredKg: number | null;
   photoUrls: string[];
@@ -247,6 +246,26 @@ export interface AdminOrderDetail extends Omit<AdminOrderRow, "arrivedAt"> {
   completedAt: string | null;
   /** 07 F10-⑤: 이 주문에 대한 쿠폰 환급(REFUND 원장) 존재 여부. 귀책 취소 시 true. */
   refunded: boolean;
+  // ── [19 T8] 데이터 연결 누락 보강(19 §0) ──
+  /** 라이더 차량번호(보조 표기). */
+  riderVehicle: string | null;
+  /** [14 J3] ACCEPT 시 스냅샷된 귀속 좌상. null=본사 직속. */
+  dealerId: string | null;
+  dealerName: string | null;
+  /** [14 J3] 정산 청구 귀속. null=미정산. */
+  dealerSettlementId: string | null;
+  settlementStatus: string | null;
+  /** [14 J2] 신유 구매 — 신청 통수·통당가 스냅샷·실배달 통수·대금. */
+  purchaseRequestedCans: number | null;
+  snapshotFreshCanPrice: number | null;
+  purchaseAmount: number | null;
+  /** [14 J2] 현장 상계 순액 = cash_paid_amount − purchase_amount(음수=점주 지불). */
+  netAmount: number | null;
+  /** [14 J1] 현장 도착 시각(1급 컬럼). */
+  arrivedAt: string | null;
+  acceptedAt: string | null;
+  /** [19 T7] 현장 등록 바코드 수 — 유통이력 화면으로 넘어가는 진입점. */
+  barcodeCount: number;
 }
 
 export function useAdminOrderDetail(orderId: string | undefined) {
@@ -255,26 +274,51 @@ export function useAdminOrderDetail(orderId: string | undefined) {
     enabled: Boolean(orderId),
     queryFn: async (): Promise<AdminOrderDetail | null> => {
       if (!orderId) return null;
-      const [{ data, error }, { supplierNames, riderNames }, refundRes] = await Promise.all([
-        supabase
-          .from("pickup_orders")
-          .select(
-            "id, status, supplier_id, rider_id, requested_kg, final_kg, measured_kg, photo_urls, dispute_reason, cancel_reason, pickup_address, created_at, snapshot_price_per_kg, coupon_cost, payout_method, cash_paid_amount, completed_at, order_kind, delivered_cans",
-          )
-          .eq("id", orderId)
-          .maybeSingle(),
-        fetchNameMaps(),
-        // 귀책 환급(REFUND) 여부 — coupon_ledger에서 이 주문의 REFUND 원장을 admin RLS로 조회.
-        supabase
-          .from("coupon_ledger")
-          .select("id")
-          .eq("order_id", orderId)
-          .eq("entry_type", "REFUND")
-          .limit(1),
-      ]);
+      const [{ data, error }, { supplierNames, riderNames, riderVehicles }, refundRes, itemsRes] =
+        await Promise.all([
+          supabase
+            .from("pickup_orders")
+            .select(
+              // [19 T8] 좌상·정산청구·신유·순액·도착시각을 함께 읽는다(19 §0 데이터 연결 누락 6종).
+              "id, status, supplier_id, rider_id, requested_kg, final_kg, measured_kg, photo_urls, dispute_reason, cancel_reason, pickup_address, created_at, snapshot_price_per_kg, coupon_cost, payout_method, cash_paid_amount, completed_at, order_kind, delivered_cans, dealer_id, dealer_settlement_id, purchase_requested_cans, snapshot_fresh_can_price, purchase_amount, net_amount, arrived_at, accepted_at",
+            )
+            .eq("id", orderId)
+            .maybeSingle(),
+          fetchNameMaps(),
+          // 귀책 환급(REFUND) 여부 — coupon_ledger에서 이 주문의 REFUND 원장을 admin RLS로 조회.
+          supabase
+            .from("coupon_ledger")
+            .select("id")
+            .eq("order_id", orderId)
+            .eq("entry_type", "REFUND")
+            .limit(1),
+          // [19 T8] 현장 등록 바코드 수 — 유통이력(/traceability) 진입 배지용.
+          supabase.from("pickup_items").select("barcode").eq("order_id", orderId),
+        ]);
       if (error) throw error;
       if (refundRes.error) throw refundRes.error;
       if (!data) return null;
+
+      // 좌상 표시명·정산 청구 상태는 있을 때만 추가 조회한다(대부분의 주문은 둘 다 null).
+      const [dealerName, settlementStatus] = await Promise.all([
+        data.dealer_id
+          ? supabase
+              .from("profiles")
+              .select("display_name")
+              .eq("id", data.dealer_id)
+              .maybeSingle()
+              .then((r) => (r.data?.display_name as string | undefined) ?? null)
+          : Promise.resolve(null),
+        data.dealer_settlement_id
+          ? supabase
+              .from("dealer_settlements")
+              .select("status")
+              .eq("id", data.dealer_settlement_id)
+              .maybeSingle()
+              .then((r) => (r.data?.status as string | undefined) ?? null)
+          : Promise.resolve(null),
+      ]);
+
       return {
         id: data.id,
         status: data.status,
@@ -299,6 +343,25 @@ export function useAdminOrderDetail(orderId: string | undefined) {
           data.cash_paid_amount !== null && data.cash_paid_amount !== undefined ? Number(data.cash_paid_amount) : null,
         completedAt: data.completed_at ?? null,
         refunded: (refundRes.data ?? []).length > 0,
+        riderVehicle: data.rider_id ? (riderVehicles.get(data.rider_id) ?? null) : null,
+        dealerId: (data.dealer_id as string | null) ?? null,
+        dealerName,
+        dealerSettlementId: (data.dealer_settlement_id as string | null) ?? null,
+        settlementStatus,
+        purchaseRequestedCans:
+          data.purchase_requested_cans !== null && data.purchase_requested_cans !== undefined
+            ? Number(data.purchase_requested_cans)
+            : null,
+        snapshotFreshCanPrice:
+          data.snapshot_fresh_can_price !== null && data.snapshot_fresh_can_price !== undefined
+            ? Number(data.snapshot_fresh_can_price)
+            : null,
+        purchaseAmount:
+          data.purchase_amount !== null && data.purchase_amount !== undefined ? Number(data.purchase_amount) : null,
+        netAmount: data.net_amount !== null && data.net_amount !== undefined ? Number(data.net_amount) : null,
+        arrivedAt: (data.arrived_at as string | null) ?? null,
+        acceptedAt: (data.accepted_at as string | null) ?? null,
+        barcodeCount: (itemsRes.data ?? []).length,
       };
     },
   });
