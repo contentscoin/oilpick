@@ -151,6 +151,8 @@ function mapTransitionError(rpcErr: { message?: string }): Response {
   // 매핑이 없으면 폴백 INVALID_TRANSITION으로 뭉개져 점주가 원인을 알 수 없고, 주문이 ARRIVED에 묶인다.
   if (message.includes("INSUFFICIENT_BALANCE")) return errorResponse("INSUFFICIENT_BALANCE", 409);
   if (message.includes("DEALER_LIMIT_EXCEEDED")) return errorResponse("DEALER_LIMIT_EXCEEDED", 409);
+  // [18 R3] PER_RIDER 배분 모드의 라이더 개인 한도 초과. 좌상 총량과 분리(복구 주체가 다르다).
+  if (message.includes("RIDER_LIMIT_EXCEEDED")) return errorResponse("RIDER_LIMIT_EXCEEDED", 409);
   if (message.includes("INSUFFICIENT_COUPON")) return errorResponse("INSUFFICIENT_COUPON", 409);
   if (message.includes("VALIDATION_ERROR")) return errorResponse("VALIDATION_ERROR", 400);
   if (message.includes("ALREADY_ACCEPTED")) return errorResponse("ALREADY_ACCEPTED", 409);

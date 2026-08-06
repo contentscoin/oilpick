@@ -1,7 +1,8 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { ToastProvider } from "@oilpick/ui";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { RiderCredit } from "@oilpick/core";
 import type { OrderStatus } from "@oilpick/core";
 import { ActiveRunPage } from "./ActiveRunPage";
 import type { ActiveRun, ActiveRunSummary } from "../hooks/useActiveRun";
@@ -13,12 +14,18 @@ const { mockUseSession, mockUseActiveRun, mockInvoke, mockStorageFrom, mockUseAc
   mockInvoke: vi.fn(),
   mockStorageFrom: vi.fn(),
 }));
+// [18 R7] 크레딧 게이지/fail-fast 소스. 기본은 "한도 없음"(본사 직속) — 기존 단언 무영향.
+const { mockUseRiderCredit } = vi.hoisted(() => ({
+  mockUseRiderCredit: vi.fn((): { data: RiderCredit | null } => ({ data: null })),
+}));
 vi.mock("../hooks/useSession", () => ({ useSession: mockUseSession }));
 vi.mock("../hooks/useActiveRun", () => ({
   useActiveRun: mockUseActiveRun,
   useActiveRunSummaries: mockUseActiveRunSummaries,
 }));
 vi.mock("../hooks/useRiderLocationPusher", () => ({ useRiderLocationPusher: vi.fn() }));
+// [18 R7] 크레딧 게이지/fail-fast 소스. 기본은 "한도 없음"(본사 직속) — 기존 단언 무영향.
+vi.mock("../hooks/useRiderCredit", () => ({ useRiderCredit: () => mockUseRiderCredit() }));
 // [16 L3] 내 위치·경로 조회는 부가 기능 — 기본은 "없음"(칩·경로선 미표기 폴백 경로).
 const { mockUseGeolocation, mockUseDirections } = vi.hoisted(() => ({
   mockUseGeolocation: vi.fn(() => null as { lat: number; lng: number } | null),
@@ -697,5 +704,58 @@ describe("ActiveRunPage — 현금으로 바꿔 다시 제출(N3, 08 P2 확장)"
   it("CASH 제출 대기 배너에는 원터치 버튼이 없다", () => {
     renderRun(makeRun({ status: "ARRIVED", measuredKg: 40, payoutMethod: "CASH" }));
     expect(screen.queryByTestId("cash-resubmit-button")).not.toBeInTheDocument();
+  });
+});
+
+// [18 R6·R7] 크레딧 게이지 + POINT 제출 fail-fast — 한도 초과 에러가 점주에게 도달하지 않게 막는다(18 X2).
+describe("ActiveRunPage — 포인트 지급 한도 게이지/fail-fast(18 R7)", () => {
+  afterEach(() => mockUseRiderCredit.mockReturnValue({ data: null }));
+
+  const CREDIT = (over: boolean) => ({
+    data: {
+      rider_id: "rider-1",
+      dealer_id: "d1",
+      allocation_mode: "PER_RIDER" as const,
+      limit_amount: 50000,
+      used: over ? 45000 : 10000,
+      available: over ? 5000 : 40000,
+      is_unlimited: false,
+    },
+  });
+
+  it("한도가 없으면(본사 직속) 게이지를 띄우지 않고 제출도 막지 않는다", () => {
+    mockUseRiderCredit.mockReturnValue({ data: null });
+    renderRun(makeRun({ status: "ARRIVED", measuredKg: null, finalKg: null }));
+    fireEvent.click(screen.getByTestId("payout-option-point"));
+    expect(screen.queryByTestId("measure-credit-gauge")).not.toBeInTheDocument();
+    expect(screen.getByTestId("submit-measure-button")).not.toBeDisabled();
+  });
+
+  it("POINT 선택 시 게이지를 띄우고, 잔여 안이면 제출 가능", () => {
+    mockUseRiderCredit.mockReturnValue(CREDIT(false));
+    renderRun(makeRun({ status: "ARRIVED", measuredKg: null, finalKg: null }));
+    fireEvent.change(screen.getByTestId("measured-kg-input"), { target: { value: "10" } }); // 10×1600 = 16,000
+    fireEvent.click(screen.getByTestId("payout-option-point"));
+    expect(screen.getByTestId("measure-credit-gauge")).toBeInTheDocument();
+    expect(screen.getByTestId("submit-measure-button")).not.toBeDisabled();
+  });
+
+  it("이번 건이 잔여 한도를 넘으면 제출을 잠그고 현금 전환을 안내한다", () => {
+    mockUseRiderCredit.mockReturnValue(CREDIT(true)); // 잔여 5,000
+    renderRun(makeRun({ status: "ARRIVED", measuredKg: null, finalKg: null }));
+    fireEvent.change(screen.getByTestId("measured-kg-input"), { target: { value: "10" } }); // 16,000 > 5,000
+    fireEvent.click(screen.getByTestId("payout-option-point"));
+    const submit = screen.getByTestId("submit-measure-button");
+    expect(submit).toBeDisabled();
+    expect(submit).toHaveTextContent("현금 지급으로 바꿔주세요");
+  });
+
+  it("현금(CASH)을 고르면 한도와 무관하게 제출할 수 있다", () => {
+    mockUseRiderCredit.mockReturnValue(CREDIT(true));
+    renderRun(makeRun({ status: "ARRIVED", measuredKg: null, finalKg: null }));
+    fireEvent.change(screen.getByTestId("measured-kg-input"), { target: { value: "10" } });
+    fireEvent.click(screen.getByTestId("payout-option-cash"));
+    expect(screen.queryByTestId("measure-credit-gauge")).not.toBeInTheDocument();
+    expect(screen.getByTestId("submit-measure-button")).not.toBeDisabled();
   });
 });

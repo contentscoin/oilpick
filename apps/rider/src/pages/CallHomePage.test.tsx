@@ -25,6 +25,8 @@ vi.mock("../hooks/useSession", () => ({ useSession: mockUseSession }));
 vi.mock("../hooks/useRiderProfile", () => ({ useRiderProfile: mockUseRiderProfile }));
 vi.mock("../hooks/useOpenCalls", () => ({ useOpenCalls: mockUseOpenCalls }));
 vi.mock("../hooks/useCoupons", () => ({ useCouponBalance: mockUseCouponBalance }));
+// [18 R6] 홈 크레딧 게이지 소스. 기본은 "한도 없음" — 게이지 미노출로 기존 단언 무영향.
+vi.mock("../hooks/useRiderCredit", () => ({ useRiderCredit: () => ({ data: null }) }));
 vi.mock("../hooks/useTodayStats", () => ({ useTodayStats: mockUseTodayStats }));
 vi.mock("../hooks/useGeolocation", () => ({ useGeolocation: mockUseGeolocation }));
 vi.mock("../lib/supabaseClient", () => ({ supabase: { from: mockFrom } }));

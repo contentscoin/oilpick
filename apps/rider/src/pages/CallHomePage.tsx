@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   CallCard,
+  CreditGaugeBar,
   DynamicIsland,
   EmptyState,
   PointBalanceCard,
@@ -18,6 +19,7 @@ import { useSession } from "../hooks/useSession";
 import { useRiderProfile } from "../hooks/useRiderProfile";
 import { useOpenCalls } from "../hooks/useOpenCalls";
 import { useCouponBalance } from "../hooks/useCoupons";
+import { useRiderCredit } from "../hooks/useRiderCredit";
 import { useTodayStats } from "../hooks/useTodayStats";
 import { useGeolocation } from "../hooks/useGeolocation";
 import { distanceKm } from "../lib/geo";
@@ -50,6 +52,8 @@ export function CallHomePage() {
   const { data: stats, isLoading: statsLoading } = useTodayStats(userId);
   // [17 Q3] 쿠폰 잔액(v_coupon_balance + coupon_ledger Realtime) — 콜 홈 잔액 카드(07 F5-①).
   const { data: couponBalance, isLoading: couponLoading } = useCouponBalance(userId);
+  // [18 R6] 포인트 지급 한도(v_rider_credit) — 좌상 크레딧 중 내 몫. 게이지바 소스.
+  const { data: credit } = useRiderCredit(userId);
   const position = useGeolocation(true);
   const {
     data: calls,
@@ -188,6 +192,19 @@ export function CallHomePage() {
               충전하기
             </PointHeroAction>
           }
+        />
+      )}
+
+      {/* [18 R6] 포인트 지급 한도 게이지 — 소속 좌상 크레딧에서 내가 쓸 수 있는 몫.
+          PER_RIDER면 내 배분분, POOL이면 좌상 공용 총량(라벨로 구분). 소속 없음(본사 직속)·
+          좌상 계정 미설정은 한도 자체가 없어 미노출한다(is_unlimited/limit_amount null). */}
+      {credit && !credit.is_unlimited && credit.limit_amount != null && (
+        <CreditGaugeBar
+          data-testid="rider-credit-gauge"
+          limitAmount={credit.limit_amount}
+          used={credit.used}
+          available={credit.available}
+          allocationMode={credit.allocation_mode}
         />
       )}
 

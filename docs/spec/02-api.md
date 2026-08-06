@@ -187,6 +187,15 @@ ACCEPTED 이후 모든 전이 단일 엔드포인트.
   → profiles update. 중복 아이디 409 `CONFLICT`. 부분 실패는 재시도로 수렴(모든 갱신이 멱등).
 - 출력: `{ dealerId, username }`(`dealerUpdateOutputSchema` — 수정 후 로그인 아이디).
 
+## 20-3. `dealer-rider-limit-set` (admin + 소속 좌상) — 18 R2·R9
+> 라이더 개인 포인트 지급 한도(`rider_profiles.credit_limit`) 배분. `guard_rider_verify`가
+> service_role 외 변경을 되돌리므로 이 Edge가 유일 경로(라이더 셀프 상향 차단).
+- 입력: `{ riderId, creditLimit: int|null }`(`dealerRiderLimitSetInputSchema`). role=admin 또는 dealer.
+  `null`은 배분 해제 = PER_RIDER 모드에서 0으로 취급(지급 불가).
+- 처리: 라이더 존재 확인 + **dealer는 자기 소속만**(아니면 403 `FORBIDDEN`) → `fn_set_rider_credit_limit`.
+  라이더 없음 404 `NOT_FOUND`.
+- 출력: `{ riderId, creditLimit }`(`dealerRiderLimitSetOutputSchema`).
+
 ## 21. `dealer-assign` (admin + 좌상) — 13 I2·D6
 > rider_profiles.dealer_id 배정/해제. dealer_id는 guard_rider_verify상 service_role만 변경 → 이 Edge가 유일 경로.
 - 입력: `{ riderId, dealerId | null }`(`dealerAssignInputSchema`). role=admin 또는 dealer.
@@ -331,8 +340,9 @@ ACCEPTED 이후 모든 전이 단일 엔드포인트.
   키는 서버 시크릿 `VWORLD_KEY`. 미설정 시 200 + `configured:false`로 조용히 비활성(호출부는 수동
   좌표 입력으로 강등). 인증만 요구(역할 무관 — 점주가 매장 주소를 등록한다). directions와 동일 패턴.
 - **price-set** 분기: `kind='FRESH'`면 `{ pricePerCan }` → fresh_oil_price_ticks. 미지정=폐유 시세(기존).
-- **dealer-account-set**(admin): `{ dealerId, depositAmount, creditLimit, claimThreshold, feeRateBp }` →
-  fn_set_dealer_account upsert.
+- **dealer-account-set**(admin): `{ dealerId, depositAmount, creditLimit, claimThreshold, feeRateBp,
+  allocationMode? }` → fn_set_dealer_account upsert. **[18 R1]** `allocationMode`(`'POOL'|'PER_RIDER'`)
+  생략 시 기존 값 유지(신규 행은 POOL). RPC 시그니처가 7파라미터로 교체됐다(구 6파라미터 삭제).
 - **dealer-claim**(admin): `{ action:'create', dealerId }` / `{ action:'settle'|'void', settlementId }` →
   fn_create/settle/void_dealer_claim. create=미정산 주문 집계·스탬핑, void=스탬프 해제(풀 복귀).
 - 조회 뷰: `v_dealer_statement`(usage/limit/headroom/over_threshold), `v_dealer_settlement_orders`(청구 상세/CSV).

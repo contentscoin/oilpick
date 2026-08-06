@@ -27,7 +27,7 @@ Deno.serve((req) =>
     if (!parsed.success) {
       return errorResponse("VALIDATION_ERROR", 400, parsed.error.issues[0]?.message);
     }
-    const { dealerId, depositAmount, creditLimit, claimThreshold, feeRateBp } = parsed.data;
+    const { dealerId, depositAmount, creditLimit, claimThreshold, feeRateBp, allocationMode } = parsed.data;
 
     const { data: account, error } = await admin.rpc("fn_set_dealer_account", {
       p_dealer_id: dealerId,
@@ -36,6 +36,8 @@ Deno.serve((req) =>
       p_claim_threshold: claimThreshold,
       p_fee_rate_bp: feeRateBp,
       p_admin_id: uid,
+      // [18 R1] 생략 시 null → RPC가 기존 값 유지(신규 행은 POOL).
+      p_allocation_mode: allocationMode ?? null,
     });
     if (error) {
       if ((error.message ?? "").includes("NOT_FOUND")) {
@@ -50,6 +52,7 @@ Deno.serve((req) =>
       creditLimit: account.credit_limit,
       claimThreshold: account.claim_threshold,
       feeRateBp: account.fee_rate_bp,
+      allocationMode: account.allocation_mode,
     });
   })
 );

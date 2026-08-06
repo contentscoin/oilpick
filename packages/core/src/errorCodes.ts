@@ -74,6 +74,14 @@ export const PAYMENT_FAILED = "PAYMENT_FAILED";
 export const DEALER_LIMIT_EXCEEDED = "DEALER_LIMIT_EXCEEDED";
 
 /**
+ * [18 R3] PER_RIDER 배분 모드에서 라이더 **개인** 한도를 넘길 때 fn_settle_trade가 raise. HTTP 409.
+ * 좌상 총량(DEALER_LIMIT_EXCEEDED)과 분리한다 — 복구 주체가 다르다: 총량은 회사↔좌상 정산 청구가,
+ * 개인 한도는 소속 좌상의 재배분이 푼다. 라이더 앱은 게이지바+제출 전 fail-fast로 이 에러가
+ * 점주에게 도달하지 않게 막는다(18 X2·R7). 18 §2, 02-api.md `order-transition`.
+ */
+export const RIDER_LIMIT_EXCEEDED = "RIDER_LIMIT_EXCEEDED";
+
+/**
  * 라이더가 활성 주문 상한(MAX_RIDER_ACTIVE_ORDERS)에 도달한 상태로 콜을 수락할 때. HTTP 409.
  * 점주 측 TOO_MANY_ACTIVE와 코드를 분리한다 — 한글 문구("요청" vs "수락")와 복구 행동이 다르다.
  */
@@ -122,6 +130,7 @@ export const ERROR_CODES = {
   COUPON_PRICE_NOT_SET,
   PAYMENT_FAILED,
   DEALER_LIMIT_EXCEEDED,
+  RIDER_LIMIT_EXCEEDED,
   RIDER_TOO_MANY_ACTIVE,
   NO_RIDER,
   VALIDATION_ERROR,
@@ -147,6 +156,7 @@ export const ERROR_MESSAGE_KO: Record<ErrorCode, string> = {
   COUPON_PRICE_NOT_SET: "쿠폰 단가가 아직 설정되지 않았어요. 관리자 설정 후 이용할 수 있어요.",
   PAYMENT_FAILED: "결제 승인에 실패했어요. 다시 시도해 주세요.",
   DEALER_LIMIT_EXCEEDED: "라이더 소속 좌상의 사용한도를 초과했어요. 현금 지급으로 다시 요청해 주세요.",
+  RIDER_LIMIT_EXCEEDED: "라이더에게 배분된 포인트 한도를 초과했어요. 현금 지급으로 다시 요청해 주세요.",
   RIDER_TOO_MANY_ACTIVE: "진행 중인 콜이 이미 3건이에요. 하나를 완료한 뒤 받을 수 있어요.",
   NO_RIDER: "수락한 라이더가 없어 자동 취소되었어요.",
   VALIDATION_ERROR: "입력값을 확인해주세요.",

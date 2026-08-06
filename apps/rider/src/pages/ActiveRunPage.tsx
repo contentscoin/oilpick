@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   BigButton,
   CheckList,
+  CreditGaugeBar,
   EmptyState,
   MapView,
   NumberFlow,
@@ -39,6 +40,7 @@ import {
   type OrderKind,
   type OrderStatus,
   type PayoutMethod,
+  type RiderCredit,
   type PickupGeo,
   ORDER_STATUS_LABEL,
 } from "@oilpick/core";
@@ -50,6 +52,7 @@ import { useActiveRun, useActiveRunSummaries, type ActiveRunSummary } from "../h
 import { useDirections } from "../hooks/useDirections";
 import { useGeolocation, type GeoPosition } from "../hooks/useGeolocation";
 import { useRiderLocationPusher } from "../hooks/useRiderLocationPusher";
+import { useRiderCredit } from "../hooks/useRiderCredit";
 import { distanceKm } from "../lib/geo";
 import {
   clearDraft,
@@ -89,6 +92,8 @@ export function ActiveRunPage() {
   // [16 L3] 내 위치 1회 조회 — 전환기 거리·권장 순서(§3-3)와 경로 미리보기 origin(§3-1) 공용.
   // 권한 거부·실패 시 null: 거리 칩·경로선 미표기 폴백(운행 흐름은 그대로).
   const position = useGeolocation(true);
+  // [18 R7] 내 포인트 지급 한도 — ARRIVED 계량 패널의 POINT fail-fast/게이지에 쓴다.
+  const { data: credit } = useRiderCredit(riderId);
 
   useRiderLocationPusher(Boolean(run));
 
@@ -154,6 +159,7 @@ export function ActiveRunPage() {
           orderKind={run.orderKind}
           purchaseRequestedCans={run.purchaseRequestedCans}
           snapshotFreshCanPrice={run.snapshotFreshCanPrice}
+          credit={credit ?? null}
         />
       )}
       {run.status === "DISPUTED" && (
@@ -627,6 +633,7 @@ function ArrivedPanel({
   orderKind,
   purchaseRequestedCans,
   snapshotFreshCanPrice,
+  credit,
 }: {
   orderId: string;
   /** [N5] 요청 kg(requested_kg) — 계량 입력 프리필. 0(신유 단독)이면 빈 값 유지. */
@@ -642,6 +649,8 @@ function ArrivedPanel({
   orderKind: OrderKind | null;
   purchaseRequestedCans: number | null;
   snapshotFreshCanPrice: number | null;
+  /** [18 R7] 내 포인트 지급 한도(v_rider_credit). POINT 선택 시 fail-fast 판정에 쓴다. null=한도 없음. */
+  credit: RiderCredit | null;
 }) {
   // [14 J2] 구매 동반(PURCHASE/MIXED)이면 현장 배달 통수를 입력받고 폐유 수령액과 상계한다.
   const purchaseInvolved = orderKind === "PURCHASE" || orderKind === "MIXED";
@@ -1168,6 +1177,13 @@ function ArrivedPanel({
     purchaseInvolved && snapshotFreshCanPrice != null ? estimatePurchase(deliveredCans, snapshotFreshCanPrice) : 0;
   const netAmount = payoutAmount - purchaseAmount;
 
+  // [18 R7] 크레딧 fail-fast — POINT 지급으로 점주에게 실제 발행될 금액은 상계 후 순액(netAmount>0).
+  // 이 금액이 잔여 한도를 넘으면 서버(fn_settle_trade)가 점주 확인 시점에 거부한다(18 X2). 그 에러가
+  // 무관한 점주에게 도달하지 않도록 제출 자체를 여기서 막는다. 서버 게이트는 동시성 최종 방어선으로 유지.
+  const creditApplies = isPointSelected && credit != null && !credit.is_unlimited && credit.limit_amount != null;
+  const pendingPointAmount = netAmount > 0 ? netAmount : 0;
+  const creditBlocked = creditApplies && pendingPointAmount > credit!.available;
+
   return (
     <form data-testid="run-arrived-panel" onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {/* [16 L4] 드래프트 복원 배너 — 저장 시각 표기(낡은 입력임을 인지시킨다) + 수동 파기. */}
@@ -1259,6 +1275,18 @@ function ArrivedPanel({
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <span style={{ fontSize: 14, fontWeight: 600, color: gray[800] }}>지급 수단 (필수)</span>
           <PayoutMethodSelect value={payout} onChange={setPayout} disabled={submitting} />
+          {/* [18 R6·R7] POINT를 고른 순간 내 잔여 한도와 이번 건을 대조해 보여준다. 초과면
+              아래 제출 버튼이 잠기고 현금으로 유도한다(점주에게 에러가 가지 않게). */}
+          {creditApplies && (
+            <CreditGaugeBar
+              data-testid="measure-credit-gauge"
+              limitAmount={credit!.limit_amount}
+              used={credit!.used}
+              available={credit!.available}
+              allocationMode={credit!.allocation_mode}
+              pendingAmount={pendingPointAmount}
+            />
+          )}
         </div>
 
         {/* 08 G6-③: 지급액 미리보기 — 수단별 라벨/단위 분기. 앰버(accent) 강조 배너. */}
@@ -1538,16 +1566,20 @@ function ArrivedPanel({
 
       {/* E8-③: 업로드 중에는 loading 스피너 문구("처리 중...") 대신 진행 카운트를 버튼에 노출한다
           (loading=true면 BigButton이 children을 숨기므로 disabled로만 잠근다). */}
+      {/* [18 R7] 한도 초과 상태에서는 제출을 잠근다 — 제출해봐야 점주 확인 단계에서 서버가 거부하고
+          그 에러를 점주가 보게 된다(18 X2). 현금 전환이 유일한 진행 경로임을 버튼 문구로 알린다. */}
       <BigButton
         type="submit"
         data-testid="submit-measure-button"
         loading={submitting && !uploadProgress}
-        disabled={submitting}
+        disabled={submitting || creditBlocked}
       >
         {uploadProgress ? (
           <span data-testid="upload-progress">
             사진 {uploadProgress.current}/{uploadProgress.total} 업로드 중
           </span>
+        ) : creditBlocked ? (
+          "한도 초과 — 현금 지급으로 바꿔주세요"
         ) : (
           "계량 제출 → 사장님 확인 요청"
         )}

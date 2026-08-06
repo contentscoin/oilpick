@@ -516,6 +516,10 @@ import_map = "./functions/import_map.json"
 verify_jwt = true
 import_map = "./functions/import_map.json"
 
+[functions.dealer-rider-limit-set]
+verify_jwt = true
+import_map = "./functions/import_map.json"
+
 [functions.dealer-assign]
 verify_jwt = true
 import_map = "./functions/import_map.json"

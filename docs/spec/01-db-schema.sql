@@ -24,6 +24,10 @@ create type coupon_purchase_status as enum ('PENDING','PAID','FAILED','EXPIRED',
 -- [08 P2] 현장 지급수단(실 DDL: 20260715000001)
 create type payout_method as enum ('CASH','POINT');
 
+-- [18 R1] 좌상 크레딧 배분 모드(실 DDL: 20260806000003). POOL=소속 라이더가 총량 공유(선착순),
+-- PER_RIDER=라이더별 개인 한도(rider_profiles.credit_limit) 배분. 기존 좌상 기본값 POOL=동작 무변경.
+create type dealer_alloc_mode as enum ('POOL','PER_RIDER');
+
 -- ===== profiles =====
 create table profiles (
   id uuid primary key references auth.users(id) on delete cascade,
@@ -60,6 +64,7 @@ create table rider_profiles (
   recycler_name text, recycler_contact text,  -- 인계 재활용업체(승인 조건, 07 F11 D5. 실 DDL: 20260709000008)
   referral_code text unique,   -- [09 H2] 라이더 추천코드(Crockford base32 8자, Edge referral-code 생성. APPROVED 코드만 attach 유효. 실 DDL: 20260715000004)
   dealer_id uuid references profiles(id),  -- [13 I1] 소속 좌상(dealer). null=본사 직속. 셀프변경 차단(guard_rider_verify). 실 DDL: 20260722000002
+  credit_limit int check (credit_limit is null or credit_limit >= 0),  -- [18 R2] PER_RIDER 모드의 라이더 개인 한도(P). null=미배분=0. POOL 모드에선 무시. 셀프변경 차단(guard_rider_verify). 실 DDL: 20260806000003
   created_at timestamptz not null default now()
 );
 create index idx_rider_location on rider_profiles using gist(last_location);
@@ -155,10 +160,16 @@ create table dealer_accounts (
   credit_limit int not null default 0 check (credit_limit >= 0),      -- 사용한도(P)
   claim_threshold int not null default 5000000 check (claim_threshold > 0), -- 자동청구 배지 임계(P)
   fee_rate_bp int not null default 0 check (fee_rate_bp between 0 and 10000), -- 요율(bp)
+  allocation_mode dealer_alloc_mode not null default 'POOL', -- [18 R1] POOL=총량 공유(선착순) / PER_RIDER=라이더별 배분. 실 DDL: 20260806000003
   updated_at timestamptz not null default now(),
   updated_by uuid references profiles(id)
 );
 -- RLS: read=본인+admin. 쓰기=service_role RPC(fn_set_dealer_account)만.
+-- [18 R2] 크레딧 소비 게이트는 2단: ① 좌상 총량(모드 무관 항상) → ② PER_RIDER면 라이더 개인
+--   한도(rider_profiles.credit_limit, null=0). 초과 시 각각 DEALER_LIMIT_EXCEEDED /
+--   RIDER_LIMIT_EXCEEDED. 두 검사 모두 좌상 단위 advisory xact lock 안에서 수행(fn_settle_trade).
+-- [18 R6] 라이더 가시성 뷰 v_rider_credit(security_invoker) — rider_id, dealer_id, allocation_mode,
+--   limit_amount, used, available, is_unlimited. 라이더 본인·소속 좌상·admin이 기존 RLS로 조회.
 
 -- 정산 청구(원장). 주문 귀속=pickup_orders.dealer_settlement_id 스탬핑(날짜범위 아님).
 create table dealer_settlements (

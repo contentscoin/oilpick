@@ -23,6 +23,9 @@ OilPick을 유지한다(`docs/spec/10-brand.md` B4가 단일 진실). 모든 설
 - `docs/spec/17-coupon-revival.md` — 수거쿠폰 복권(8차, Q-태스크). **08 P1 폐기 결정의 명시적
   역전(CEO 2026-08-05)** — 라이더 쿠폰 구매(코엠 간편결제)·통당 1쿠폰 수락 게이트·좌상 실적
   조회의 단일 진실. 07/F14 자산 복원 기반, 08 지급수단 모델 불변
+- `docs/spec/18-dealer-credit-share.md` — 좌상 크레딧 공유·배분 + 라이더 가시성(9차, R-태스크).
+  배분 모드(POOL 총량공유 / PER_RIDER 라이더별 한도)·`rider_profiles.credit_limit`·2단 게이트
+  (좌상 총량 → 라이더 개인)·`v_rider_credit`·라이더 게이지바의 단일 진실. 14 크레딧(C5) 위 순수 추가
 - `docs/spec/16-ops-convenience.md` — 라이더·좌상 운영편의성 고도화(7차, L-태스크). 알림 계층 단일화(notifications.kind·dedupe 헬퍼)·라이더 인앱 경로 ETA/계량 드래프트/방문 순서·확인 교착 리마인드(상태 무접촉)·좌상 관제 뷰(v_dealer_active_orders, 14 §2-5 예약 실행)·정산 셀프서비스·정산 워치의 단일 진실. 정보구조·상태머신·원장 불변(08/09/13/14 위 순수 추가)
 
 ## 스택 (변경 금지)

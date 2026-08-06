@@ -191,8 +191,23 @@ function DealerListItem({
   return (
     <li className="rounded-card border border-gray-100 px-3 py-2 text-sm" data-testid={`dealer-item-${dealer.id}`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="min-w-0 font-medium text-gray-800">{dealer.displayName}</span>
+        <span className="min-w-0 font-medium text-gray-800">
+          {dealer.displayName}
+          {/* [18 R8·X1] 크레딧 계정 미등록 = 게이트 미적용(무제한 POINT 발행). 온보딩 누락을 가시화한다. */}
+          {!dealer.hasAccount && (
+            <span
+              data-testid={`dealer-no-account-${dealer.id}`}
+              title="크레딧 계정이 없어 사용한도 제한이 적용되지 않아요. 정산 화면에서 한도를 등록하세요."
+              className="ml-2 rounded-pill bg-danger/10 px-2 py-0.5 text-xs font-semibold text-danger"
+            >
+              한도 미설정
+            </span>
+          )}
+        </span>
         <span className="flex items-center gap-3">
+          {dealer.creditLimit != null && (
+            <span className="text-xs tabular-nums text-gray-500">한도 {dealer.creditLimit.toLocaleString()}P</span>
+          )}
           <span className="text-gray-500">{dealer.phone}</span>
           <button
             type="button"
