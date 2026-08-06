@@ -2,12 +2,15 @@ import { useState } from "react";
 import { PAYOUT_METHOD_LABEL, formatKrw, formatPoint, formatRelativeTime } from "@oilpick/core";
 import { useDealerSettlements, useDealerStatements, useDealerUnsettledOrders } from "../hooks/useDealersAdmin";
 import { downloadSettlementCsv } from "../lib/settlementCsv";
+import { Badge, Button, Card, Gauge, PageHeader, StatCard } from "../components/ui";
 
 /**
  * [14 J3]【dealer】 좌상 본인 정산 명세(/statement). v_dealer_statement·dealer_settlements는
  * RLS로 본인 행만 조회된다(읽기 전용 — 계정 설정·청구는 admin이 수행). §5.
  * [16 L7] 정산 셀프서비스: ① '미정산 내역' 섹션(usage 카드와 1:1 대사 — POINT 순액 합계 병기)
  * ② 청구 이력 행별 [CSV](admin과 공용 lib) — 매 청구마다 본사에 명세를 요청하던 왕복 제거.
+ * [19 T6] ③ 대사 **판정**을 표시한다 — 합계를 나란히 놓기만 하면 좌상이 직접 빼서 비교해야 했다.
+ * ④ 한도 게이지(관할 대시보드와 같은 시각 언어).
  */
 export function DealerStatementPage() {
   const { data: statements, isLoading } = useDealerStatements();
@@ -30,10 +33,10 @@ export function DealerStatementPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">내 정산 명세</h1>
-        <p className="text-sm text-gray-500">보증금 담보 사용한도와 미정산 사용액이에요. 청구·정산은 본사가 처리해요.</p>
-      </div>
+      <PageHeader
+        title="내 정산 명세"
+        description="보증금 담보 사용한도와 미정산 사용액이에요. 청구·정산은 본사가 처리해요."
+      />
 
       {isLoading ? (
         <p className="text-sm text-gray-500">불러오는 중...</p>
@@ -42,20 +45,55 @@ export function DealerStatementPage() {
           아직 계정이 설정되지 않았어요. 본사에 문의해 주세요.
         </p>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4" data-testid="dealer-statement-summary">
-          <StatCard label="사용한도" value={formatPoint(stmt.credit_limit)} />
-          <StatCard label="미정산 사용액" value={formatPoint(stmt.usage)} accent={stmt.over_threshold} />
-          <StatCard label="남은 여유" value={formatPoint(stmt.headroom)} />
-          <StatCard label="보증금" value={formatKrw(stmt.deposit_amount)} />
-        </div>
+        <>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4" data-testid="dealer-statement-summary">
+            <StatCard label="사용한도" value={formatPoint(stmt.credit_limit)} />
+            <StatCard
+              label="미정산 사용액"
+              value={formatPoint(stmt.usage)}
+              sub={stmt.over_threshold ? "자동 청구 임계 초과" : undefined}
+              tone={stmt.over_threshold ? "accent" : "neutral"}
+            />
+            <StatCard label="남은 여유" value={formatPoint(stmt.headroom)} />
+            <StatCard label="보증금" value={formatKrw(stmt.deposit_amount)} />
+          </div>
+          {/* [19 T6] 한도 게이지 — 숫자 4장만으로는 "얼마나 찼는지"가 즉시 읽히지 않는다. */}
+          <Card data-testid="dealer-statement-gauge">
+            <Gauge
+              used={stmt.usage}
+              limit={stmt.credit_limit}
+              label={
+                <>
+                  <span>
+                    사용 {stmt.usage.toLocaleString()}P / 한도 {stmt.credit_limit.toLocaleString()}P
+                  </span>
+                  <span className="tabular-nums">잔여 {stmt.headroom.toLocaleString()}P</span>
+                </>
+              }
+            />
+          </Card>
+        </>
       )}
 
       {/* [16 L7] 미정산 내역 — usage 카드 숫자의 근거 주문. 포인트 순액 합계로 1:1 대사. */}
       <div className="rounded-card bg-white p-6 shadow-card" data-testid="dealer-unsettled">
         <h2 className="mb-1 text-lg font-semibold text-gray-900">미정산 내역</h2>
-        <p className="mb-4 text-xs text-gray-500">
-          아직 청구되지 않은 완료 주문이에요. 포인트 순액 합계가 위 미정산 사용액과 일치해요.
+        <p className="mb-2 text-xs text-gray-500">
+          아직 청구되지 않은 완료 주문이에요. 포인트 순액 합계가 위 미정산 사용액과 일치해야 해요.
         </p>
+        {/* [19 T6] 대사 판정 — 좌상이 두 숫자를 직접 빼서 비교하지 않도록 결과를 못 박는다.
+            불일치는 데이터 이상 신호(청구 스탬핑 누락 등)라 본사 문의 문구까지 붙인다. */}
+        {stmt && (
+          <p className="mb-4" data-testid="dealer-reconcile">
+            {pointNetSum === stmt.usage ? (
+              <Badge tone="primary">대사 일치 · {formatPoint(pointNetSum)}</Badge>
+            ) : (
+              <Badge tone="danger">
+                대사 불일치 · 명세 {formatPoint(pointNetSum)} / 사용액 {formatPoint(stmt.usage)} — 본사에 문의해 주세요
+              </Badge>
+            )}
+          </p>
+        )}
         <div className="overflow-x-auto">
           {/* [03 레이아웃 강건성] 표 전체 nowrap 제거 — 글자 확대 시 셀 줄바꿈을 허용한다. */}
           <table className="w-full text-left text-sm" data-testid="dealer-unsettled-table">
@@ -129,15 +167,9 @@ export function DealerStatementPage() {
                   <td className="py-2 text-gray-500">{formatRelativeTime(s.claimed_at)}</td>
                   <td className="py-2">
                     {/* [16 L7] 근거 주문 CSV — RLS로 본인 청구만 조회된다(권한 확대 0). */}
-                    <button
-                      type="button"
-                      data-testid={`statement-csv-${s.id}`}
-                      disabled={csvBusy === s.id}
-                      onClick={() => void handleCsv(s.id)}
-                      className="rounded-button border border-gray-200 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-50"
-                    >
+                    <Button size="sm" data-testid={`statement-csv-${s.id}`} disabled={csvBusy === s.id} onClick={() => void handleCsv(s.id)}>
                       CSV
-                    </button>
+                    </Button>
                   </td>
                 </tr>
               ))}
@@ -152,15 +184,6 @@ export function DealerStatementPage() {
           </table>
         </div>
       </div>
-    </div>
-  );
-}
-
-function StatCard({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
-  return (
-    <div className="rounded-card bg-white p-5 shadow-card">
-      <p className="text-sm text-gray-500">{label}</p>
-      <p className={`mt-1 text-xl font-bold tabular-nums ${accent ? "text-accent-deep" : "text-primary"}`}>{value}</p>
     </div>
   );
 }

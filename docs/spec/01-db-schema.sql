@@ -225,6 +225,13 @@ create table pickup_items (
 create index idx_pickup_items_order on pickup_items (order_id);
 create index idx_pickup_items_barcode on pickup_items (barcode);
 -- RLS: read = admin + 주문 당사자(supplier/rider). write 정책 없음(service_role RPC만).
+-- [19 T2] 유통이력 뷰 2종(20260806000004, 둘 다 security_invoker=true — 기저 RLS 위임):
+--   v_barcode_trace   : 회수 이벤트 1건=1행. pickup_items에 주문/매장/라이더/좌상/정산 연결.
+--                       정렬 축 seen_at = coalesce(captured_at, created_at).
+--   v_barcode_summary : 바코드 1개=1행 집계(pickup_count·order_count·rider_count·
+--                       first/last_seen_at·last_order_id·last_rider_id).
+--   가시성: admin=전체, 점주/라이더=자기 주문분, **좌상=0행**(pickup_items 읽기 정책 없음 —
+--   유통이력 메뉴는 admin 전용. 좌상 확장은 19 §4 보류 과제).
 
 -- ===== 포인트 원장 (append-only) =====
 -- [08 P3·P4] 현역 복권 — POINT 지급수단의 EARN(fn_transition_order CONFIRM_MEASURE/FORCE_COMPLETE),
@@ -761,7 +768,14 @@ create policy p_profiles_read_own_riders on profiles for select using (fn_dealer
 create policy p_referrals_read_by_dealer on referrals for select using (fn_dealer_owns_rider(referrer_rider_id));
 create policy p_profiles_read_my_dealer on profiles for select using (id = (select dealer_id from rider_profiles where id = auth.uid())); -- I5 라이더→소속 좌상 상호
 -- v_dealer_rider_stats(security_invoker): 라이더별 완료수·수거kg·현금/포인트 지급합·레퍼럴 실적(표시용 통계, 정산 아님).
--- [17 Q5] + coupon_used_qty(완료 주문 coupon_cost 합, null→0) 끝에 append — 현행 정의는 20260805000001이 단일 진실(파일 끝 절 참조).
+-- [17 Q5] + coupon_used_qty(완료 주문 coupon_cost 합, null→0) 끝에 append.
+-- [19 T10] **귀속 축**(20260806000005이 현행 단일 진실): 집계는
+--   `o.rider_id = rp.id and o.dealer_id is not distinct from rp.dealer_id`
+--   = pickup_orders.dealer_id 스냅샷 ∩ rider_profiles.dealer_id 현 소속 — 정산(v_dealer_statement)·
+--   크레딧(v_rider_credit)과 **같은 축**이다. 이 필터가 없던 시절엔 축을 RLS가 우연히 대신해
+--   좌상 시점과 admin 시점의 값이 달랐다(admin은 라이더 전 생애 실적을 현 소속 좌상에 계상). 19 §5.
+--   `=`가 아니라 `is not distinct from`인 이유: 본사 직속(dealer_id null) 라이더의 실적이
+--   null 비교로 통째로 증발하는 것을 막는다.
 
 -- ===== 함수 EXECUTE 권한 [14 J4] (20260724000010_rpc_execute_lockdown.sql) =====
 -- Supabase는 `alter default privileges in schema public grant execute on functions to anon,

@@ -520,6 +520,11 @@ import_map = "./functions/import_map.json"
 verify_jwt = true
 import_map = "./functions/import_map.json"
 
+# [19 T4] 공급업체·라이더 회원 정보수정(admin 전용). 좌상은 dealer-update가 담당.
+[functions.user-update]
+verify_jwt = true
+import_map = "./functions/import_map.json"
+
 [functions.dealer-assign]
 verify_jwt = true
 import_map = "./functions/import_map.json"

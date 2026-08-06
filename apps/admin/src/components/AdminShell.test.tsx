@@ -41,3 +41,23 @@ describe("AdminShell role 메뉴 (13 I3)", () => {
     expect(screen.getByTestId("admin-role-label").textContent).toBe("좌상");
   });
 });
+
+// [19 T3·T7] 메뉴 그룹 재구성 + 유통이력 신설. 라우트·role 게이트는 불변(표시 구조만 변경).
+describe("AdminShell 메뉴 그룹 (19 T3)", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("admin 메뉴를 업무 그룹으로 묶고 '유통이력'을 노출한다", () => {
+    mockUseCurrentRole.mockReturnValue({ role: "admin", loading: false });
+    renderShell();
+    for (const group of ["운영", "조직·회원", "정산·청구", "추적·분석", "지원"]) {
+      expect(screen.getByText(group)).toBeInTheDocument();
+    }
+    expect(screen.getByText("유통이력")).toBeInTheDocument();
+  });
+
+  it("dealer에게는 유통이력을 노출하지 않는다(admin 전용 — 19 §1 T2)", () => {
+    mockUseCurrentRole.mockReturnValue({ role: "dealer", loading: false });
+    renderShell();
+    expect(screen.queryByText("유통이력")).not.toBeInTheDocument();
+  });
+});

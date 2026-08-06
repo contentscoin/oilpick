@@ -51,6 +51,10 @@ const DealerSettlementPage = lazy(() =>
 const DealerStatementPage = lazy(() =>
   import("./pages/DealerStatementPage").then((m) => ({ default: m.DealerStatementPage })),
 );
+// [19 T7] 유통이력(바코드별 회수 이력) — admin 전용.
+const TraceabilityPage = lazy(() =>
+  import("./pages/TraceabilityPage").then((m) => ({ default: m.TraceabilityPage })),
+);
 
 /**
  * 03-frontend.md apps/admin 라우팅 + 13 I3. /login만 가드 밖. 나머지는 AuthGuard(admin|dealer
@@ -162,6 +166,14 @@ export function App() {
             element={
               <Protected>
                 <CsPage />
+              </Protected>
+            }
+          />
+          <Route
+            path="/traceability"
+            element={
+              <Protected>
+                <TraceabilityPage />
               </Protected>
             }
           />

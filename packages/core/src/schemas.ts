@@ -674,6 +674,54 @@ export const dealerUpdateOutputSchema = z.object({
 });
 export type DealerUpdateOutput = z.infer<typeof dealerUpdateOutputSchema>;
 
+/**
+ * user-update (admin, [19 T4]): 공급업체·라이더 회원 정보수정. docs/spec/19-admin-console.md §1 T4.
+ *
+ * 왜 Edge가 필요한가: `p_profiles_update`는 `id = auth.uid()`뿐이라 admin이 회원의 이름·연락처를
+ * 직접 고칠 수 없다(supplier_profiles/rider_profiles는 `p_sup_self`/`p_rider_self`로 admin 갱신이
+ * 되지만, 둘로 갈린 경로를 만드는 대신 감사 경로를 한 곳으로 모은다).
+ *
+ * **금지 필드**: verify_status·dealer_id·credit_limit(각각 rider-verify·dealer-assign·
+ * dealer-rider-limit-set 전용 — guard_rider_verify가 이중 방어), role, 포인트·쿠폰 잔액.
+ * 좌상(dealer) 계정 수정은 dealer-update(13 I2 보강)가 담당한다 — 이 Edge는 404로 막는다.
+ */
+export const userUpdateInputSchema = z
+  .object({
+    userId: uuidSchema,
+    /** profiles — 공통. */
+    displayName: z.string().min(1).max(40).optional(),
+    phone: z.string().min(1).max(20).optional(),
+    /** supplier_profiles — role='supplier'일 때만 적용. */
+    storeName: z.string().min(1).max(60).optional(),
+    bizNumber: z.string().min(1).max(20).optional(),
+    address: z.string().min(1).max(200).optional(),
+    /** rider_profiles — role='rider'일 때만 적용. */
+    vehicleNumber: z.string().min(1).max(20).optional(),
+    recyclerName: z.string().max(60).nullable().optional(),
+    recyclerContact: z.string().max(40).nullable().optional(),
+  })
+  .refine(
+    (v) =>
+      v.displayName != null ||
+      v.phone != null ||
+      v.storeName != null ||
+      v.bizNumber != null ||
+      v.address != null ||
+      v.vehicleNumber != null ||
+      v.recyclerName !== undefined ||
+      v.recyclerContact !== undefined,
+    { message: "수정할 항목을 하나 이상 입력해주세요." },
+  );
+export type UserUpdateInput = z.infer<typeof userUpdateInputSchema>;
+
+export const userUpdateOutputSchema = z.object({
+  userId: uuidSchema,
+  role: z.enum(["supplier", "rider"]),
+  /** 실제로 갱신된 필드명 목록(감사·UI 안내용). */
+  updated: z.array(z.string()),
+});
+export type UserUpdateOutput = z.infer<typeof userUpdateOutputSchema>;
+
 /** dealer-assign (admin + 좌상 자기소속, 13 I2): rider_profiles.dealer_id 배정/해제. dealerId=null은 해제. */
 export const dealerAssignInputSchema = z.object({
   riderId: uuidSchema,

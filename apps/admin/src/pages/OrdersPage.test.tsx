@@ -60,6 +60,7 @@ function order(overrides: Partial<AdminOrderRow> = {}): AdminOrderRow {
     supplierName: "행복식당",
     riderId: null,
     riderName: null,
+    riderVehicle: null,
     requestedKg: 30,
     measuredKg: null,
     finalKg: null,
@@ -161,7 +162,8 @@ describe("OrdersPage", () => {
           supplierName: "김밥천국",
           pickupAddress: "부산 해운대구",
           riderId: "r-1",
-          riderName: "12가3456",
+          riderName: "김라이더",
+          riderVehicle: "12가3456",
         }),
       ]),
     );

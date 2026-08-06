@@ -27,13 +27,14 @@
 supabase login
 supabase link --project-ref <PROJECT_REF>
 
-# 마이그레이션 적용(31개) — Storage 버킷·RLS·RPC·권한가드·payout_method(08)·referrals(09)까지 전부 포함.
+# 마이그레이션 적용 — Storage 버킷·RLS·RPC·권한가드·payout_method(08)·referrals(09)까지 전부 포함.
 # seed.sql은 로컬 전용이라 프로덕션엔 적용되지 않는다(아래 3-1에서 admin 수동 생성).
 supabase db push
 
 # Edge Functions 배포 — 08 withdraw-*/point-adjust 부활, 09 referral-code/attach/settle,
 # 11 M9-b directions, 13 dealer-create/dealer-assign(+dealer-update, 08 Q절 CEO 2026-08-06),
 # [18 R3] dealer-rider-limit-set 신설 + order-transition RIDER_LIMIT_EXCEEDED 매핑,
+# [19 T4] user-update 신설(공급업체·라이더 회원 정보수정 — admin 전용),
 # [17 Q2] coupon-* 6종 재복원
 # (coupon-purchase-intent/confirm/return·coupon-refund/adjust/price-set — return은
 # verify_jwt=false). verify_jwt 등은 supabase/config.toml을 따른다.

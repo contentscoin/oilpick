@@ -1,7 +1,10 @@
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import type { OrderStatus, UserUpdateInput, UserUpdateOutput } from "@oilpick/core";
 import { supabase } from "../lib/supabaseClient";
 import { queryKeys } from "../lib/queryClient";
+import { invokeEdgeFunction } from "../lib/edgeFunction";
+import { fetchDisplayNameMap } from "../lib/adminQueries";
 
 export interface AdminSupplierRow {
   id: string;
@@ -64,6 +67,11 @@ export interface AdminRiderRow {
   recyclerContact: string | null;
   isOnline: boolean;
   createdAt: string;
+  /** [19 T4] 소속 좌상(13 I1) — 회원 관리에서 조직 귀속을 못 보던 누락 연결. */
+  dealerId: string | null;
+  dealerName: string | null;
+  /** [19 T4] 개인 지급 한도(18 R2). null=미배분(PER_RIDER 모드에선 0 취급). */
+  creditLimit: number | null;
 }
 
 /** rider PENDING 큐 포함 전체 라이더 목록. statusFilter: 'ALL' | verify_status. */
@@ -75,8 +83,9 @@ export function useAdminRiders(statusFilter: string) {
     queryFn: async (): Promise<AdminRiderRow[]> => {
       let q = supabase
         .from("rider_profiles")
+        // [19 T4] dealer_id·credit_limit 추가 — 회원 관리에서 소속·한도를 함께 본다.
         .select(
-          "id, biz_number, vehicle_number, verify_status, reject_reason, doc_biz_url, doc_vehicle_url, doc_permit_url, recycler_name, recycler_contact, is_online, created_at",
+          "id, biz_number, vehicle_number, verify_status, reject_reason, doc_biz_url, doc_vehicle_url, doc_permit_url, recycler_name, recycler_contact, is_online, created_at, dealer_id, credit_limit",
         )
         .order("created_at", { ascending: false });
       if (statusFilter !== "ALL") {
@@ -89,6 +98,10 @@ export function useAdminRiders(statusFilter: string) {
       if (error) throw error;
       if (profileErr) throw profileErr;
       const profileMap = new Map((profileRows ?? []).map((p) => [p.id as string, p]));
+      // 좌상 표시명은 rider profiles와 role이 달라 위 조회에 안 잡힌다 — 별도 배치로 붙인다.
+      const dealerNames = await fetchDisplayNameMap(
+        (data ?? []).map((r) => r.dealer_id as string | null).filter((v): v is string => Boolean(v)),
+      );
       return (data ?? []).map((row) => {
         const profile = profileMap.get(row.id) as { display_name: string; phone: string } | undefined;
         return {
@@ -106,6 +119,9 @@ export function useAdminRiders(statusFilter: string) {
           recyclerContact: row.recycler_contact,
           isOnline: row.is_online,
           createdAt: row.created_at,
+          dealerId: (row.dealer_id as string | null) ?? null,
+          dealerName: row.dealer_id ? (dealerNames.get(row.dealer_id as string) ?? null) : null,
+          creditLimit: (row.credit_limit as number | null) ?? null,
         };
       });
     },
@@ -255,4 +271,135 @@ export function useRiderCouponPurchases(riderId: string | undefined, enabled: bo
   }, [queryClient]);
 
   return query;
+}
+
+// ===== [19 T4] 회원 상세·정보수정 — docs/spec/19-admin-console.md §1 T4 =====
+
+/**
+ * 전 공급업체 포인트 잔액(v_point_balance). admin은 point_ledger RLS(p_ledger_read: 본인 또는
+ * admin) 위에서 invoker 뷰로 전체 행을 읽는다 — 잔액은 뷰로만 조회(절대 규칙 1).
+ */
+export function usePointBalances() {
+  const queryClient = useQueryClient();
+
+  const query = useQuery({
+    queryKey: ["admin", "users", "pointBalances"],
+    queryFn: async (): Promise<Map<string, number>> => {
+      const { data, error } = await supabase.from("v_point_balance").select("user_id, available");
+      if (error) throw error;
+      return new Map((data ?? []).map((row) => [row.user_id as string, Number(row.available ?? 0)]));
+    },
+  });
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("admin_point_balances")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "point_ledger" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["admin", "users", "pointBalances"] });
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
+
+  return query;
+}
+
+/**
+ * 라이더별 크레딧 현황(v_rider_credit — 18 R6). admin은 뷰 본문 술어의 is_admin() 분기로 전체.
+ * 회원 관리 라이더 상세에서 "배분 한도 / 사용 / 잔여"를 좌상 콘솔과 같은 값으로 보여준다.
+ */
+export interface RiderCreditRow {
+  limitAmount: number | null;
+  used: number;
+  available: number | null;
+  isUnlimited: boolean;
+  allocationMode: "POOL" | "PER_RIDER";
+}
+
+export function useRiderCredits() {
+  return useQuery({
+    queryKey: ["admin", "users", "riderCredits"],
+    queryFn: async (): Promise<Map<string, RiderCreditRow>> => {
+      const { data, error } = await supabase
+        .from("v_rider_credit")
+        .select("rider_id, limit_amount, used, available, is_unlimited, allocation_mode");
+      if (error) throw error;
+      return new Map(
+        (data ?? []).map((r) => [
+          r.rider_id as string,
+          {
+            limitAmount: (r.limit_amount as number | null) ?? null,
+            used: Number(r.used ?? 0),
+            available: (r.available as number | null) ?? null,
+            isUnlimited: Boolean(r.is_unlimited),
+            allocationMode: ((r.allocation_mode as "POOL" | "PER_RIDER") ?? "POOL"),
+          },
+        ]),
+      );
+    },
+  });
+}
+
+export interface UserOrderRow {
+  id: string;
+  status: OrderStatus;
+  finalKg: number | null;
+  requestedKg: number;
+  payoutMethod: "CASH" | "POINT" | null;
+  cashPaidAmount: number | null;
+  netAmount: number | null;
+  createdAt: string;
+  completedAt: string | null;
+}
+
+/**
+ * 회원 1명의 최근 주문(기본 10건) — 공급업체는 supplier_id, 라이더는 rider_id 축.
+ * 상세 드로어에서 "이 회원이 실제로 무엇을 했는가"를 화면 안에서 닫기 위한 최소 연결.
+ */
+export function useUserRecentOrders(userId: string | undefined, role: "supplier" | "rider", limit = 10) {
+  return useQuery({
+    queryKey: ["admin", "users", "orders", role, userId ?? "", limit],
+    enabled: Boolean(userId),
+    queryFn: async (): Promise<UserOrderRow[]> => {
+      if (!userId) return [];
+      const { data, error } = await supabase
+        .from("pickup_orders")
+        .select("id, status, requested_kg, final_kg, payout_method, cash_paid_amount, net_amount, created_at, completed_at")
+        .eq(role === "supplier" ? "supplier_id" : "rider_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(limit);
+      if (error) throw error;
+      return (data ?? []).map((r) => ({
+        id: r.id as string,
+        status: r.status as OrderStatus,
+        requestedKg: Number(r.requested_kg),
+        finalKg: r.final_kg !== null ? Number(r.final_kg) : null,
+        payoutMethod: (r.payout_method as "CASH" | "POINT" | null) ?? null,
+        cashPaidAmount: r.cash_paid_amount !== null ? Number(r.cash_paid_amount) : null,
+        netAmount: r.net_amount !== null ? Number(r.net_amount) : null,
+        createdAt: r.created_at as string,
+        completedAt: (r.completed_at as string | null) ?? null,
+      }));
+    },
+  });
+}
+
+/**
+ * 회원 정보수정 — user-update Edge(admin 전용, service_role). 클라이언트에서 profiles를 직접
+ * update하지 않는다(p_profiles_update가 본인 한정이라 애초에 통하지도 않는다 — 19 §0).
+ */
+export function useUserMutations() {
+  const queryClient = useQueryClient();
+
+  async function updateUser(input: UserUpdateInput) {
+    const result = await invokeEdgeFunction<UserUpdateOutput>("user-update", { ...input });
+    if (result.ok) {
+      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+    }
+    return result;
+  }
+
+  return { updateUser };
 }

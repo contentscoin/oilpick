@@ -202,3 +202,39 @@ export function useMyDealerAccount() {
     },
   });
 }
+
+/**
+ * [19 T10]【dealer】 좌상 축(스냅샷) 완료 주문 총계 — v_dealer_settlement_orders(RLS 본인).
+ *
+ * 왜 필요한가: 소속 라이더 실적(v_dealer_rider_stats)은 **현재 내 소속인 라이더**의 행만 있다.
+ * 라이더가 떠나면 그 라이더가 내 소속으로 있는 동안 낸 주문은 정산(usage·청구)에는 그대로
+ * 남지만 실적 목록에서는 사라진다 — 라이더 행 합계로 KPI를 만들면 정산과 영원히 어긋난다.
+ * 그래서 KPI의 건수·지급액은 **좌상 축 총계**를 진실로 쓰고, 실적 목록은 현 소속 라이더의
+ * 내 귀속분을 보여준다(19 §5). 둘의 차이는 화면이 '전 소속 라이더 귀속분'으로 설명한다.
+ */
+export interface DealerCompletedTotals {
+  /** 좌상 귀속 완료 주문 건수(정산·미정산 전부). */
+  orderCount: number;
+  /** 상계 순액 합(net_amount, 레거시는 cash_paid_amount 폴백). */
+  netTotal: number;
+}
+
+export function useDealerCompletedTotals() {
+  return useQuery({
+    queryKey: ["dealer", "completed-totals"],
+    queryFn: async (): Promise<DealerCompletedTotals> => {
+      const { data, error } = await supabase
+        .from("v_dealer_settlement_orders")
+        .select("net_amount, cash_paid_amount");
+      if (error) throw error;
+      const rows = data ?? [];
+      return {
+        orderCount: rows.length,
+        netTotal: rows.reduce(
+          (sum, r) => sum + Number(r.net_amount ?? r.cash_paid_amount ?? 0),
+          0,
+        ),
+      };
+    },
+  });
+}

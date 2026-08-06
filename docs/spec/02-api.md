@@ -203,6 +203,19 @@ ACCEPTED 이후 모든 전이 단일 엔드포인트.
   로만 배정(이미 배정 시 409 `CONFLICT`)·자기 소속만 해제(아니면 403 `FORBIDDEN`). 라이더 없음 404 `NOT_FOUND`.
 - 출력: `{ riderId, dealerId }`(`dealerAssignOutputSchema`).
 
+## 24. `user-update` (admin) — 19 T4
+> 공급업체·라이더 **회원 정보수정**. `p_profiles_update`가 `id = auth.uid()`뿐이라 admin이 회원의
+> 이름·연락처를 직접 못 고친다 → service_role 단일 진입 경로. 좌상은 `dealer-update`(§19-2) 담당.
+- 입력(`userUpdateInputSchema`, 전부 선택 · 최소 1개 필수):
+  `{ userId, displayName?, phone?, storeName?, bizNumber?, address?, vehicleNumber?,
+  recyclerName?|null, recyclerContact?|null }`. role=admin.
+- 처리: 대상 `profiles.role ∈ {supplier, rider}`만(admin·dealer는 404 `NOT_FOUND`) →
+  `profiles`(display_name/phone) + role별 프로필 테이블 갱신. 대상 role에 없는 필드가 오면
+  400 `VALIDATION_ERROR`(조용한 무시 금지). `recyclerName/Contact`는 `null`=지움, `undefined`=유지.
+- **금지 필드**: `verify_status`·`dealer_id`·`credit_limit`(각각 `rider-verify`·`dealer-assign`·
+  `dealer-rider-limit-set` 전용 — `guard_rider_verify`가 DB에서 이중 방어), `role`, 포인트·쿠폰 잔액.
+- 출력: `{ userId, role, updated[] }`(`userUpdateOutputSchema` — 실제 갱신된 컬럼명 목록).
+
 ## 11. `coupon-purchase-intent` (rider) — 07 F4·F14, [17 Q2] 복권
 > ✅ **복권(17-coupon-revival.md C2·C3)** — 08 P1이 삭제했던 6종을 `a4b4fdd^` 원형으로 복원.
 > DB(테이블·RPC·RLS)는 08에서도 보존돼 있었으므로 마이그레이션 없이 Edge·계약만 복귀.
