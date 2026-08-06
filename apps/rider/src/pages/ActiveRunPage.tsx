@@ -93,7 +93,7 @@ export function ActiveRunPage() {
   // 권한 거부·실패 시 null: 거리 칩·경로선 미표기 폴백(운행 흐름은 그대로).
   const position = useGeolocation(true);
   // [18 R7] 내 포인트 지급 한도 — ARRIVED 계량 패널의 POINT fail-fast/게이지에 쓴다.
-  const { data: credit } = useRiderCredit(riderId);
+  const { data: credit, refetch: refetchCredit } = useRiderCredit(riderId);
 
   useRiderLocationPusher(Boolean(run));
 
@@ -160,6 +160,7 @@ export function ActiveRunPage() {
           purchaseRequestedCans={run.purchaseRequestedCans}
           snapshotFreshCanPrice={run.snapshotFreshCanPrice}
           credit={credit ?? null}
+          onCreditRefresh={() => void refetchCredit?.()}
         />
       )}
       {run.status === "DISPUTED" && (
@@ -634,6 +635,7 @@ function ArrivedPanel({
   purchaseRequestedCans,
   snapshotFreshCanPrice,
   credit,
+  onCreditRefresh,
 }: {
   orderId: string;
   /** [N5] 요청 kg(requested_kg) — 계량 입력 프리필. 0(신유 단독)이면 빈 값 유지. */
@@ -651,6 +653,8 @@ function ArrivedPanel({
   snapshotFreshCanPrice: number | null;
   /** [18 R7] 내 포인트 지급 한도(v_rider_credit). POINT 선택 시 fail-fast 판정에 쓴다. null=한도 없음. */
   credit: RiderCredit | null;
+  /** [18 R7] 제출 성공 직후 크레딧 재조회 — 방금 제출분이 예약분에 즉시 반영되게 한다. */
+  onCreditRefresh?: () => void;
 }) {
   // [14 J2] 구매 동반(PURCHASE/MIXED)이면 현장 배달 통수를 입력받고 폐유 수령액과 상계한다.
   const purchaseInvolved = orderKind === "PURCHASE" || orderKind === "MIXED";
@@ -1138,6 +1142,9 @@ function ArrivedPanel({
         uploadedUrlsRef.current = {};
         setDraftRestoredAt(null);
         void clearDraft(orderId);
+        // [18 R7] 방금 제출분이 예약분(reserved)에 잡히도록 크레딧을 즉시 다시 읽는다.
+        // 이게 없으면 staleTime 창 동안 낡은 잔여로 다음 건이 통과하고, 그 실패는 점주가 본다.
+        onCreditRefresh?.();
       } else {
         lastSubmitFailedRef.current = true;
         showToast(result.message, { variant: "error" });
@@ -1182,7 +1189,15 @@ function ArrivedPanel({
   // 무관한 점주에게 도달하지 않도록 제출 자체를 여기서 막는다. 서버 게이트는 동시성 최종 방어선으로 유지.
   const creditApplies = isPointSelected && credit != null && !credit.is_unlimited && credit.limit_amount != null;
   const pendingPointAmount = netAmount > 0 ? netAmount : 0;
-  const creditBlocked = creditApplies && pendingPointAmount > credit!.available;
+  // 재제출이면 **이 주문의 기존 제출분이 이미 credit.reserved에 잡혀 있다** — 그대로 두면 같은 건을
+  // 두 번 세어 정상 재제출까지 막힌다. 기존 제출분을 잔여에 되돌려 준다(구매 상계분을 알 수 없어
+  // 폐유 수령액 기준 근사 — reserved를 넘지 않게 클램프해 과대 복원은 막는다).
+  const priorReserved =
+    submittedPayoutMethod === "POINT" && measuredKg != null
+      ? Math.min(estimateCash(measuredKg, snapshotPricePerKg), credit?.reserved ?? 0)
+      : 0;
+  const effectiveAvailable = (credit?.available ?? 0) + priorReserved;
+  const creditBlocked = creditApplies && pendingPointAmount > effectiveAvailable;
 
   return (
     <form data-testid="run-arrived-panel" onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -1282,7 +1297,8 @@ function ArrivedPanel({
               data-testid="measure-credit-gauge"
               limitAmount={credit!.limit_amount}
               used={credit!.used}
-              available={credit!.available}
+              reserved={Math.max((credit!.reserved ?? 0) - priorReserved, 0)}
+              available={effectiveAvailable}
               allocationMode={credit!.allocation_mode}
               pendingAmount={pendingPointAmount}
             />

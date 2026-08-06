@@ -19,8 +19,10 @@ import { colors, gray, radius, surface } from "../tokens";
 export interface CreditGaugeBarProps {
   /** 한도(P). null이면 한도 없음(본사 직속·계정 미설정) — 호출부가 렌더를 생략하는 편이 낫다. */
   limitAmount: number | null;
-  /** 사용액(P). 미정산 POINT 지급 순액. */
+  /** 사용액(P). 미정산 POINT 지급 순액(확정분). */
   used: number;
+  /** [R7] 예약분(P) — 제출했지만 점주 확인 전인 POINT 건. available에서 이미 빠져 있다. */
+  reserved?: number;
   /** 잔여(P). 서버 계산값(음수는 0으로 클램프된 값)을 그대로 받는다. */
   available: number;
   /** 배분 모드. POOL이면 좌상 공용 한도로 표기한다. */
@@ -34,6 +36,7 @@ export interface CreditGaugeBarProps {
 export function CreditGaugeBar({
   limitAmount,
   used,
+  reserved,
   available,
   allocationMode,
   pendingAmount,
@@ -43,7 +46,9 @@ export function CreditGaugeBar({
   // 한도 미설정(무제한)은 게이지로 표현할 수 없다 — 호출부가 걸러야 하지만 방어적으로 null 반환.
   if (limitAmount == null || limitAmount <= 0) return null;
 
-  const usedRatio = Math.min(1, Math.max(0, used / limitAmount));
+  // 소진분 = 확정 사용 + 확인 대기 예약분. 잔여(available)가 이미 둘 다 뺀 값이라 바도 같은 기준으로 그린다.
+  const consumed = used + (reserved ?? 0);
+  const usedRatio = Math.min(1, Math.max(0, consumed / limitAmount));
   const availableRatio = 1 - usedRatio;
   // 이번 건까지 반영한 예상 사용률(초과 시 1로 클램프해 바 밖으로 새지 않게).
   const pendingRatio =
@@ -128,6 +133,12 @@ export function CreditGaugeBar({
         <span className="oilpick-tabular-nums">
           사용 {formatPoint(used)} / 한도 {formatPoint(limitAmount)}
         </span>
+        {/* [R7] 확인 대기 중인 제출분 — 아직 확정은 아니지만 잔여에서 이미 빠져 있다(중복 지급 방지). */}
+        {reserved != null && reserved > 0 && (
+          <span data-testid="credit-gauge-reserved" className="oilpick-tabular-nums">
+            · 확인 대기 {formatPoint(reserved)}
+          </span>
+        )}
         {isPool && <span>· 소속 라이더가 함께 쓰는 한도예요</span>}
       </div>
 

@@ -4,7 +4,7 @@
 create extension if not exists pgtap with schema extensions;
 
 begin;
-select plan(13);
+select plan(18);
 
 -- ── 픽스처: 좌상 2(POOL/PER_RIDER) + 라이더 3 + 점주 ──────────────────────
 insert into auth.users (id, instance_id, aud, role, email, created_at, updated_at)
@@ -86,21 +86,62 @@ select throws_ok(
   '총량 게이트가 개인 한도보다 먼저 잡는다(총량이 최종 방어선)');
 update dealer_accounts set credit_limit = 100000 where dealer_id='ca000000-0000-0000-0000-000000000002';
 
--- ============ (6) v_rider_credit 계산 ============
-select is((select limit_amount from v_rider_credit where rider_id='ca000000-0000-0000-0000-000000000102'), 5000,
-  'v_rider_credit: PER_RIDER 라이더의 limit_amount = 개인 한도 5,000');
-select is((select used from v_rider_credit where rider_id='ca000000-0000-0000-0000-000000000102'), 4000,
-  'v_rider_credit: used = 본인 미정산 POINT 순액 4,000');
-select is((select available from v_rider_credit where rider_id='ca000000-0000-0000-0000-000000000102'), 1000,
-  'v_rider_credit: available = 5,000-4,000 = 1,000');
-select is((select limit_amount from v_rider_credit where rider_id='ca000000-0000-0000-0000-000000000101'), 100000,
-  'v_rider_credit: POOL 라이더는 좌상 총량이 limit_amount');
+-- ============ (6)(7) v_rider_credit — **실제 소비자 롤 시점**으로 검증 ============
+-- ⚠️ 이 뷰는 소유자 권한(security_invoker=false)으로 집계하고 본문 술어로 가시성을 강제한다.
+-- superuser로 조회하면 auth.uid()가 null이라 술어에 걸려 0행이다 — 즉 **롤을 세팅하지 않은
+-- 어서션은 뷰를 검증할 수 없다**. (이전 security_invoker 구현이 라이더 세션에서 통째로 붕괴했는데도
+-- superuser 어서션만 있어서 green이었던 회귀를 여기서 막는다.)
+-- claims를 먼저 세팅하고 role을 바꾼다(순서 반대면 권한 부족으로 claims 설정이 실패한다).
+
+-- (6) 라이더 A(PER_RIDER, 개인 한도 5,000 / 사용 4,000) 본인 시점.
+set local request.jwt.claims = '{"sub":"ca000000-0000-0000-0000-000000000102","role":"authenticated"}';
+set local role authenticated;
+select is((select count(*)::int from v_rider_credit), 1,
+  '라이더 시점: 본인 1행만 보인다(타 라이더 미노출)');
+select is((select is_unlimited from v_rider_credit), false,
+  '라이더 시점: is_unlimited=false — dealer_accounts 조인이 붕괴하지 않는다(핵심 회귀 가드)');
+select is((select limit_amount from v_rider_credit), 5000,
+  '라이더 시점: limit_amount = 개인 한도 5,000');
+select is((select used from v_rider_credit), 4000,
+  '라이더 시점: used = 본인 미정산 POINT 순액 4,000');
+-- 라이더 A에게는 확인 대기(ARRIVED+measured_kg) POINT 건이 2개 남아 있다 — 위 (3)·(5)에서
+-- CONFIRM이 거부돼 ARRIVED로 되돌아간 403(2,000P)·405(1,000P). 이 예약분이 잔여에서 빠져야
+-- 라이더가 "이미 제출해 둔 건"을 잊고 또 제출해 점주에게 에러가 터지는 일이 없다(R7).
+select is((select reserved from v_rider_credit), 3000,
+  '라이더 시점: reserved = 확인 대기 제출분 2,000+1,000 = 3,000');
+select is((select available from v_rider_credit), 0,
+  '라이더 시점: available = max(5,000-4,000-3,000, 0) = 0 — 예약분까지 뺀 보수적 잔여');
+reset role;
+reset request.jwt.claims;
+
+-- (6-b) POOL 라이더 본인 시점 — 좌상 총량이 limit_amount이고, used는 **좌상 전체** 합이어야 한다.
+-- (security_invoker였다면 pickup_orders RLS에 잘려 본인 주문만 세어 과소 집계됐다.)
+set local request.jwt.claims = '{"sub":"ca000000-0000-0000-0000-000000000101","role":"authenticated"}';
+set local role authenticated;
+select is((select limit_amount from v_rider_credit), 100000,
+  'POOL 라이더 시점: limit_amount = 좌상 총량 100,000');
+select is((select used from v_rider_credit), 6000,
+  'POOL 라이더 시점: used = 좌상 전체 미정산 합 6,000(본인 주문만 세지 않는다)');
+reset role;
+reset request.jwt.claims;
+
+-- (6-c) 좌상 본인 시점 — 소속 라이더 전원이 보인다.
+set local request.jwt.claims = '{"sub":"ca000000-0000-0000-0000-000000000002","role":"authenticated"}';
+set local role authenticated;
+select is((select count(*)::int from v_rider_credit), 2,
+  '좌상 시점: 소속 라이더 2명이 보인다');
+reset role;
+reset request.jwt.claims;
 
 -- ============ (7) 정산 청구 후 개인 한도 회복 ============
 -- 배분좌상 미정산분을 청구로 스탬핑 → used가 0으로 떨어져야 한다(R4 같은 분모).
 select fn_create_dealer_claim('ca000000-0000-0000-0000-000000000002', null);
-select is((select used from v_rider_credit where rider_id='ca000000-0000-0000-0000-000000000102'), 0,
+set local request.jwt.claims = '{"sub":"ca000000-0000-0000-0000-000000000102","role":"authenticated"}';
+set local role authenticated;
+select is((select used from v_rider_credit), 0,
   '청구 스탬핑 후 라이더 used 회복(0)');
+reset role;
+reset request.jwt.claims;
 
 -- ============ (8) 라이더 셀프 credit_limit 변조 차단(R9) ============
 -- guard_rider_verify는 current_user가 service_role/postgres가 아닐 때만 되돌린다. 테스트 하네스는

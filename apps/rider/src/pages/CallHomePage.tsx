@@ -203,6 +203,7 @@ export function CallHomePage() {
           data-testid="rider-credit-gauge"
           limitAmount={credit.limit_amount}
           used={credit.used}
+          reserved={credit.reserved}
           available={credit.available}
           allocationMode={credit.allocation_mode}
         />

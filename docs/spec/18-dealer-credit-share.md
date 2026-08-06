@@ -35,14 +35,14 @@
 | **R1** | **두 가지 배분 모드** | `dealer_accounts.allocation_mode enum('POOL','PER_RIDER') default 'POOL'`. **POOL** = 현행(총량 공유, 선착순) — 기존 좌상은 전부 이 값이라 **동작 무변경**. **PER_RIDER** = 라이더별 한도 배분 |
 | **R2** | 라이더 개인 한도 | `rider_profiles.credit_limit int null`. **PER_RIDER 모드에서만 의미**를 갖는다. `null` = **미배분 = 0**(명시 배분한 라이더만 POINT 지급 가능). POOL 모드에서는 무시 |
 | **R3** | 2단 게이트 | `fn_settle_trade`의 POINT·net>0 분기에서 ① **좌상 총량**(기존 그대로, 모드 무관 항상) → ② PER_RIDER면 **라이더 개인 한도**를 추가 검사. 개인 초과 시 `RIDER_LIMIT_EXCEEDED`(409). 좌상 총량은 어떤 모드에서도 상한이다(배분 합계가 총량을 넘어도 총량이 최종 방어선) |
-| **R4** | 사용액 정의 | 라이더 사용액 = `pickup_orders`에서 `rider_id=본인 ∧ dealer_id=소속 ∧ status='COMPLETED' ∧ dealer_settlement_id is null ∧ payout_method='POINT'`인 `net_amount` 합. 좌상 총량 사용액(14 §2-5)과 **같은 분모**(미정산 기준) — 정산 청구가 완료되면 라이더 한도도 함께 회복된다 |
+| **R4** | 사용액 정의 | 라이더 사용액 = `pickup_orders`에서 `rider_id=본인 ∧ dealer_id=소속 ∧ status='COMPLETED' ∧ dealer_settlement_id is null ∧ payout_method='POINT'`인 `net_amount` **순액** 합(음수=신유 구매 상계도 반영). 좌상 총량 사용액(14 §2-5)과 **같은 분모** — `net_amount > 0`으로 거르면 좌상 채무를 되돌린 라이더가 개인 한도만 계속 소진해 부당하게 잠긴다. 정산 청구가 완료되면 라이더 한도도 함께 회복된다 |
 | **R5** | 배분 합계 vs 총량 | 배분 합계가 좌상 총량을 **초과해도 저장은 허용**(오버부킹 — 실무상 여유 배분 관행). 단 UI가 합계/총량을 항상 보여주고 초과 시 경고. 실제 지급은 R3의 2단 게이트가 막는다 |
 | **R6** | 라이더 가시성 | 뷰 `v_rider_credit` 신설 — 라이더 본인·소속 좌상·admin이 조회. 라이더 앱 홈에 **게이지바**(사용/한도, 잔여 강조). POOL 모드면 "좌상 공용 한도"로 표기하고 좌상 총량 기준 게이지를 보여준다(내 몫이 따로 없다는 사실 자체가 정보) |
-| **R7** | X2 해소(fail-fast) | 라이더가 계량 제출에서 **POINT를 고르는 순간** 잔여 한도와 이번 건 예상액을 대조해 경고/차단한다. 서버 게이트는 최종 방어선으로 그대로 두되(동시성), **점주가 에러를 보는 일이 없게** 라이더 단에서 먼저 거른다 |
+| **R7** | X2 해소(fail-fast) | 라이더가 계량 제출에서 **POINT를 고르는 순간** 잔여 한도와 이번 건 예상액을 대조해 경고/차단한다. 서버 게이트는 최종 방어선으로 그대로 두되(동시성), **점주가 에러를 보는 일이 없게** 라이더 단에서 먼저 거른다. **예약분(reserved)**: 제출했지만 점주 확인 전인 POINT 건(`status='ARRIVED' ∧ measured_kg 기록됨`)의 예상 지급액을 available에서 뺀다 — 서버 게이트는 COMPLETED 기준이라 이걸 모르므로, 라이더가 연속으로 여러 건을 처리하면 "클라이언트 통과 → 점주 확인에서 서버 거부"로 X2가 재현된다. 재제출은 **자기 건 예약분을 잔여로 되돌려** 이중계산을 막고(폐유 수령액 기준 근사, reserved로 클램프), 제출 성공 직후 크레딧을 재조회한다 |
 | **R8** | X1 해소 | `dealer-create`에 `creditLimit`(선택) 추가 — 입력하면 `dealer_accounts` 행을 함께 생성. 미입력 시 현행대로 행 없음(§10 #2 결정 유지)이되 **admin 좌상 목록에 "한도 미설정" 경고 배지**를 띄워 무제한 상태를 가시화한다 |
 | **R9** | 권한 | 라이더 개인 한도 쓰기는 **admin + 해당 라이더의 소속 좌상**만(`dealer-rider-limit-set` Edge). `guard_rider_verify` 트리거에 `credit_limit` 보호를 추가해 라이더 셀프 변경을 차단(dealer_id·verify_status와 동일 방식) |
 
-## 3. DB (마이그레이션 2건 + 01-db-schema.sql 동기화)
+## 3. DB (마이그레이션 1건 + 01-db-schema.sql 동기화)
 
 `20260806000003_dealer_credit_alloc.sql` 1건 — `dealer_alloc_mode`는 **신규 타입**이라 ADD VALUE
 제약(같은 트랜잭션 내 사용 불가)이 없다. REFERRAL·WITHDRAW_FEE처럼 파일을 쪼갤 이유가 없어 한 파일에 담는다:
@@ -51,19 +51,27 @@
 - `rider_profiles.credit_limit int` (null 허용, `check (credit_limit >= 0)`)
 - `guard_rider_verify` 재정의 — `credit_limit`도 service_role만 변경(셀프 insert 시 null 강제,
   셀프 update 시 old 값 복원)
-- `v_rider_credit` (security_invoker) — rider_id, dealer_id, allocation_mode, limit_amount,
-  used, available, is_unlimited
+- `v_rider_credit` (**security_invoker=false — 소유자 권한 + 본문 가시성 술어**) — rider_id,
+  dealer_id, allocation_mode, limit_amount, used, **reserved**, available, is_unlimited.
+  ⚠️ invoker로 두면 안 된다(머지 전 적대적 리뷰 확정): ① 라이더는 `dealer_accounts`를 읽을 수 없어
+  (정책이 `dealer_id = auth.uid() or is_admin()`) 조인이 통째로 NULL → 뷰가 is_unlimited=true로
+  붕괴하고 게이지·fail-fast가 **조용히 무동작**한다. ② POOL 합산이 라이더 권한에서는 pickup_orders
+  RLS에 잘려 본인 주문만 세어 잔여를 과대 표시한다. 따라서 소유자 권한으로 집계하고 가시성은
+  `where rp.id = auth.uid() or rp.dealer_id = auth.uid() or is_admin()`로 뷰가 직접 강제한다
 - `fn_settle_trade` 개정 — R3의 2단 게이트
 - `fn_set_rider_credit_limit(p_rider_id, p_credit_limit, p_actor_id)` service_role RPC
-- `fn_set_dealer_account` 개정 — `p_allocation_mode` 추가(7파라미터). **구 6파라미터 시그니처는
-  삭제**한다(PostgREST 이름 기반 오버로드 모호성 제거 — 호출부는 Edge 하나뿐이라 동시 배포로 안전).
-  03_privilege_guards_test의 시그니처 단언도 함께 갱신
+- `fn_set_dealer_account` 개정 — `p_allocation_mode dealer_alloc_mode **default null**` 추가(7파라미터).
+  구 6파라미터 시그니처는 삭제하되 **default를 반드시 붙인다** — DEPLOY.md 절차가 `db push` → `functions
+  deploy` 순차라, default가 없으면 그 사이 구간에 구 Edge의 6-인자 호출이 어떤 오버로드에도 매칭되지
+  않아 500이 난다. 03_privilege_guards_test의 시그니처 단언도 함께 갱신
 - 신규 RPC 2종은 `revoke ... from public` + **`revoke execute from anon, authenticated`**까지 수행
   (Supabase `alter default privileges`가 신규 함수에 EXECUTE를 직접 부여 — 20260724000010 락다운과 동일 이유)
 
 pgTAP `21_dealer_credit_alloc_test.sql`: POOL 모드 기존 동작 회귀 / PER_RIDER 미배분 라이더 차단 /
 배분 한도 내 통과·초과 거부 / 좌상 총량이 개인 한도보다 작으면 총량이 이긴다 / 정산 청구 후 회복 /
-라이더 셀프 credit_limit 변경 차단.
+라이더 셀프 credit_limit 변경 차단 / **뷰는 반드시 실제 롤 시점(`set local request.jwt.claims` →
+`set local role authenticated`)으로 검증**한다 — superuser 어서션은 뷰의 가시성 술어에 걸려 0행이라
+아무것도 증명하지 못하고, invoker 붕괴 같은 결함을 green인 채로 통과시킨다(실제로 그랬다).
 
 ## 4. Edge Functions
 
@@ -93,8 +101,9 @@ pgTAP `21_dealer_credit_alloc_test.sql`: POOL 모드 기존 동작 회귀 / PER_
 | # | 내용 | 상태 |
 |---|------|------|
 | R1 | 스펙 확정(이 문서) + 문서맵 | ✅ |
-| R2 | DB 마이그레이션 2건 + pgTAP 21 | ✅ |
+| R2 | DB 마이그레이션 1건 + pgTAP 21 | ✅ |
 | R3 | core 계약 + Edge 3종(신설 1·확장 2) + vendor + config | ✅ |
 | R4 | 라이더 게이지바 + POINT fail-fast | ✅ |
 | R5 | 좌상 배분 UI + admin 경고·모드 토글 | ✅ |
 | R6 | 게이트 + PR | ✅ |
+| R7 | **머지 전 적대적 리뷰**(5관점 × 반증 검증, 20 에이전트) — 확정 결함 6건 수정: v_rider_credit invoker 붕괴(핵심)·POOL 과소집계·예약분 미반영·사용액 분모 불일치·RPC default 누락·초기 한도 UI 미연결. 뷰 검증을 실제 롤 시점으로 전환 | ✅ |

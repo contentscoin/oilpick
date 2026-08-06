@@ -50,14 +50,26 @@ end;
 $$;
 
 -- ── ④ 라이더 크레딧 뷰 ───────────────────────────────────────────────────
--- security_invoker → RLS가 범위를 강제한다: 라이더 본인(p_rider_self), 소속 좌상
--- (p_rider_profiles_read_by_dealer), admin(is_admin 정책). 별도 정책 추가 없이 기존 RLS 재사용.
+-- ⚠️ **security_invoker를 쓰면 안 된다**(리뷰 확정 결함). 이 뷰는 두 테이블을 조인하는데:
+--   ① dealer_accounts의 유일한 SELECT 정책은 `dealer_id = auth.uid() or is_admin()`이라
+--      **라이더에게는 자기 좌상의 계정 행이 보이지 않는다** → left join이 통째로 NULL이 되어
+--      limit_amount=null·is_unlimited=true로 붕괴하고, 게이지바와 POINT fail-fast(R6·R7)가
+--      에러 하나 없이 조용히 무동작한다.
+--   ② POOL 모드의 pool 합산은 **좌상 전체** 주문을 세야 하는데, 라이더 권한으로 평가되면
+--      pickup_orders RLS가 본인 주문만 남겨 사용액을 과소 집계한다(잔여 과대 표시).
+-- 따라서 뷰 소유자 권한(security_invoker=false, PG 기본)으로 집계하고 **가시성은 뷰 본문의
+-- 명시적 술어로 직접 강제**한다 — 라이더 본인 / 소속 좌상 / admin만 자기 범위의 행을 본다.
+-- (dealer_accounts에 라이더용 정책을 추가하는 대안은 보증금·수수료율까지 노출되어 기각.)
 --
--- used = 미정산 POINT 지급 순액(14 §2-5 좌상 총량과 같은 분모) — 정산 청구가 완료되면
--- dealer_settlement_id가 스탬핑되어 이 합계에서 빠지고 한도가 회복된다(R4).
+-- used = 미정산 POINT 지급 순액(14 §2-5 좌상 총량과 **같은 분모** — R4). 음수(신유 구매 상계)도
+-- 그대로 반영해 개인 한도가 회복되게 한다. 정산 청구가 스탬핑되면 합계에서 빠져 한도가 회복된다.
+-- reserved = 제출했지만 아직 점주 확인 전인 POINT 건의 예상 지급액(status='ARRIVED' +
+-- measured_kg 기록됨). 서버 게이트는 COMPLETED 기준이라 이 예약분을 모르지만, 라이더가 연속으로
+-- 여러 건을 처리하면 "클라이언트는 통과 → 점주 확인에서 서버가 거부"가 되어 X2가 재현된다.
+-- UI 차단을 보수적으로 만들기 위해 available에서 예약분을 뺀다(서버 게이트는 무변경).
 -- POOL 모드: limit_amount/used는 좌상 총량 기준(내 몫이 따로 없음을 라벨로 구분해 표시, R6).
 -- 계정 행이 없는 좌상(X1)·본사 직속(dealer_id null)은 is_unlimited=true — 게이지 미노출 신호.
-create or replace view v_rider_credit with (security_invoker = true) as
+create or replace view v_rider_credit with (security_invoker = false) as
 select
   rp.id                                        as rider_id,
   rp.dealer_id,
@@ -73,33 +85,52 @@ select
     when da.allocation_mode = 'PER_RIDER' then coalesce(mine.used, 0)
     else coalesce(pool.used, 0)
   end                                          as used,
+  case
+    when da.dealer_id is null then 0
+    when da.allocation_mode = 'PER_RIDER' then coalesce(mine.reserved, 0)
+    else coalesce(pool.reserved, 0)
+  end                                          as reserved,
   greatest(
     case
       when da.dealer_id is null then 0
-      when da.allocation_mode = 'PER_RIDER' then coalesce(rp.credit_limit, 0) - coalesce(mine.used, 0)
-      else da.credit_limit - coalesce(pool.used, 0)
+      when da.allocation_mode = 'PER_RIDER'
+        then coalesce(rp.credit_limit, 0) - coalesce(mine.used, 0) - coalesce(mine.reserved, 0)
+      else da.credit_limit - coalesce(pool.used, 0) - coalesce(pool.reserved, 0)
     end, 0)                                    as available,
   (da.dealer_id is null)                       as is_unlimited
 from rider_profiles rp
 left join dealer_accounts da on da.dealer_id = rp.dealer_id
 left join lateral (
-  select coalesce(sum(o.net_amount), 0)::int as used
+  select
+    coalesce(sum(o.net_amount) filter (where o.status = 'COMPLETED'), 0)::int as used,
+    coalesce(sum(greatest(
+      round(o.measured_kg * o.snapshot_price_per_kg)::int
+        - coalesce(o.delivered_cans, 0) * coalesce(o.snapshot_fresh_can_price, 0), 0
+    )) filter (where o.status = 'ARRIVED' and o.measured_kg is not null), 0)::int as reserved
   from pickup_orders o
   where o.rider_id = rp.id
     and o.dealer_id = rp.dealer_id
-    and o.status = 'COMPLETED'
     and o.dealer_settlement_id is null
     and o.payout_method = 'POINT'
-    and o.net_amount > 0
+    and (o.status = 'COMPLETED' or (o.status = 'ARRIVED' and o.measured_kg is not null))
 ) mine on true
 left join lateral (
-  select coalesce(sum(o.net_amount), 0)::int as used
+  select
+    coalesce(sum(o.net_amount) filter (where o.status = 'COMPLETED'), 0)::int as used,
+    coalesce(sum(greatest(
+      round(o.measured_kg * o.snapshot_price_per_kg)::int
+        - coalesce(o.delivered_cans, 0) * coalesce(o.snapshot_fresh_can_price, 0), 0
+    )) filter (where o.status = 'ARRIVED' and o.measured_kg is not null), 0)::int as reserved
   from pickup_orders o
   where o.dealer_id = rp.dealer_id
-    and o.status = 'COMPLETED'
     and o.dealer_settlement_id is null
     and o.payout_method = 'POINT'
-) pool on true;
+    and (o.status = 'COMPLETED' or (o.status = 'ARRIVED' and o.measured_kg is not null))
+) pool on true
+-- 가시성(뷰가 소유자 권한으로 도므로 여기서 직접 강제한다 — RLS 대체가 아니라 등가 표현).
+where rp.id = (select auth.uid())
+   or rp.dealer_id = (select auth.uid())
+   or is_admin();
 
 grant select on v_rider_credit to authenticated;
 
@@ -178,6 +209,8 @@ begin
           if v_alloc_mode = 'PER_RIDER' then
             select coalesce(credit_limit, 0) into v_rider_limit
             from rider_profiles where id = v_order.rider_id;
+            -- 라이더 사용액도 좌상 총량과 **같은 분모**(순액 — 음수 상계 포함, R4). net>0만 세면
+            -- 신유 구매로 좌상 채무를 되돌린 라이더가 개인 한도만 계속 소진해 부당하게 잠긴다.
             select coalesce(sum(net_amount), 0)::int
             into v_rider_usage
             from pickup_orders
@@ -185,8 +218,7 @@ begin
               and dealer_id = v_order.dealer_id
               and status = 'COMPLETED'
               and dealer_settlement_id is null
-              and payout_method = 'POINT'
-              and net_amount > 0;
+              and payout_method = 'POINT';
             if v_rider_usage > coalesce(v_rider_limit, 0) then
               raise exception 'RIDER_LIMIT_EXCEEDED' using errcode = 'P0001';
             end if;
@@ -268,7 +300,9 @@ create or replace function fn_set_dealer_account(
   p_claim_threshold int,
   p_fee_rate_bp int,
   p_admin_id uuid,
-  p_allocation_mode dealer_alloc_mode
+  -- default null: `db push`가 먼저 적용되고 `functions deploy`가 뒤따르는 배포 창(DEPLOY.md 1장)에서
+  -- 구 Edge의 6-인자 호출이 그대로 이 함수로 해석되게 한다. default가 없으면 그 구간에 500이 난다.
+  p_allocation_mode dealer_alloc_mode default null
 ) returns dealer_accounts
 language plpgsql
 security definer

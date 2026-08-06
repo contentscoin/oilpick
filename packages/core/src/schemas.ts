@@ -756,6 +756,8 @@ export const riderCreditSchema = z.object({
   allocation_mode: dealerAllocModeSchema.nullable(),
   limit_amount: z.number().int().nullable(),
   used: z.number().int(),
+  /** [18 R7] 제출했지만 점주 확인 전인 POINT 건의 예상 지급액(P). available에서 이미 차감돼 있다. */
+  reserved: z.number().int(),
   available: z.number().int(),
   is_unlimited: z.boolean(),
 });

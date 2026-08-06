@@ -718,6 +718,7 @@ describe("ActiveRunPage — 포인트 지급 한도 게이지/fail-fast(18 R7)",
       allocation_mode: "PER_RIDER" as const,
       limit_amount: 50000,
       used: over ? 45000 : 10000,
+      reserved: 0,
       available: over ? 5000 : 40000,
       is_unlimited: false,
     },
@@ -756,6 +757,34 @@ describe("ActiveRunPage — 포인트 지급 한도 게이지/fail-fast(18 R7)",
     fireEvent.change(screen.getByTestId("measured-kg-input"), { target: { value: "10" } });
     fireEvent.click(screen.getByTestId("payout-option-cash"));
     expect(screen.queryByTestId("measure-credit-gauge")).not.toBeInTheDocument();
+    expect(screen.getByTestId("submit-measure-button")).not.toBeDisabled();
+  });
+});
+
+// [18 R7 리뷰 반영] 재제출 시 자기 건 예약분(reserved) 이중계산 방지 — 정상 재제출까지 막히면 안 된다.
+describe("ActiveRunPage — 재제출 시 예약분 이중계산 방지(18 R7)", () => {
+  afterEach(() => mockUseRiderCredit.mockReturnValue({ data: null }));
+
+  it("이미 POINT로 제출한 건을 재제출할 때, 그 건의 예약분은 잔여로 되돌려 계산한다", () => {
+    // 한도 50,000 / 확정 사용 40,000 / 예약 10,000(= 이 주문의 기존 제출분) → 서버 available은 0.
+    // 자기 건을 되돌리지 않으면 같은 금액 재제출조차 막힌다.
+    mockUseRiderCredit.mockReturnValue({
+      data: {
+        rider_id: "rider-1",
+        dealer_id: "d1",
+        allocation_mode: "PER_RIDER" as const,
+        limit_amount: 50000,
+        used: 40000,
+        reserved: 10000,
+        available: 0,
+        is_unlimited: false,
+      },
+    });
+    // measuredKg 6.25 × 1,600 = 10,000 — 기존 제출분과 동일 금액.
+    renderRun(makeRun({ status: "ARRIVED", measuredKg: 6.25, finalKg: null, payoutMethod: "POINT" }));
+    fireEvent.click(screen.getByTestId("measure-resubmit-button"));
+    fireEvent.change(screen.getByTestId("measured-kg-input"), { target: { value: "6.25" } });
+    fireEvent.click(screen.getByTestId("payout-option-point"));
     expect(screen.getByTestId("submit-measure-button")).not.toBeDisabled();
   });
 });
