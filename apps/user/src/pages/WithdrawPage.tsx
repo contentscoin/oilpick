@@ -5,6 +5,7 @@ import {
   BigButton,
   ConfirmSheet,
   PageHeader,
+  PayoutTaxNotice,
   PointBalanceCard,
   colors,
   inputClassName,
@@ -12,7 +13,7 @@ import {
   radius,
   surface,
 } from "@oilpick/ui";
-import { MIN_WITHDRAW, formatPoint, type WithdrawRequestOutput } from "@oilpick/core";
+import { MIN_WITHDRAW, WITHDRAW_FEE_POINT, formatPoint, type WithdrawRequestOutput } from "@oilpick/core";
 import { useSession } from "../hooks/useSession";
 import { usePointBalance } from "../hooks/useWallet";
 import { useBankAccount, useSaveBankAccount } from "../hooks/useBankAccount";
@@ -53,7 +54,8 @@ export function WithdrawPage() {
 
   const amount = Number(amountInput);
   const available = balance?.available ?? 0;
-  const amountValid = Number.isInteger(amount) && amount >= MIN_WITHDRAW && amount <= available;
+  // [08 Q1] 수수료 1,000P가 함께 차감되므로 잔액 요건은 amount + fee(서버 fn_request_withdraw와 동일).
+  const amountValid = Number.isInteger(amount) && amount >= MIN_WITHDRAW && amount + WITHDRAW_FEE_POINT <= available;
 
   async function handleSaveBank() {
     setError(null);
@@ -74,8 +76,8 @@ export function WithdrawPage() {
     // fail-fast: 서버(fn_request_withdraw)가 최종 검증하지만 왕복 전에 클라이언트에서 먼저 거른다.
     if (!amountValid) {
       setError(
-        amount > available
-          ? "출금 가능 잔액을 초과했어요."
+        amount + WITHDRAW_FEE_POINT > available
+          ? `출금 가능 잔액을 초과했어요. 신청 금액에 수수료 ${formatPoint(WITHDRAW_FEE_POINT)}가 더해져 차감돼요.`
           : `최소 출금 금액은 ${formatPoint(MIN_WITHDRAW)}이에요.`,
       );
       return;
@@ -181,9 +183,13 @@ export function WithdrawPage() {
           style={inputStyle}
         />
         <p style={{ margin: 0, fontSize: 12, color: colors.status.wait }}>
-          최소 출금 {formatPoint(MIN_WITHDRAW)} · 출금 가능 잔액 {formatPoint(available)}
+          최소 출금 {formatPoint(MIN_WITHDRAW)} · 신청 시 수수료 {formatPoint(WITHDRAW_FEE_POINT)} 별도 차감 · 출금
+          가능 잔액 {formatPoint(available)}
         </p>
       </section>
+
+      {/* [08 Q2·Q3] 세금·수수료 안내 — 3.3% 공제/사업자 부가세 포함/수수료. 문구는 PayoutTaxNotice가 단일 진실. */}
+      <PayoutTaxNotice context="withdraw" data-testid="withdraw-tax-notice" />
 
       {error && (
         <p role="alert" data-testid="withdraw-error" style={{ margin: 0, fontSize: 14, color: colors.status.danger }}>
@@ -205,7 +211,7 @@ export function WithdrawPage() {
         open={success != null}
         onClose={goBackToWallet}
         title="출금 신청이 접수됐어요"
-        description={`신청 금액 ${formatPoint(success?.amount ?? 0)} · 관리자 승인 후 계좌로 이체돼요. 반려되면 포인트가 다시 복구돼요.`}
+        description={`신청 금액 ${formatPoint(success?.amount ?? 0)} · 수수료 ${formatPoint(success?.fee ?? WITHDRAW_FEE_POINT)} 차감 · 관리자 승인 후 계좌로 이체돼요. 반려되면 수수료를 포함해 포인트가 다시 복구돼요.`}
         confirmLabel="지갑으로 돌아가기"
         cancelLabel="닫기"
         onConfirm={goBackToWallet}

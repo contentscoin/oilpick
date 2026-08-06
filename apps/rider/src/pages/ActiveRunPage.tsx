@@ -8,6 +8,7 @@ import {
   NumberFlow,
   OrderTimeline,
   PayoutMethodChip,
+  PayoutTaxNotice,
   PhotoUploader,
   QtyStepper,
   colors,
@@ -558,6 +559,7 @@ function PayoutMethodSelect({
   disabled?: boolean;
 }) {
   return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
     <div role="radiogroup" aria-label="지급 수단" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 8 }}>
       {PAYOUT_OPTIONS.map((option) => {
         const selected = value === option.value;
@@ -591,6 +593,9 @@ function PayoutMethodSelect({
           </button>
         );
       })}
+    </div>
+    {/* [08 Q2·Q3] 사장님께 안내할 세무 기준 — 포인트=부가세 포함/현금(개인)=3.3% 공제/세금계산서=부가세 포함. */}
+    <PayoutTaxNotice context="measure" data-testid="payout-tax-notice-measure" />
     </div>
   );
 }

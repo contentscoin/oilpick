@@ -7,6 +7,8 @@ import type {
   DealerCreateOutput,
   DealerSettlement,
   DealerStatement,
+  DealerUpdateInput,
+  DealerUpdateOutput,
 } from "@oilpick/core";
 import { supabase } from "../lib/supabaseClient";
 import { invokeEdgeFunction } from "../lib/edgeFunction";
@@ -98,7 +100,14 @@ export function useDealerMutations() {
     return result;
   }
 
-  return { createDealer, assignRider };
+  // [13 I2 보강, CEO 2026-08-06] 좌상 아이디/비밀번호/상호/연락처 수정 — dealer-update Edge.
+  async function updateDealer(input: DealerUpdateInput) {
+    const result = await invokeEdgeFunction<DealerUpdateOutput>("dealer-update", { ...input });
+    if (result.ok) invalidate();
+    return result;
+  }
+
+  return { createDealer, assignRider, updateDealer };
 }
 
 // ===== 14 J3 좌상 정산 =====

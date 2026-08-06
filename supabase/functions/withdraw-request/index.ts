@@ -69,6 +69,7 @@ Deno.serve((req) =>
       withdrawalId: withdrawal.id,
       status: withdrawal.status,
       amount: withdrawal.amount,
+      fee: withdrawal.fee,
     });
   })
 );

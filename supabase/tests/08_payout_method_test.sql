@@ -118,8 +118,8 @@ select is((select payout_method from pickup_orders where id='00000000-0808-0000-
 select fn_request_withdraw('11111111-0808-1111-1111-111111111111', 20000, '국민', '123-456', '공급8');
 select is((select status from withdrawals where user_id='11111111-0808-1111-1111-111111111111' order by created_at desc limit 1),
   'REQUESTED', 'P4: 출금 신청 → REQUESTED');
-select is((select available from v_point_balance where user_id='11111111-0808-1111-1111-111111111111'), 43000,
-  'P4: 신청 즉시 차감 — available 63000-20000=43000');
+select is((select available from v_point_balance where user_id='11111111-0808-1111-1111-111111111111'), 42000,
+  'P4: 신청 즉시 차감 — available 63000-20000-1000(수수료, 08 Q1)=42000');
 select fn_process_withdraw(
   (select id from withdrawals where user_id='11111111-0808-1111-1111-111111111111' order by created_at desc limit 1),
   'REJECTED', null, '계좌 오류');

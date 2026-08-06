@@ -187,6 +187,12 @@ function WithdrawQueueSection() {
         </button>
       </div>
 
+      {/* [08 Q2·Q4] 이체 금액 산정 기준 — 세무 공제는 이체 단계에서 적용(원장 무기록). 수수료 1,000P는 신청 시 이미 차감됨. */}
+      <p className="mb-4 text-xs leading-relaxed text-gray-500">
+        이체 금액 기준: 개인은 신청액(부가세 제외)에서 사업소득 3.3% 공제, 사업자 정보(세금계산서 발행) 등록
+        시 부가세 포함 지급. 출금 수수료 1,000P는 신청 시점에 포인트에서 이미 차감돼 있어요.
+      </p>
+
       <div className="mb-4 flex flex-wrap gap-2">
         {["REQUESTED", "APPROVED", "REJECTED", "PAID", "ALL"].map((s) => (
           <button

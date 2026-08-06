@@ -4,6 +4,7 @@ import {
   EmptyState,
   LedgerList,
   PayoutMethodChip,
+  PayoutTaxNotice,
   PointBalanceCard,
   PointHeroAction,
   colors,
@@ -190,6 +191,8 @@ export function WalletPage() {
               {formatPoint(MIN_WITHDRAW)}부터 출금을 신청할 수 있어요.
             </p>
           )}
+          {/* [08 Q2·Q3] 포인트=부가세 포함·플랫폼 내 사용 무공제·출금 공제 요약. */}
+          <PayoutTaxNotice context="wallet" data-testid="wallet-tax-notice" />
         </section>
       )}
 

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { BigButton, ConfirmSheet, DriverCard, DynamicIsland, ErrorScreen, InfoStatCard, MapView, OrderTimeline, PageHeader, PayoutMethodChip, StatusHeadline, colors, elevation, gradient, gray, radius, surface, touchTarget, useToast } from "@oilpick/ui";
+import { BigButton, ConfirmSheet, DriverCard, DynamicIsland, ErrorScreen, InfoStatCard, MapView, OrderTimeline, PageHeader, PayoutMethodChip, PayoutTaxNotice, StatusHeadline, colors, elevation, gradient, gray, radius, surface, touchTarget, useToast } from "@oilpick/ui";
 import { estimateCash, formatEta, formatKg, formatKrw, formatPoint, formatTimeOfDay, type OrderStatus } from "@oilpick/core";
 import { MAP_STYLE_URL } from "../lib/env";
 import { invokeEdgeFunction } from "../lib/edgeFunction";
@@ -587,6 +587,8 @@ export function OrderDetailPage() {
               확인하시면 새 기름 대금이 보유 포인트에서 즉시 차감돼요.
             </p>
           )}
+          {/* [08 Q2·Q3] 확인 전 지급 형태별 세무 기준 안내 — 포인트/현금(개인)/세금계산서. */}
+          <PayoutTaxNotice context="measure" data-testid="confirm-tax-notice" />
           {/* [N3, 08 P2 확장] POINT 제출 건 한정 — 포인트가 싫거나 잔액이 부족할 때 라이더에게
               현금 재제출을 인앱으로 요청한다(payout-change-request — 상태 무접촉 푸시, 주문당 2h
               서버 dedupe). 실제 변경은 라이더 재제출로만 일어난다(2자 확인 원칙). */}

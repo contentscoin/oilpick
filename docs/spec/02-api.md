@@ -112,14 +112,16 @@ ACCEPTED 이후 모든 전이 단일 엔드포인트.
 > ✅ **부활 (08 P4·G3-⑤)** — F13이 삭제했던 함수를 git 이력 기반으로 복원(계약 동일).
 - 입력: `{ amount }` (≥10000, `MIN_WITHDRAW`). 프로필에 계좌 없으면 400 `NO_BANK_ACCOUNT`.
 - 처리: 계좌 사전 확인 후 **`fn_request_withdraw` RPC 단일 호출** — user 단위 FOR UPDATE 직렬화 →
-  잔액 재계산(v_point_balance.available ≥ amount) → WITHDRAW_REQUEST(-amount) + withdrawals insert 원자.
+  잔액 재계산(v_point_balance.available ≥ amount + **수수료 1,000P**, 08 Q1) →
+  WITHDRAW_REQUEST(-amount) + WITHDRAW_FEE(-1,000) + withdrawals insert(fee 스냅샷) 원자.
   잔액 부족 400 `INSUFFICIENT_BALANCE`.
-- 출력: `{ withdrawalId, status, amount }`
+- 출력: `{ withdrawalId, status, amount, fee }`
 
 ## 8. `withdraw-process` (admin)
 > ✅ **부활 (08 P4·G3-⑤)** — F13이 삭제했던 함수를 git 이력 기반으로 복원(계약 동일).
 - 입력: `{ withdrawalId, decision: 'APPROVED'|'REJECTED'|'PAID', memo? }`
-- 처리: **`fn_process_withdraw` RPC 단일 호출**. REJECTED 시 WITHDRAW_CANCEL(+amount) 복구(withdrawal_id 멱등).
+- 처리: **`fn_process_withdraw` RPC 단일 호출**. REJECTED 시 WITHDRAW_CANCEL(+amount+fee) 전액
+  복구(수수료 포함 — 08 Q1, withdrawal_id 멱등).
   상태 전이: REQUESTED→APPROVED→PAID 또는 REQUESTED→REJECTED. 위반 409 `INVALID_TRANSITION`.
 - 부수효과: supplier 푸시 — "출금 신청이 승인되었어요"/"출금이 완료되었어요"/"출금 신청이 반려되어
   포인트가 복구되었어요" (§1-5), link `/wallet`.
@@ -173,6 +175,17 @@ ACCEPTED 이후 모든 전이 단일 엔드포인트.
 - 처리: GoTrue 사용자 생성(email=`<username>@oilpick.local`, email_confirm) + profiles(role='dealer') insert.
   중복 아이디 409 `CONFLICT`. profiles 실패 시 방금 만든 auth 사용자 정리(고아 방지).
 - 출력: `{ dealerId, username }`(`dealerCreateOutputSchema`).
+
+## 20-2. `dealer-update` (admin) — 13 I2 보강 (CEO 2026-08-06 "좌상 정보수정")
+> 좌상 계정 정보 수정 — 아이디·비밀번호·상호·연락처. GoTrue 쓰기는 service_role(auth.admin)만
+> 가능 → 이 Edge가 유일 경로(대시보드 수동 조작 불요). 대상이 role='dealer'가 아니면 404
+> (admin/일반 유저 변조 경로 차단).
+- 입력: `{ dealerId, username?, password?, displayName?, phone? }`(`dealerUpdateInputSchema` —
+  넷 중 최소 하나). role=admin 필수.
+- 처리: username → GoTrue email(`<username>@oilpick.local`) 재매핑(email_confirm — .local 가짜
+  도메인은 확인 메일 경로가 없다), password → 관리자 재설정(현재 비밀번호 불요), displayName/phone
+  → profiles update. 중복 아이디 409 `CONFLICT`. 부분 실패는 재시도로 수렴(모든 갱신이 멱등).
+- 출력: `{ dealerId, username }`(`dealerUpdateOutputSchema` — 수정 후 로그인 아이디).
 
 ## 21. `dealer-assign` (admin + 좌상) — 13 I2·D6
 > rider_profiles.dealer_id 배정/해제. dealer_id는 guard_rider_verify상 service_role만 변경 → 이 Edge가 유일 경로.

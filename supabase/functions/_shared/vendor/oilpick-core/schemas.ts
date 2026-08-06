@@ -150,7 +150,9 @@ var withdrawRequestInputSchema = z.object({
 var withdrawRequestOutputSchema = z.object({
   withdrawalId: uuidSchema,
   status: z.literal("REQUESTED"),
-  amount: z.number().int()
+  amount: z.number().int(),
+  // [08 Q1] 신청 시점 수수료 스냅샷(현행 1,000P). 별도 원장 행 WITHDRAW_FEE로 함께 차감된다.
+  fee: z.number().int()
 });
 var withdrawProcessInputSchema = z.object({
   withdrawalId: uuidSchema,
@@ -356,6 +358,20 @@ var dealerCreateOutputSchema = z.object({
   dealerId: uuidSchema,
   username: z.string()
 });
+var dealerUpdateInputSchema = z.object({
+  dealerId: uuidSchema,
+  username: z.string().min(3).max(32).regex(/^[a-z0-9_]+$/, "\uC544\uC774\uB514\uB294 \uC601\uC18C\uBB38\uC790\xB7\uC22B\uC790\xB7\uBC11\uC904\uB9CC \uAC00\uB2A5\uD574\uC694.").optional(),
+  password: z.string().min(8, "\uBE44\uBC00\uBC88\uD638\uB294 8\uC790 \uC774\uC0C1\uC774\uC5B4\uC57C \uD574\uC694.").optional(),
+  displayName: z.string().min(1).max(40).optional(),
+  phone: z.string().min(1).max(20).optional()
+}).refine((v) => v.username != null || v.password != null || v.displayName != null || v.phone != null, {
+  message: "\uC218\uC815\uD560 \uD56D\uBAA9\uC744 \uD558\uB098 \uC774\uC0C1 \uC785\uB825\uD574\uC8FC\uC138\uC694."
+});
+var dealerUpdateOutputSchema = z.object({
+  dealerId: uuidSchema,
+  /** 수정 후 로그인 아이디(변경 없으면 기존 값). */
+  username: z.string()
+});
 var dealerAssignInputSchema = z.object({
   riderId: uuidSchema,
   dealerId: uuidSchema.nullable()
@@ -461,6 +477,8 @@ export {
   dealerSettlementSchema,
   dealerSettlementStatusSchema,
   dealerStatementSchema,
+  dealerUpdateInputSchema,
+  dealerUpdateOutputSchema,
   deliverPayloadSchema,
   directionsInputSchema,
   directionsOutputSchema,

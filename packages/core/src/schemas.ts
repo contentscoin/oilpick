@@ -258,6 +258,8 @@ export const withdrawRequestOutputSchema = z.object({
   withdrawalId: uuidSchema,
   status: z.literal("REQUESTED"),
   amount: z.number().int(),
+  // [08 Q1] 신청 시점 수수료 스냅샷(현행 1,000P). 별도 원장 행 WITHDRAW_FEE로 함께 차감된다.
+  fee: z.number().int(),
 });
 export type WithdrawRequestOutput = z.infer<typeof withdrawRequestOutputSchema>;
 
@@ -641,6 +643,31 @@ export const dealerCreateOutputSchema = z.object({
   username: z.string(),
 });
 export type DealerCreateOutput = z.infer<typeof dealerCreateOutputSchema>;
+
+/**
+ * dealer-update (admin, 13 I2 보강 — CEO 2026-08-06 "좌상 정보수정"): 좌상 아이디/비밀번호/상호/연락처 수정.
+ * 아이디 변경은 GoTrue email(<아이디>@oilpick.local) 재매핑, 비밀번호는 관리자 재설정(현재 비밀번호 불요).
+ * 넷 중 최소 하나는 있어야 한다.
+ */
+export const dealerUpdateInputSchema = z
+  .object({
+    dealerId: uuidSchema,
+    username: z.string().min(3).max(32).regex(/^[a-z0-9_]+$/, "아이디는 영소문자·숫자·밑줄만 가능해요.").optional(),
+    password: z.string().min(8, "비밀번호는 8자 이상이어야 해요.").optional(),
+    displayName: z.string().min(1).max(40).optional(),
+    phone: z.string().min(1).max(20).optional(),
+  })
+  .refine((v) => v.username != null || v.password != null || v.displayName != null || v.phone != null, {
+    message: "수정할 항목을 하나 이상 입력해주세요.",
+  });
+export type DealerUpdateInput = z.infer<typeof dealerUpdateInputSchema>;
+
+export const dealerUpdateOutputSchema = z.object({
+  dealerId: uuidSchema,
+  /** 수정 후 로그인 아이디(변경 없으면 기존 값). */
+  username: z.string(),
+});
+export type DealerUpdateOutput = z.infer<typeof dealerUpdateOutputSchema>;
 
 /** dealer-assign (admin + 좌상 자기소속, 13 I2): rider_profiles.dealer_id 배정/해제. dealerId=null은 해제. */
 export const dealerAssignInputSchema = z.object({

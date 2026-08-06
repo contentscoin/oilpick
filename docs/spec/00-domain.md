@@ -77,8 +77,8 @@
 - **현역 entry_type**:
   - `EARN`(supplier 매각대금 적립) — POINT 지급수단 주문의 완료 전이에서 fn_post_ledger로 발행.
     멱등 `unique(order_id, entry_type, user_id)` — 주문 1건당 EARN 정확히 1행.
-  - `WITHDRAW_REQUEST`(출금 신청 시 -amount 즉시 차감) / `WITHDRAW_CANCEL`(반려 시 +amount 복구)
-    — withdrawal_id로 멱등.
+  - `WITHDRAW_REQUEST`(출금 신청 시 -amount 즉시 차감) / `WITHDRAW_FEE`(신청 시 출금 수수료
+    -1,000P 별도 행 — 08 Q1) / `WITHDRAW_CANCEL`(반려 시 +amount+fee 전액 복구) — withdrawal_id로 멱등.
   - `ADJUST`(admin 수동 ± — point-adjust Edge Function, memo 필수).
   - `REFERRAL`(supplier 추천 보너스 적립, +부호·출금 가능 = EARN과 동일 취급) — 추천 점주의 첫 수거
     완료(활성화) 시 `fn_activate_referral` → `fn_post_ledger(supplier,'REFERRAL',보너스,order_id)`로 발행.
@@ -86,12 +86,15 @@
 - **레거시 전용 entry_type(신규 발행 없음)**: `HOLD`/`RELEASE`(구모델 수거비 — 잔존 HOLD는 held
   표시로만 남는 과거 회계 기록, 지급 의무 아님), `PURCHASE`(쇼핑몰, 미래 예약).
 - 부호 규칙: 잔액 증가 = 양수, 감소 = 음수. HOLD는 `held` 컬럼 별도 집계 (잔액 미포함).
-- 출금: 최소 **10,000P**(`MIN_WITHDRAW`). 신청 = `fn_request_withdraw`(user 단위 FOR UPDATE 직렬화
-  → 잔액 재계산 → WITHDRAW_REQUEST(-) + withdrawals insert 원자 처리, 부족 시 INSUFFICIENT_BALANCE).
-  처리 = `fn_process_withdraw`(REQUESTED→APPROVED→PAID / REQUESTED→REJECTED+WITHDRAW_CANCEL 복구).
+- 출금: 최소 **10,000P**(`MIN_WITHDRAW`) + 수수료 **1,000P**(`WITHDRAW_FEE_POINT`, 08 Q1). 신청 =
+  `fn_request_withdraw`(user 단위 FOR UPDATE 직렬화 → 잔액 재계산(available ≥ amount+fee) →
+  WITHDRAW_REQUEST(-amount) + WITHDRAW_FEE(-fee) + withdrawals insert(fee 스냅샷) 원자 처리,
+  부족 시 INSUFFICIENT_BALANCE). 처리 = `fn_process_withdraw`(REQUESTED→APPROVED→PAID /
+  REQUESTED→REJECTED+WITHDRAW_CANCEL(+amount+fee) 복구). 세무 공제(3.3%·부가세)는 이체 금액
+  산정 기준이며 원장 무기록(08 Q2·Q4 — 지급·출금 화면 안내 노출 의무).
 - 잔액 조회는 `v_point_balance` 뷰만 사용 (user_id, available, held).
 - 불변식(테스트로 검증): POINT 완료 주문 1건당 EARN 1행(재시도 멱등), CASH 완료 주문은
-  point_ledger 무변경, 출금 신청→반려 왕복 후 잔액 원복, 레거시 DELIVER는 원장 무변경.
+  point_ledger 무변경, 출금 신청→반려 왕복 후 잔액 원복(수수료 포함), 레거시 DELIVER는 원장 무변경.
 
 ## 쿠폰 원장 규칙 ([17 복권] 현역 — 07 §1-1, 절대 규칙 1의 확장)
 > **[17 복권]** 08 P1이 "레거시 — 신규 발행 중지"로 강등했던 이 절을 17-coupon-revival.md가
